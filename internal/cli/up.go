@@ -1,6 +1,10 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/dm-balakin/solitary/internal/cell"
+)
 
 func newUpCmd() *cobra.Command {
 	var (
@@ -19,8 +23,8 @@ func newUpCmd() *cobra.Command {
 			"already exists with a different image, the command fails and asks for\n" +
 			"--as.",
 		Args: cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errNotImplemented
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cell.Up(args[0], cmd.ErrOrStderr())
 		},
 	}
 

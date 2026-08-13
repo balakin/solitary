@@ -1,0 +1,189 @@
+package lima
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+)
+
+// ErrNotInstalled is returned when limactl is not on PATH.
+var ErrNotInstalled = errors.New("limactl not found on PATH: install Lima from https://lima-vm.io")
+
+// Instance is one Lima machine, as reported by limactl list --json.
+type Instance struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Dir    string `json:"dir"`
+}
+
+// Machine statuses reported by Lima.
+const (
+	StatusRunning = "Running"
+	StatusStopped = "Stopped"
+	StatusBroken  = "Broken"
+)
+
+func limactl() (string, error) {
+	path, err := exec.LookPath("limactl")
+	if err != nil {
+		return "", ErrNotInstalled
+	}
+	return path, nil
+}
+
+// run executes limactl with output discarded unless it fails, in which case
+// stderr is folded into the error.
+func run(args ...string) error {
+	bin, err := limactl()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(bin, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			return fmt.Errorf("limactl %s: %w", strings.Join(args, " "), err)
+		}
+		return fmt.Errorf("limactl %s: %w\n%s", strings.Join(args, " "), err, msg)
+	}
+
+	return nil
+}
+
+// runVerbose executes limactl with its output attached to the terminal, for
+// commands where progress matters.
+func runVerbose(args ...string) error {
+	bin, err := limactl()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(bin, args...)
+	cmd.Stdout = os.Stderr // progress is not output; keep stdout clean
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("limactl %s: %w", strings.Join(args, " "), err)
+	}
+
+	return nil
+}
+
+// List returns every Lima machine on the host. limactl emits one JSON object
+// per line rather than a JSON array.
+func List() ([]Instance, error) {
+	bin, err := limactl()
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := exec.Command(bin, "list", "--json").Output()
+	if err != nil {
+		return nil, fmt.Errorf("listing Lima machines: %w", err)
+	}
+
+	var instances []Instance
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024) // definitions are large
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var inst Instance
+		if err := json.Unmarshal(line, &inst); err != nil {
+			return nil, fmt.Errorf("parsing limactl list output: %w", err)
+		}
+		instances = append(instances, inst)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("reading limactl list output: %w", err)
+	}
+
+	return instances, nil
+}
+
+// Lookup returns the named machine, or nil when it does not exist.
+func Lookup(name string) (*Instance, error) {
+	instances, err := List()
+	if err != nil {
+		return nil, err
+	}
+	for i := range instances {
+		if instances[i].Name == name {
+			return &instances[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// Create builds a machine from a definition file and starts it.
+func Create(name, definitionPath string) error {
+	return runVerbose("start", "--tty=false", "--name="+name, definitionPath)
+}
+
+// Start boots an existing machine.
+func Start(name string) error {
+	return runVerbose("start", "--tty=false", name)
+}
+
+// Stop shuts a machine down, keeping its disk.
+func Stop(name string) error {
+	return runVerbose("stop", name)
+}
+
+// Delete destroys a machine and its disk.
+func Delete(name string) error {
+	return run("delete", "--force", name)
+}
+
+// Exec runs a command inside a machine, without a terminal, and returns its
+// standard output.
+func Exec(name string, args ...string) ([]byte, error) {
+	bin, err := limactl()
+	if err != nil {
+		return nil, err
+	}
+
+	full := append([]string{"shell", "--workdir=/", name}, args...)
+	cmd := exec.Command(bin, full...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			return stdout.Bytes(), fmt.Errorf("%s: %w", strings.Join(args, " "), err)
+		}
+		return stdout.Bytes(), fmt.Errorf("%s: %w\n%s", strings.Join(args, " "), err, msg)
+	}
+
+	return stdout.Bytes(), nil
+}
+
+// Attach runs a command inside a machine with the terminal attached, so that
+// interactive programs work. The command's exit status is returned as an error.
+func Attach(name string, args ...string) error {
+	bin, err := limactl()
+	if err != nil {
+		return err
+	}
+
+	full := append([]string{"shell", "--workdir=/", name}, args...)
+	cmd := exec.Command(bin, full...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}

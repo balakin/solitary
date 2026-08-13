@@ -11,7 +11,7 @@ import (
 // scaffold is written by 'solitary init'. It is a commented file rather than
 // marshalled YAML so that a new cell explains its own options.
 const scaffold = `# The container image holding this cell's tools. Required.
-image: ghcr.io/library/ubuntu:latest
+image: docker.io/library/ubuntu:24.04
 
 # Environment variables this cell is allowed to see. Values are read from the
 # .env file next to this one and passed into the container at run time. Names
