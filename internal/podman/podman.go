@@ -7,10 +7,13 @@
 package podman
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"golang.org/x/term"
@@ -24,6 +27,23 @@ const Container = "solitary"
 // imageLabel records the image as written in cell.yaml, so that a change can be
 // detected without having to guess how podman normalises references.
 const imageLabel = "solitary.image"
+
+// envLabel records a digest of the environment the container was started with.
+// A container's environment is fixed once it is running, so this is what tells
+// up that secrets have changed and the container has to be replaced. It is a
+// digest rather than the values themselves, which anyone able to inspect the
+// container would otherwise be able to read back.
+const envLabel = "solitary.env"
+
+// EnvDigest summarises a set of KEY=VALUE entries. Order does not matter.
+func EnvDigest(env []string) string {
+	sorted := append([]string(nil), env...)
+	sort.Strings(sorted)
+
+	sum := sha256.Sum256([]byte(strings.Join(sorted, "\x00")))
+
+	return hex.EncodeToString(sum[:])
+}
 
 // HomeDir is where the container's home lives inside the container. It is a
 // path no base image is likely to use, so a bind mount over it hides nothing
@@ -39,13 +59,15 @@ type State struct {
 	// Image is the reference the container was created from, as written in
 	// cell.yaml rather than as normalised by podman.
 	Image string
+	// EnvDigest identifies the environment the container was started with.
+	EnvDigest string
 }
 
 // Inspect reports the state of a cell's container.
 func Inspect(instance string) (State, error) {
 	out, err := lima.Exec(instance,
 		"podman", "container", "inspect", Container,
-		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}",
+		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}",
 	)
 	if err != nil {
 		// podman exits non-zero when the container does not exist, which is
@@ -57,10 +79,13 @@ func Inspect(instance string) (State, error) {
 		return State{}, err
 	}
 
-	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 2)
+	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 3)
 	state := State{Exists: true, Running: fields[0] == "running"}
 	if len(fields) > 1 {
 		state.Image = fields[1]
+	}
+	if len(fields) > 2 {
+		state.EnvDigest = fields[2]
 	}
 
 	return state, nil
@@ -93,6 +118,7 @@ func Run(instance string, opts RunOptions) error {
 		"--replace",
 		"--name", Container,
 		"--label", imageLabel + "=" + opts.Image,
+		"--label", envLabel + "=" + EnvDigest(opts.Env),
 		// The machine is the boundary, so the container shares its network
 		// rather than adding a second one to reason about.
 		"--network", "host",

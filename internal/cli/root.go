@@ -11,10 +11,6 @@ import (
 // version is overwritten at build time via -ldflags.
 var version = "dev"
 
-// errNotImplemented is returned by every command until the corresponding
-// package under internal/ is written.
-var errNotImplemented = fmt.Errorf("not implemented yet")
-
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "solitary",

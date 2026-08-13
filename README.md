@@ -2,8 +2,8 @@
 
 **Hypervisor-isolated cells for running coding agents off the leash.**
 
-> ⚠️ Pre-alpha. This repository is a scaffold: the command tree exists, none of
-> it is implemented. Nothing here works yet.
+> ⚠️ Pre-alpha. Cells build, run, persist and take secrets. Egress from a cell
+> is not restricted yet — see [what this does not protect against](#what-this-does-not-protect-against).
 
 ## The problem
 
@@ -29,8 +29,9 @@ A cell is a Lima VM with a container inside it.
   inside the cell. The host only ever displays results.
 - **Secrets are whitelisted per cell.** This cell sees a GitHub token; that one
   does not.
-- **Only ports cross the boundary**, and only inbound: run a dev server in the
-  cell, open it in your browser on the host.
+- **Ports are the way in.** Run a dev server in the cell, open it in your
+  browser on the host. Traffic the other way — a cell reaching your machine or
+  your network — is not blocked yet.
 
 Cells are meant to be thrown away. `rm` then `up` gets you a clean one, still
 authenticated, because secrets live on the host and not in the VM.
@@ -50,6 +51,8 @@ name, never a field inside the file.
 ```yaml
 image: ghcr.io/you/nvim-claude:latest
 
+command: sleep infinity   # optional; must not exit — it is the container's life
+
 secrets:            # only these names are passed into the cell
   - CLAUDE_API_KEY
   - GITHUB_TOKEN
@@ -63,8 +66,16 @@ vm:                 # optional; falls back to config.yaml, then to built-ins
 ```
 
 Values for the names under `secrets:` live in `cells/<name>/.env`, which stays
-on the host and is never copied into the VM. `~/.config/solitary/config.yaml`
-holds a `vm:` block used as the default for every cell.
+on the host and is never copied into the VM — they are passed to the container
+as environment variables when it starts. The file may hold more than a cell
+needs; only the names that cell declares are ever passed in. `up` asks for any
+that are missing, and `solitary secrets <name>` sets or rotates them later.
+
+Because the values live on the host, `rm` followed by `up` gives you a clean
+cell that is still authenticated.
+
+`~/.config/solitary/config.yaml` holds a `vm:` block used as the default for
+every cell.
 
 ## Commands
 
@@ -80,8 +91,15 @@ solitary secrets <name>         set the values a cell is allowed to see
 
 `up` is the only command that changes state, and it is idempotent: it creates
 the cell if absent, boots it if stopped, and attaches if it is already running.
-Passing an image reference instead of a known name creates a cell from it with
-default settings — useful for demos.
+It also replaces the container when the image or the secrets changed, so
+editing `cell.yaml` and running `up` again is all a change ever takes.
+
+Work belongs in `/home/cell`, which lives on the machine's disk rather than in
+the container. It survives a new image, a stop and start, and anything an editor
+installs into the home directory. `rm` is what discards it.
+
+Creating a cell takes a couple of minutes: it downloads a cloud image and
+installs podman. Everything after that is container-speed.
 
 ## Requirements
 
@@ -100,6 +118,22 @@ make lint
 
 Formatting is `gofumpt` plus `goimports` via `golangci-lint fmt`. Commit
 messages follow Conventional Commits.
+
+## How it works
+
+`up` renders an embedded Lima template into a machine definition, creates the
+machine, and starts one rootless podman container inside it. Both are driven by
+shelling out — `limactl` on the host, `podman` through `limactl shell` in the
+machine — so there is nothing to install beyond Lima.
+
+The container runs with `--network host`: the machine is the boundary, so there
+is no reason to put a second one between the container and the machine it lives
+in. Ports reach the host through Lima's forwarding.
+
+The container's identity is recorded in two labels: the image as written in
+`cell.yaml`, and a digest of the environment it was started with. `up` compares
+both and replaces the container when either has moved, which is why changing a
+secret or an image needs no separate command.
 
 ## Roadmap
 

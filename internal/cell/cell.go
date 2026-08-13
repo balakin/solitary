@@ -12,6 +12,7 @@ import (
 	"github.com/dm-balakin/solitary/internal/config"
 	"github.com/dm-balakin/solitary/internal/lima"
 	"github.com/dm-balakin/solitary/internal/podman"
+	"github.com/dm-balakin/solitary/internal/secrets"
 )
 
 // Status is what a cell is currently doing.
@@ -149,24 +150,74 @@ func Up(name string, progress io.Writer) error {
 		}
 	}
 
-	return ensureContainer(instance, c, progress)
+	env, err := resolveSecrets(name, c, progress)
+	if err != nil {
+		return err
+	}
+
+	return ensureContainer(instance, c, env, progress)
+}
+
+// resolveSecrets collects the values this cell is allowed to see, asking for
+// any that are declared but not set yet.
+func resolveSecrets(name string, c *config.Cell, progress io.Writer) ([]string, error) {
+	if len(c.Secrets) == 0 {
+		return nil, nil
+	}
+
+	path, err := config.EnvFile(name)
+	if err != nil {
+		return nil, err
+	}
+	values, err := secrets.Load(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if missing := secrets.Missing(c.Secrets, values); len(missing) > 0 {
+		if !secrets.CanPrompt() {
+			return nil, fmt.Errorf("cell %q needs values for %s; set them with 'solitary secrets %s'",
+				name, strings.Join(missing, ", "), name)
+		}
+
+		fmt.Fprintf(progress, "Cell %q needs %d secret(s). Input is hidden.\n", name, len(missing))
+		changed, err := secrets.Prompt(progress, missing, values)
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			if err := secrets.Save(path, values); err != nil {
+				return nil, err
+			}
+			fmt.Fprintf(progress, "Saved to %s\n", path)
+		}
+	}
+
+	return secrets.Env(c.Secrets, values), nil
 }
 
 // ensureContainer starts the cell's container if it is not already running the
 // requested image. Work lives in a directory on the machine that is mounted
 // over the container's home, so replacing the container keeps files, caches and
 // anything an editor installed into the home directory.
-func ensureContainer(instance string, c *config.Cell, progress io.Writer) error {
+func ensureContainer(instance string, c *config.Cell, env []string, progress io.Writer) error {
 	state, err := podman.Inspect(instance)
 	if err != nil {
 		return err
 	}
-	if state.Running && state.Image == c.Image {
+
+	digest := podman.EnvDigest(env)
+	if state.Running && state.Image == c.Image && state.EnvDigest == digest {
 		return nil
 	}
 
-	if state.Exists && state.Image != c.Image {
+	switch {
+	case state.Running && state.Image != c.Image:
 		fmt.Fprintf(progress, "Image changed to %s; replacing the container.\n", c.Image)
+	case state.Running && state.EnvDigest != digest:
+		// A container's environment is fixed once it is running, so secrets
+		// that changed only reach the cell by replacing it.
+		fmt.Fprintln(progress, "Secrets changed; restarting the container.")
 	}
 
 	exists, err := podman.ImageExists(instance, c.Image)
@@ -188,6 +239,7 @@ func ensureContainer(instance string, c *config.Cell, progress io.Writer) error 
 	return podman.Run(instance, podman.RunOptions{
 		Image:    c.Image,
 		Command:  c.Command,
+		Env:      env,
 		HostHome: home,
 	})
 }
@@ -248,6 +300,65 @@ func warnDrift(name, rendered string, w io.Writer) {
 	fmt.Fprintf(w, "Warning: the vm settings for %q changed since its machine was created.\n", name)
 	fmt.Fprintf(w, "         The running cell still uses the old ones. To apply the change:\n")
 	fmt.Fprintf(w, "           solitary rm %s && solitary up %s\n", name, name)
+}
+
+// SetSecrets asks for every secret a cell declares, keeping values that are
+// already set unless something new is typed. It reports whether the cell needs
+// restarting for the change to take effect.
+func SetSecrets(name string, progress io.Writer) error {
+	c, err := config.LoadCell(name)
+	if err != nil {
+		return err
+	}
+	if len(c.Secrets) == 0 {
+		path, err := config.CellFile(name)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(progress, "Cell %q declares no secrets. Add them under secrets: in %s.\n", name, path)
+		return nil
+	}
+
+	path, err := config.EnvFile(name)
+	if err != nil {
+		return err
+	}
+	values, err := secrets.Load(path)
+	if err != nil {
+		return err
+	}
+
+	if !secrets.CanPrompt() {
+		return errors.New("solitary secrets needs a terminal to ask on")
+	}
+
+	changed, err := secrets.Prompt(progress, c.Secrets, values)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		fmt.Fprintln(progress, "Nothing changed.")
+		return nil
+	}
+
+	if err := secrets.Save(path, values); err != nil {
+		return err
+	}
+	fmt.Fprintf(progress, "Saved to %s\n", path)
+
+	// A running container was started with the old environment.
+	inst, err := lima.Lookup(config.Instance(name))
+	if err != nil {
+		return err
+	}
+	if inst != nil && inst.Status == lima.StatusRunning {
+		state, err := podman.Inspect(inst.Name)
+		if err == nil && state.Running {
+			fmt.Fprintf(progress, "Cell %q is running with the old values. Apply them with: solitary up %s\n", name, name)
+		}
+	}
+
+	return nil
 }
 
 // Down stops a cell's machine, keeping its disk and its secrets.
