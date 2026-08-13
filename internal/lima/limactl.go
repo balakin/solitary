@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // ErrNotInstalled is returned when limactl is not on PATH.
@@ -131,14 +132,49 @@ func Create(name, definitionPath string) error {
 	return runVerbose("start", "--tty=false", "--name="+name, definitionPath)
 }
 
+// startAttempts is how many times Start retries. limactl stop can return
+// before QEMU has released the instance's sockets, and a start that lands in
+// that window fails outright rather than waiting.
+const startAttempts = 3
+
+// startRetryDelay is how long to wait between attempts.
+var startRetryDelay = 3 * time.Second
+
 // Start boots an existing machine.
 func Start(name string) error {
-	return runVerbose("start", "--tty=false", name)
+	var err error
+	for attempt := 1; attempt <= startAttempts; attempt++ {
+		if err = runVerbose("start", "--tty=false", name); err == nil {
+			return nil
+		}
+		if attempt < startAttempts {
+			time.Sleep(startRetryDelay)
+		}
+	}
+
+	return fmt.Errorf("starting %s after %d attempts: %w", name, startAttempts, err)
 }
 
-// Stop shuts a machine down, keeping its disk.
+// Stop shuts a machine down, keeping its disk, and waits for it to actually be
+// gone so that a start straight afterwards does not race the teardown.
 func Stop(name string) error {
-	return runVerbose("stop", name)
+	if err := runVerbose("stop", name); err != nil {
+		return err
+	}
+
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		inst, err := Lookup(name)
+		if err != nil {
+			return err
+		}
+		if inst == nil || inst.Status != StatusRunning {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+
+	return fmt.Errorf("%s did not stop within 30s", name)
 }
 
 // Delete destroys a machine and its disk.

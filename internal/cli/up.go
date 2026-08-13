@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/dm-balakin/solitary/internal/cell"
@@ -24,7 +26,18 @@ func newUpCmd() *cobra.Command {
 			"--as.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cell.Up(args[0], cmd.ErrOrStderr())
+			name := args[0]
+
+			if err := cell.Up(name, cmd.ErrOrStderr()); err != nil {
+				return err
+			}
+
+			if detach {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Cell %q is running. Enter it with: solitary shell %s\n", name, name)
+				return nil
+			}
+
+			return cell.Shell(name)
 		},
 	}
 

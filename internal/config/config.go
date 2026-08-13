@@ -32,6 +32,11 @@ type Cell struct {
 	// even when present in .env.
 	Secrets []string `yaml:"secrets"`
 
+	// Command is the shell command the container runs. It must not exit: the
+	// container lives as long as this process does, and shells opened with
+	// up or shell are separate from it. Defaults to DefaultCommand.
+	Command string `yaml:"command"`
+
 	// Ports restricts which guest ports reach the host. When empty, Lima's
 	// default forwarding applies and every port the container listens on is
 	// reachable on host localhost. When set, only these are forwarded.
@@ -62,6 +67,10 @@ type VM struct {
 type UserConfig struct {
 	VM VM `yaml:"vm"`
 }
+
+// DefaultCommand keeps a container alive without assuming anything about the
+// image. Cells that run a server instead set command: in cell.yaml.
+const DefaultCommand = "sleep infinity"
 
 // Defaults returns the settings compiled into the binary, used when neither the
 // cell nor the user-wide config specifies a value.
@@ -129,6 +138,9 @@ func LoadCell(name string) (*Cell, error) {
 	}
 	if cell.Image == "" {
 		return nil, fmt.Errorf("%s: image is required", path)
+	}
+	if cell.Command == "" {
+		cell.Command = DefaultCommand
 	}
 
 	user, err := LoadUserConfig()
