@@ -1,0 +1,58 @@
+### Lima machine definition for a solitary cell.
+###
+### Rendered from this template by internal/lima; not written by users.
+
+minimumLimaVersion: 2.0.0
+
+base:
+  - template:_images/ubuntu-lts
+
+cpus: 4
+memory: "8GiB"
+disk: "40GiB"
+
+# Load-bearing, not stylistic. A cell exists so that code an agent wrote is
+# never interpreted by a process on the host; a mount here would hand it a
+# path back to files the host executes (git hooks, package scripts, .envrc).
+# Do not add mounts.
+mounts: []
+
+# Host proxy configuration can name internal hosts and carry credentials.
+propagateProxyEnv: false
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      command -v podman >/dev/null 2>&1 && exit 0
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y podman uidmap slirp4netns fuse-overlayfs
+
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      apt-get update
+      apt-get install -y build-essential
+
+probes:
+  - script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      if ! timeout 30s bash -c "until command -v podman >/dev/null 2>&1; do sleep 3; done"; then
+        echo >&2 "podman is not installed yet"
+        exit 1
+      fi
+    hint: See "/var/log/cloud-init-output.log" in the guest
+
+# ports: was set on the cell, so the default catch-all is replaced by an
+# explicit allow list.
+portForwards:
+  - guestPort: 8080
+    hostPort: 8080
+  - guestPort: 3000
+    hostPort: 3000
+  - guestPortRange: [1, 65535]
+    ignore: true

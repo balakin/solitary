@@ -1,6 +1,12 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+
+	"github.com/dm-balakin/solitary/internal/config"
+)
 
 func newInitCmd() *cobra.Command {
 	var force bool
@@ -11,8 +17,19 @@ func newInitCmd() *cobra.Command {
 		Long: "Creates ~/.config/solitary/cells/<name>/cell.yaml.\n" +
 			"Refuses to overwrite an existing cell unless --force is given.",
 		Args: cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errNotImplemented
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+
+			path, err := config.InitCell(name, force)
+			if err != nil {
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Created %s\n", path)
+			fmt.Fprintf(out, "Edit it, then run: solitary up %s\n", name)
+
+			return nil
 		},
 	}
 
