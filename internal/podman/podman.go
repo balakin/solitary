@@ -56,8 +56,8 @@ type State struct {
 	Exists bool
 	// Running is true when the container is up.
 	Running bool
-	// Image is the reference the container was created from, as written in
-	// cell.yaml rather than as normalised by podman.
+	// Image is the identity the container was created from: see
+	// RunOptions.Identity.
 	Image string
 	// EnvDigest identifies the environment the container was started with.
 	EnvDigest string
@@ -93,8 +93,13 @@ func Inspect(instance string) (State, error) {
 
 // RunOptions describes the container to start.
 type RunOptions struct {
-	// Image is the reference from cell.yaml.
+	// Image is the reference to run.
 	Image string
+	// Identity distinguishes what the container was started from. For a
+	// pulled image it is the reference; for a built one it covers the build
+	// context, so an edited Containerfile counts as a different image even
+	// though the tag is unchanged.
+	Identity string
 	// Command is the shell command the container runs. It has to keep
 	// running: the container's lifetime is the lifetime of this process, and
 	// shells are attached to it separately with Shell.
@@ -117,7 +122,7 @@ func Run(instance string, opts RunOptions) error {
 		"--detach",
 		"--replace",
 		"--name", Container,
-		"--label", imageLabel + "=" + opts.Image,
+		"--label", imageLabel + "=" + opts.Identity,
 		"--label", envLabel + "=" + EnvDigest(opts.Env),
 		// The machine is the boundary, so the container shares its network
 		// rather than adding a second one to reason about.

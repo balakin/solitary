@@ -43,6 +43,12 @@ misusing the authority you granted it. It can still push to any repository the
 token you whitelisted can reach, and until egress filtering lands it can still
 send data anywhere. The image you run is trusted code.
 
+A secret passed to a cell lives inside that cell. The `.env` file never leaves
+the host, but the values reach the container as environment variables, and
+podman records a container's environment in its own metadata on the machine's
+disk. `rm` discards that along with everything else. Give a cell only the
+credentials it needs.
+
 ## Configuration
 
 `~/.config/solitary/cells/<name>/cell.yaml` — the cell's name is the directory
@@ -50,6 +56,7 @@ name, never a field inside the file.
 
 ```yaml
 image: ghcr.io/you/nvim-claude:latest
+# build: ./Containerfile  # or build it instead — set one, not both
 
 command: sleep infinity   # optional; must not exit — it is the container's life
 
@@ -76,6 +83,23 @@ cell that is still authenticated.
 
 `~/.config/solitary/config.yaml` holds a `vm:` block used as the default for
 every cell.
+
+### Building the image
+
+Instead of `image:`, a cell can name a `Containerfile` to build:
+
+```yaml
+build: ./Containerfile
+```
+
+The path is relative to the cell's directory, and that directory is the build
+context. It is copied into the machine and built there, so nothing in a
+`Containerfile` ever runs on the host — the same reason the rest of this tool
+exists. `.git` and `node_modules` are left out of the copy, and the copy is
+deleted afterwards so a context that carried build-time secrets does not linger.
+
+`up` rebuilds when anything in the context changes and reuses the image when
+nothing has, so iterating on a `Containerfile` is just `up` again.
 
 ## Commands
 

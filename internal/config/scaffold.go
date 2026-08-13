@@ -10,8 +10,14 @@ import (
 
 // scaffold is written by 'solitary init'. It is a commented file rather than
 // marshalled YAML so that a new cell explains its own options.
-const scaffold = `# The container image holding this cell's tools. Required.
+const scaffold = `# The container image holding this cell's tools.
 image: docker.io/library/ubuntu:24.04
+
+# Or build the image instead, from a Containerfile beside this file. Its
+# directory is the build context, copied into the machine and built there, so
+# nothing in it ever runs on the host. Set either image or build, not both.
+#
+# build: ./Containerfile
 
 # Environment variables this cell is allowed to see. Values are read from the
 # .env file next to this one and passed into the container at run time. Names

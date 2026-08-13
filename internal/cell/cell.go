@@ -66,10 +66,13 @@ func List() ([]Info, error) {
 	for _, name := range names {
 		info := Info{Name: name, Status: StatusUninitialized}
 
-		if c, err := config.LoadCell(name); err == nil {
-			info.Image = c.Image
-		} else {
+		switch c, err := config.LoadCell(name); {
+		case err != nil:
 			info.Image = "(unreadable)"
+		case c.Build != "":
+			info.Image = "build:" + c.Build
+		default:
+			info.Image = c.Image
 		}
 
 		if inst, ok := byName[config.Instance(name)]; ok {
@@ -155,7 +158,7 @@ func Up(name string, progress io.Writer) error {
 		return err
 	}
 
-	return ensureContainer(instance, c, env, progress)
+	return ensureContainer(name, instance, c, env, progress)
 }
 
 // resolveSecrets collects the values this cell is allowed to see, asking for
@@ -200,35 +203,29 @@ func resolveSecrets(name string, c *config.Cell, progress io.Writer) ([]string, 
 // requested image. Work lives in a directory on the machine that is mounted
 // over the container's home, so replacing the container keeps files, caches and
 // anything an editor installed into the home directory.
-func ensureContainer(instance string, c *config.Cell, env []string, progress io.Writer) error {
+func ensureContainer(name, instance string, c *config.Cell, env []string, progress io.Writer) error {
+	ref, identity, err := ensureImage(name, instance, c, progress)
+	if err != nil {
+		return err
+	}
+
 	state, err := podman.Inspect(instance)
 	if err != nil {
 		return err
 	}
 
 	digest := podman.EnvDigest(env)
-	if state.Running && state.Image == c.Image && state.EnvDigest == digest {
+	if state.Running && state.Image == identity && state.EnvDigest == digest {
 		return nil
 	}
 
 	switch {
-	case state.Running && state.Image != c.Image:
-		fmt.Fprintf(progress, "Image changed to %s; replacing the container.\n", c.Image)
+	case state.Running && state.Image != identity:
+		fmt.Fprintln(progress, "Image changed; replacing the container.")
 	case state.Running && state.EnvDigest != digest:
 		// A container's environment is fixed once it is running, so secrets
 		// that changed only reach the cell by replacing it.
 		fmt.Fprintln(progress, "Secrets changed; restarting the container.")
-	}
-
-	exists, err := podman.ImageExists(instance, c.Image)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		fmt.Fprintf(progress, "Pulling %s...\n", c.Image)
-		if err := podman.Pull(instance, c.Image); err != nil {
-			return err
-		}
 	}
 
 	home, err := machineHome(instance)
@@ -237,11 +234,55 @@ func ensureContainer(instance string, c *config.Cell, env []string, progress io.
 	}
 
 	return podman.Run(instance, podman.RunOptions{
-		Image:    c.Image,
+		Image:    ref,
+		Identity: identity,
 		Command:  c.Command,
 		Env:      env,
 		HostHome: home,
 	})
+}
+
+// ensureImage makes the cell's image available inside the machine, building it
+// when the cell declares a Containerfile and pulling it otherwise.
+//
+// It returns the reference to run and an identity for it. The identity is what
+// a running container is compared against: for a built image it covers the
+// build context, so editing a Containerfile is noticed even though the tag
+// never changes.
+func ensureImage(name, instance string, c *config.Cell, progress io.Writer) (ref, identity string, err error) {
+	if c.Build == "" {
+		exists, err := podman.ImageExists(instance, c.Image)
+		if err != nil {
+			return "", "", err
+		}
+		if !exists {
+			fmt.Fprintf(progress, "Pulling %s...\n", c.Image)
+			if err := podman.Pull(instance, c.Image); err != nil {
+				return "", "", err
+			}
+		}
+		return c.Image, c.Image, nil
+	}
+
+	digest, err := podman.ContextDigest(c.BuildPath)
+	if err != nil {
+		return "", "", err
+	}
+	tag := config.Tag(name)
+	identity = "build:" + digest
+
+	built, err := podman.BuiltDigest(instance, tag)
+	if err != nil {
+		return "", "", err
+	}
+	if built != digest {
+		fmt.Fprintf(progress, "Building %s from %s...\n", tag, c.Build)
+		if err := podman.Build(instance, c.BuildPath, tag, digest); err != nil {
+			return "", "", err
+		}
+	}
+
+	return tag, identity, nil
 }
 
 // machineHome is the directory inside the machine that backs a cell's home.

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"gopkg.in/yaml.v3"
@@ -23,8 +24,14 @@ import (
 // inside it, so the two can never disagree.
 type Cell struct {
 	// Image is the container image holding the toolset, e.g.
-	// ghcr.io/you/nvim-claude:latest. Required.
+	// ghcr.io/you/nvim-claude:latest. Exactly one of image or build is
+	// required.
 	Image string `yaml:"image"`
+
+	// Build is a Containerfile to build the toolset from, as a path relative
+	// to the cell's directory. Its directory is the build context, which is
+	// copied into the machine and built there — the host never runs a build.
+	Build string `yaml:"build"`
 
 	// Secrets lists the environment variable names this cell is allowed to
 	// see. Values come from the cell's .env file and are passed to the
@@ -44,6 +51,16 @@ type Cell struct {
 
 	// VM overrides the machine the container runs in.
 	VM VM `yaml:"vm"`
+
+	// BuildPath is Build resolved against the cell's directory. It is filled
+	// in by LoadCell rather than read from the file.
+	BuildPath string `yaml:"-"`
+}
+
+// Tag is the image reference a built cell produces. Podman qualifies locally
+// built images with localhost/.
+func Tag(name string) string {
+	return "localhost/solitary-" + name + ":latest"
 }
 
 // VM describes the Lima machine backing a cell. Every field is optional: values
@@ -136,8 +153,18 @@ func LoadCell(name string) (*Cell, error) {
 	if err := yaml.Unmarshal(data, &cell); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
-	if cell.Image == "" {
-		return nil, fmt.Errorf("%s: image is required", path)
+	switch {
+	case cell.Image == "" && cell.Build == "":
+		return nil, fmt.Errorf("%s: set either image or build", path)
+	case cell.Image != "" && cell.Build != "":
+		return nil, fmt.Errorf("%s: set image or build, not both", path)
+	}
+	if cell.Build != "" {
+		dir, err := CellDir(name)
+		if err != nil {
+			return nil, err
+		}
+		cell.BuildPath = filepath.Join(dir, cell.Build)
 	}
 	if cell.Command == "" {
 		cell.Command = DefaultCommand

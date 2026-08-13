@@ -177,6 +177,12 @@ func Stop(name string) error {
 	return fmt.Errorf("%s did not stop within 30s", name)
 }
 
+// Copy places a host directory inside a machine. The directory itself is
+// created under target, not merged into it.
+func Copy(hostPath, name, target string) error {
+	return run("copy", "--recursive", hostPath, name+":"+target)
+}
+
 // Delete destroys a machine and its disk.
 func Delete(name string) error {
 	return run("delete", "--force", name)
