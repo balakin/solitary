@@ -147,6 +147,12 @@ solitary exec claude cat notes.md > notes.md   # redirection is the host's
 The command is run directly rather than through a shell, so flags after it are
 its own and quoting survives. Ask for a shell explicitly when you want one.
 
+A session you are watching also carries your terminal into the cell: its name,
+whether it does true colour, and its description, compiled into the cell the
+first time you attach. Terminals that ship their own terminfo — ghostty, kitty,
+wezterm — work without the cell having heard of them, and a theme arrives in the
+colours it was written in.
+
 Work belongs in `/home/cell`, which lives on the machine's disk rather than in
 the container. It survives a new image, a stop and start, and anything an editor
 installs into the home directory — so a tool you authenticate or configure by

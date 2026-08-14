@@ -180,14 +180,98 @@ func Shell(instance string) error {
 // command's streams are the caller's, so it can be piped into and out of like
 // any other command.
 func Exec(instance string, command []string) error {
-	args := []string{"podman", "exec", "--interactive"}
 	// podman refuses --tty when there is no terminal to allocate, which is
 	// the case when solitary is driven from a script.
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		args = append(args, "--tty")
-	}
-	args = append(args, "--workdir", HomeDir, Container)
-	args = append(args, command...)
+	return lima.Attach(instance, execArgs(term.IsTerminal(int(os.Stdin.Fd())), command)...)
+}
 
-	return lima.Attach(instance, args...)
+// execArgs builds the podman command line for one session. A session driven by
+// a person carries the terminal it is being watched from; one driven by a
+// script carries nothing and runs the command as given.
+func execArgs(tty bool, command []string) []string {
+	args := []string{"podman", "exec", "--interactive"}
+	if !tty {
+		args = append(args, "--workdir", HomeDir, Container)
+
+		return append(args, command...)
+	}
+
+	args = append(args, "--tty")
+	args = append(args, terminalEnv()...)
+	args = append(args, "--workdir", HomeDir, Container)
+	// The bootstrap runs before the command and replaces itself with it, so
+	// the command still receives exactly the arguments it was given.
+	args = append(args, "/bin/sh", "-c", terminfoBootstrap, "solitary")
+
+	return append(args, command...)
+}
+
+// terminfoEnv is the variable the description of the host's terminal is passed
+// in, for terminfoBootstrap to install.
+const terminfoEnv = "SOLITARY_TERMINFO"
+
+// terminfoBootstrap teaches a cell the terminal it is being watched from, then
+// runs the command it was given.
+//
+// Passing TERM alone is not enough: a name the cell has no description for is
+// worse than none, and programs refuse to start ("missing or unsuitable
+// terminal"). Terminals that ship their own description — ghostty, kitty,
+// wezterm — are exactly the ones no distribution knows.
+//
+// The compiled description lands in the cell's home, which is a directory on
+// the machine rather than in the container, so it is written once and then
+// survives new containers. If it cannot be installed the session falls back to
+// a terminal every cell knows, which loses capabilities but always works.
+const terminfoBootstrap = `
+if [ -n "${SOLITARY_TERMINFO:-}" ]; then
+	marker="$HOME/.terminfo/.solitary/$TERM"
+	if [ ! -f "$marker" ]; then
+		if printf '%s' "$SOLITARY_TERMINFO" | tic -x -o "$HOME/.terminfo" - 2>/dev/null; then
+			mkdir -p "${marker%/*}" && : > "$marker"
+		else
+			TERM=xterm-256color
+			export TERM
+		fi
+	fi
+	unset SOLITARY_TERMINFO
+fi
+exec "$@"
+`
+
+// terminalEnv passes the host terminal into the container: its name, whether it
+// does true colour, and its description. Without them a cell sees no TERM at
+// all and everything inside falls back to a dumb terminal, so colours are
+// approximated to the nearest basic one and full-screen programs misdraw.
+//
+// This describes the terminal a person is sitting at, not the cell, which is
+// why it belongs to a session rather than to the container's own environment.
+func terminalEnv() []string {
+	var env []string
+	for _, name := range []string{"TERM", "COLORTERM"} {
+		if v := os.Getenv(name); v != "" {
+			env = append(env, "--env", name+"="+v)
+		}
+	}
+	if description := terminfo(os.Getenv("TERM")); description != "" {
+		env = append(env, "--env", terminfoEnv+"="+description)
+	}
+
+	return env
+}
+
+// terminfo returns the host's description of a terminal, in the source form tic
+// compiles. An empty string means the host cannot describe it, which is not a
+// problem worth reporting: the session falls back to a terminal every cell
+// knows.
+func terminfo(name string) string {
+	if name == "" {
+		return ""
+	}
+
+	out, err := exec.Command("infocmp", "-x", "-q", name).Output()
+	if err != nil {
+		return ""
+	}
+
+	return string(out)
 }
