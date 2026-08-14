@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/dm-balakin/solitary/internal/host"
 	"github.com/dm-balakin/solitary/internal/lima"
 	"github.com/dm-balakin/solitary/internal/podman"
 	"github.com/dm-balakin/solitary/internal/secrets"
@@ -29,6 +30,9 @@ const (
 	StatusRunning Status = "running"
 	// StatusDegraded means the machine is up but the container is not.
 	StatusDegraded Status = "degraded"
+	// StatusUnreachable means Lima considers the machine running but nothing
+	// inside it answers.
+	StatusUnreachable Status = "unreachable"
 	// StatusBroken means Lima reports the machine as broken.
 	StatusBroken Status = "broken"
 )
@@ -78,9 +82,13 @@ func List() ([]Info, error) {
 		if inst, ok := byName[config.Instance(name)]; ok {
 			info.Status = statusOf(inst)
 			// A machine can be up while the container inside it is not,
-			// which is not the same thing as the cell being usable.
+			// which is not the same thing as the cell being usable — and it
+			// can be up while the guest itself has stopped answering.
 			if info.Status == StatusRunning {
-				if state, err := podman.Inspect(inst.Name); err == nil && !state.Running {
+				switch state, err := podman.Inspect(inst.Name); {
+				case errors.Is(err, lima.ErrUnreachable):
+					info.Status = StatusUnreachable
+				case err == nil && !state.Running:
 					info.Status = StatusDegraded
 				}
 			}
@@ -125,6 +133,10 @@ func Up(name string, progress io.Writer) error {
 		return err
 	}
 
+	if err := verifyMemory(c.VM.Memory, progress); err != nil {
+		return err
+	}
+
 	switch {
 	case inst == nil:
 		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
@@ -141,6 +153,15 @@ func Up(name string, progress io.Writer) error {
 
 	case inst.Status == lima.StatusBroken:
 		return fmt.Errorf("cell %q is broken; inspect it with 'limactl shell %s' or discard it with 'solitary rm %s'", name, instance, name)
+
+	case inst.Status == lima.StatusRunning && !lima.Reachable(instance):
+		// The machine's process is alive and Lima still calls it running, but
+		// nothing inside answers. Stopping it releases the memory and lets the
+		// next up start it cleanly.
+		return fmt.Errorf("cell %q is running but not responding.\n"+
+			"Stop it with 'solitary down %s' and start it again; if it keeps happening,\n"+
+			"check that vm.memory fits this host and look at ~/.lima/%s/ha.stderr.log",
+			name, name, instance)
 
 	case inst.Status == lima.StatusRunning:
 		warnDrift(name, rendered, progress)
@@ -328,6 +349,29 @@ func Shell(name string) error {
 	}
 
 	return podman.Shell(instance)
+}
+
+// verifyMemory refuses a machine the host cannot back, and warns about one it
+// can only just back. A machine larger than its backing store starts, reports
+// itself running and then dies with nothing written anywhere the user looks.
+func verifyMemory(memory string, progress io.Writer) error {
+	backing, err := host.MemoryBacking()
+	if err != nil {
+		// Not being able to measure the host is not a reason to refuse to
+		// work, but it is worth saying that the check did not happen.
+		fmt.Fprintf(progress, "Warning: could not check this host's memory: %v\n", err)
+		backing = host.Backing{}
+	}
+
+	warning, err := host.VerifyMemory(memory, backing)
+	if err != nil {
+		return err
+	}
+	if warning != "" {
+		fmt.Fprintf(progress, "Warning: %s\n", warning)
+	}
+
+	return nil
 }
 
 // warnDrift reports a vm block that has changed since the machine was created.

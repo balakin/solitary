@@ -25,8 +25,12 @@ A cell is a Lima VM with a container inside it.
   is real even if the agent gets root in its container.
 - **The container is the toolset.** Change `image:`, run `up` again: same VM,
   same disk, same secrets, different tools, in seconds.
-- **Nothing is mounted from the host.** Clone, build, lint, test and review
-  inside the cell. The host only ever displays results.
+- **Nothing is mounted from the host, ever.** Clone, build, lint, test and
+  review inside the cell. The host only ever displays results. A cell is a
+  server: its state lives on its own disk and is destroyed with it. The one
+  thing that outlives a cell is its secrets, because those were never in it.
+- **No browser.** A cell has no browser and no launcher configured. Authenticate
+  on the host and pass the credential in as a secret.
 - **Secrets are whitelisted per cell.** This cell sees a GitHub token; that one
   does not.
 - **Ports are the way in.** Run a dev server in the cell, open it in your
@@ -120,10 +124,29 @@ editing `cell.yaml` and running `up` again is all a change ever takes.
 
 Work belongs in `/home/cell`, which lives on the machine's disk rather than in
 the container. It survives a new image, a stop and start, and anything an editor
-installs into the home directory. `rm` is what discards it.
+installs into the home directory — so a tool you authenticate or configure by
+hand inside a cell stays that way for the life of the cell. `rm` is what
+discards it, and `rm` means destroy the machine.
+
+Nothing is synced back to the host, because a cell has no path to the host.
+Anything you would be upset to lose either belongs in a git remote or belongs in
+`secrets:`, which lives on the host and is passed in on every start.
 
 Creating a cell takes a couple of minutes: it downloads a cloud image and
 installs podman. Everything after that is container-speed.
+
+### A machine has to fit the host
+
+On Linux a guest's entire memory is a file on `/dev/shm`, which is usually half
+of RAM. A machine asking for more than that filesystem holds boots, reports
+itself running, and then dies the moment it touches enough pages — the process
+stays alive and Lima still calls it running, so every command hangs instead of
+failing. `up` refuses to create such a machine and says what to lower `vm.memory`
+to, and warns when a machine fits the filesystem but not the space free on it.
+
+A cell that stops answering for any other reason is reported as `unreachable`
+rather than `running`, and commands against it fail in seconds instead of
+blocking. `solitary down` then `up` recovers it without touching the disk.
 
 ## Requirements
 

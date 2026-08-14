@@ -3,6 +3,7 @@ package lima
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -188,6 +189,17 @@ func Delete(name string) error {
 	return run("delete", "--force", name)
 }
 
+// ErrUnreachable means a machine Lima considers running did not answer.
+//
+// A guest can die in a way that leaves its process alive and its status
+// unchanged — memory the host cannot back is one way — and every command then
+// blocks forever rather than failing. Commands are given a deadline so that
+// state surfaces as an error instead of a hang.
+var ErrUnreachable = errors.New("machine is not responding")
+
+// execTimeout bounds a single command inside a machine.
+var execTimeout = 30 * time.Second
+
 // Exec runs a command inside a machine, without a terminal, and returns its
 // standard output.
 func Exec(name string, args ...string) ([]byte, error) {
@@ -196,13 +208,19 @@ func Exec(name string, args ...string) ([]byte, error) {
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	defer cancel()
+
 	full := append([]string{"shell", "--workdir=/", name}, args...)
-	cmd := exec.Command(bin, full...)
+	cmd := exec.CommandContext(ctx, bin, full...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return stdout.Bytes(), fmt.Errorf("%s: %w after %s", name, ErrUnreachable, execTimeout)
+		}
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			return stdout.Bytes(), fmt.Errorf("%s: %w", strings.Join(args, " "), err)
@@ -211,6 +229,12 @@ func Exec(name string, args ...string) ([]byte, error) {
 	}
 
 	return stdout.Bytes(), nil
+}
+
+// Reachable reports whether a running machine answers a trivial command.
+func Reachable(name string) bool {
+	_, err := Exec(name, "true")
+	return err == nil
 }
 
 // Attach runs a command inside a machine with the terminal attached, so that
