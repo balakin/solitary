@@ -2,10 +2,13 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/dm-balakin/solitary/internal/cell"
 )
 
 // version is overwritten at build time via -ldflags.
@@ -24,6 +27,7 @@ func newRootCmd() *cobra.Command {
 		newInitCmd(),
 		newUpCmd(),
 		newShellCmd(),
+		newExecCmd(),
 		newDownCmd(),
 		newRmCmd(),
 		newLsCmd(),
@@ -35,8 +39,19 @@ func newRootCmd() *cobra.Command {
 
 // Main runs the CLI and exits with a non-zero status on failure.
 func Main() {
-	if err := newRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "solitary:", err)
-		os.Exit(1)
+	err := newRootCmd().Execute()
+	if err == nil {
+		return
 	}
+
+	// A command run inside a cell that exits non-zero is not solitary
+	// failing: pass its status through and say nothing, so that exec can
+	// stand in for the command it ran.
+	var exit *cell.ExitError
+	if errors.As(err, &exit) {
+		os.Exit(exit.Code)
+	}
+
+	fmt.Fprintln(os.Stderr, "solitary:", err)
+	os.Exit(1)
 }

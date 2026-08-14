@@ -122,6 +122,7 @@ nothing has, so iterating on a `Containerfile` is just `up` again.
 solitary init <name>            scaffold a cell definition
 solitary up <name|image-ref>    start the cell and attach
 solitary shell <name>           shell into a running cell
+solitary exec <name> <cmd...>   run one command in a running cell
 solitary down <name>            stop the cell, keep the disk
 solitary rm <name>              destroy the VM; definition and secrets stay
 solitary ls                     list cells and their state
@@ -132,6 +133,19 @@ solitary secrets <name>         set the values a cell is allowed to see
 the cell if absent, boots it if stopped, and attaches if it is already running.
 It also replaces the container when the image or the secrets changed, so
 editing `cell.yaml` and running `up` again is all a change ever takes.
+
+`exec` is `shell` for one command: it exits with the command's status and
+leaves its streams alone, so a cell can be scripted from the host without a
+terminal in the middle.
+
+```
+solitary exec claude git status
+solitary exec claude bash -lc 'npm test | tail -20'
+solitary exec claude cat notes.md > notes.md   # redirection is the host's
+```
+
+The command is run directly rather than through a shell, so flags after it are
+its own and quoting survives. Ask for a shell explicitly when you want one.
 
 Work belongs in `/home/cell`, which lives on the machine's disk rather than in
 the container. It survives a new image, a stop and start, and anything an editor

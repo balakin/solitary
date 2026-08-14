@@ -170,18 +170,24 @@ func Pull(instance, image string) error {
 
 // Shell opens an interactive shell in a cell's container.
 func Shell(instance string) error {
+	// bash where the image has it, sh everywhere else.
+	return Exec(instance, []string{
+		"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi",
+	})
+}
+
+// Exec runs one command in a cell's container and returns when it is done. The
+// command's streams are the caller's, so it can be piped into and out of like
+// any other command.
+func Exec(instance string, command []string) error {
 	args := []string{"podman", "exec", "--interactive"}
 	// podman refuses --tty when there is no terminal to allocate, which is
 	// the case when solitary is driven from a script.
 	if term.IsTerminal(int(os.Stdin.Fd())) {
 		args = append(args, "--tty")
 	}
-	args = append(args,
-		"--workdir", HomeDir,
-		Container,
-		// bash where the image has it, sh everywhere else.
-		"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi",
-	)
+	args = append(args, "--workdir", HomeDir, Container)
+	args = append(args, command...)
 
 	return lima.Attach(instance, args...)
 }

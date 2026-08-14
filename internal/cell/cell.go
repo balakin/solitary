@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -324,31 +325,77 @@ func machineHome(instance string) (string, error) {
 // Shell opens a shell inside a running cell. It never changes state: a cell
 // that is stopped or absent is an error rather than something to start.
 func Shell(name string) error {
-	if _, err := config.LoadCell(name); err != nil {
+	instance, err := attachable(name)
+	if err != nil {
 		return err
+	}
+
+	return exitStatus(podman.Shell(instance))
+}
+
+// ExitError reports that the command run by Exec failed. It carries the status
+// the command exited with, so that solitary can exit with it too and stay
+// usable from a script.
+type ExitError struct {
+	Code int
+}
+
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("command exited with status %d", e.Code)
+}
+
+// Exec runs one command inside a running cell. Like Shell it never changes
+// state: it is for asking a cell something, not for setting it up.
+func Exec(name string, command []string) error {
+	instance, err := attachable(name)
+	if err != nil {
+		return err
+	}
+
+	return exitStatus(podman.Exec(instance, command))
+}
+
+// exitStatus recognises a command that ran and failed. That is the command's
+// own result rather than something going wrong with solitary, so it is reported
+// as a status to exit with, leaving the explaining to whatever the command
+// already printed.
+func exitStatus(err error) error {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return &ExitError{Code: exit.ExitCode()}
+	}
+
+	return err
+}
+
+// attachable returns the machine to run in, or explains why the cell cannot be
+// attached to. It changes nothing: a cell that is not up stays that way.
+func attachable(name string) (string, error) {
+	if _, err := config.LoadCell(name); err != nil {
+		return "", err
 	}
 
 	instance := config.Instance(name)
 	inst, err := lima.Lookup(instance)
 	if err != nil {
-		return err
+		return "", err
 	}
 	switch {
 	case inst == nil:
-		return fmt.Errorf("cell %q does not exist yet: run 'solitary up %s'", name, name)
+		return "", fmt.Errorf("cell %q does not exist yet: run 'solitary up %s'", name, name)
 	case inst.Status != lima.StatusRunning:
-		return fmt.Errorf("%w: run 'solitary up %s'", ErrNotRunning, name)
+		return "", fmt.Errorf("%w: run 'solitary up %s'", ErrNotRunning, name)
 	}
 
 	state, err := podman.Inspect(instance)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !state.Running {
-		return fmt.Errorf("the container in %q is not running: run 'solitary up %s'", name, name)
+		return "", fmt.Errorf("the container in %q is not running: run 'solitary up %s'", name, name)
 	}
 
-	return podman.Shell(instance)
+	return instance, nil
 }
 
 // createMachine builds a machine from a definition rendered for this call. The
