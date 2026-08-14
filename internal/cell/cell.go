@@ -181,6 +181,10 @@ func Up(name string, progress io.Writer) error {
 	// The identity is configuration rather than a secret, so it is not
 	// declared in secrets: and does not live in .env.
 	env = append(env, c.Git.Env()...)
+	// Which cell this is. A container has the machine's hostname, which says
+	// nothing useful, so an image that wants to name the cell — in a prompt,
+	// say — has nowhere else to read it from.
+	env = append(env, "SOLITARY_CELL="+name)
 
 	return ensureContainer(name, instance, c, env, progress)
 }
