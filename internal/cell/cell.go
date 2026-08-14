@@ -175,6 +175,9 @@ func Up(name string, progress io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// The identity is configuration rather than a secret, so it is not
+	// declared in secrets: and does not live in .env.
+	env = append(env, c.Git.Env()...)
 
 	return ensureContainer(name, instance, c, env, progress)
 }

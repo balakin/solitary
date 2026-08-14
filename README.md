@@ -71,6 +71,10 @@ secrets:            # only these names are passed into the cell
 ports:              # omit and every listening port reaches host localhost;
   - 8080            # set and only these do
 
+git:                # optional; usually set once in config.yaml instead
+  name: Ada Lovelace
+  email: ada@example.com
+
 vm:                 # optional; falls back to config.yaml, then to built-ins
   cpus: 4
   memory: 8GiB
@@ -85,8 +89,15 @@ that are missing, and `solitary secrets <name>` sets or rotates them later.
 Because the values live on the host, `rm` followed by `up` gives you a clean
 cell that is still authenticated.
 
-`~/.config/solitary/config.yaml` holds a `vm:` block used as the default for
-every cell.
+`~/.config/solitary/config.yaml` holds `vm:` and `git:` blocks used as the
+defaults for every cell.
+
+A cell has nowhere of its own to keep a git identity — nothing is mounted from
+the host, and anything configured by hand inside a cell is gone when it is
+rebuilt. So `git:` is passed in as environment variables, which git reads ahead
+of any config file. git wants an author and a committer, each with a name and
+an email, and has no single setting for both; solitary fills in all four from
+these two fields. Write it once in `config.yaml` and every cell commits as you.
 
 ### Building the image
 

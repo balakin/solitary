@@ -52,6 +52,10 @@ type Cell struct {
 	// VM overrides the machine the container runs in.
 	VM VM `yaml:"vm"`
 
+	// Git is the identity commits made in this cell are attributed to.
+	// Usually set once in the user-wide config rather than per cell.
+	Git Git `yaml:"git"`
+
 	// BuildPath is Build resolved against the cell's directory. It is filled
 	// in by LoadCell rather than read from the file.
 	BuildPath string `yaml:"-"`
@@ -79,10 +83,39 @@ type VM struct {
 	Provision string `yaml:"provision,omitempty"`
 }
 
+// Git is who a cell commits as.
+//
+// A cell has no state of its own to carry a git identity: nothing is mounted
+// from the host, and anything configured by hand inside a cell is lost when it
+// is rebuilt. So solitary passes the identity in as environment variables,
+// which git reads ahead of any config file.
+type Git struct {
+	Name  string `yaml:"name,omitempty"`
+	Email string `yaml:"email,omitempty"`
+}
+
+// Env renders the identity as environment variables.
+//
+// git keeps the author of a change separate from whoever committed it, and has
+// no single setting for both, so one name here becomes both names. Whatever is
+// unset is left out, so that git falls back to its own rules rather than being
+// handed an empty identity.
+func (g Git) Env() []string {
+	var env []string
+	if g.Name != "" {
+		env = append(env, "GIT_AUTHOR_NAME="+g.Name, "GIT_COMMITTER_NAME="+g.Name)
+	}
+	if g.Email != "" {
+		env = append(env, "GIT_AUTHOR_EMAIL="+g.Email, "GIT_COMMITTER_EMAIL="+g.Email)
+	}
+	return env
+}
+
 // UserConfig is ~/.config/solitary/config.yaml: defaults applied to every cell
 // that does not override them.
 type UserConfig struct {
-	VM VM `yaml:"vm"`
+	VM  VM  `yaml:"vm"`
+	Git Git `yaml:"git"`
 }
 
 // DefaultCommand keeps a container alive without assuming anything about the
@@ -129,8 +162,20 @@ func Resolve(cell, user, defaults VM) VM {
 	}
 }
 
-// LoadCell reads a cell definition. The returned Cell has its vm block already
-// merged with the user-wide config and the built-in defaults.
+// ResolveGit merges a cell's identity with the user-wide one, field by field,
+// so a cell can change the email it commits with and keep the name.
+func ResolveGit(cell, user Git) Git {
+	if cell.Name == "" {
+		cell.Name = user.Name
+	}
+	if cell.Email == "" {
+		cell.Email = user.Email
+	}
+	return cell
+}
+
+// LoadCell reads a cell definition. The returned Cell has its vm and git blocks
+// already merged with the user-wide config and the built-in defaults.
 func LoadCell(name string) (*Cell, error) {
 	if err := ValidateName(name); err != nil {
 		return nil, err
@@ -175,6 +220,7 @@ func LoadCell(name string) (*Cell, error) {
 		return nil, err
 	}
 	cell.VM = Resolve(cell.VM, user.VM, Defaults())
+	cell.Git = ResolveGit(cell.Git, user.Git)
 
 	return &cell, nil
 }

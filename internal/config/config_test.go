@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestResolvePrefersMostSpecificLayer(t *testing.T) {
 	defaults := VM{Base: "ubuntu-lts", CPUs: 2, Memory: "4GiB", Disk: "20GiB"}
@@ -49,5 +52,44 @@ func TestValidateName(t *testing.T) {
 		if err := ValidateName(name); err == nil {
 			t.Errorf("ValidateName(%q) = nil, want an error", name)
 		}
+	}
+}
+
+func TestGitEnvSetsBothAuthorAndCommitter(t *testing.T) {
+	got := Git{Name: "Ada Lovelace", Email: "ada@example.com"}.Env()
+	want := []string{
+		"GIT_AUTHOR_NAME=Ada Lovelace",
+		"GIT_COMMITTER_NAME=Ada Lovelace",
+		"GIT_AUTHOR_EMAIL=ada@example.com",
+		"GIT_COMMITTER_EMAIL=ada@example.com",
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Env() = %q, want %q", got, want)
+	}
+}
+
+// An identity that is not configured must not be passed in at all: an empty
+// GIT_AUTHOR_NAME is worse than none, since git cannot fall back past it.
+func TestGitEnvOmitsWhatIsUnset(t *testing.T) {
+	if got := (Git{}).Env(); len(got) != 0 {
+		t.Errorf("Env() = %q, want nothing for an unconfigured identity", got)
+	}
+	if got := (Git{Email: "ada@example.com"}).Env(); len(got) != 2 {
+		t.Errorf("Env() = %q, want only the email pair", got)
+	}
+}
+
+func TestResolveGitFallsBackFieldByField(t *testing.T) {
+	user := Git{Name: "Ada Lovelace", Email: "ada@example.com"}
+
+	if got := ResolveGit(Git{}, user); got != user {
+		t.Errorf("ResolveGit() = %+v, want the user-wide identity %+v", got, user)
+	}
+
+	got := ResolveGit(Git{Email: "work@example.com"}, user)
+	want := Git{Name: "Ada Lovelace", Email: "work@example.com"}
+	if got != want {
+		t.Errorf("ResolveGit() = %+v, want %+v", got, want)
 	}
 }

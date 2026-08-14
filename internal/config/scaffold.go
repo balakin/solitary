@@ -30,6 +30,13 @@ image: docker.io/library/ubuntu:24.04
 #   - CLAUDE_API_KEY
 #   - GITHUB_TOKEN
 
+# Who this cell commits as. Set it once in ~/.config/solitary/config.yaml and
+# every cell uses it; set it here only to differ from that.
+#
+# git:
+#   name: Ada Lovelace
+#   email: ada@example.com
+
 # Guest ports reachable from the host. Leave this out and every port the cell
 # listens on reaches host localhost; set it and only these do.
 #
