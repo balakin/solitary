@@ -65,9 +65,36 @@ func EnvFile(name string) (string, error) {
 	return filepath.Join(dir, ".env"), nil
 }
 
-// RenderedFile is the Lima definition last applied for a cell, kept so that
-// changes to the vm block can be detected after the machine already exists.
-func RenderedFile(name string) (string, error) {
+// StateDir holds what solitary records for itself. It is deliberately not the
+// cell directory: a cell directory is written by hand, and nothing generated
+// belongs where someone might edit it.
+func StateDir() (string, error) {
+	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
+		return filepath.Join(dir, "solitary"), nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("locating home directory: %w", err)
+	}
+
+	return filepath.Join(home, ".local", "state", "solitary"), nil
+}
+
+// AppliedFile records a digest of the Lima definition a cell's machine was
+// created from, so that later changes to the vm block can be detected. The
+// definition itself is rendered fresh each time and never kept.
+func AppliedFile(name string) (string, error) {
+	dir, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "cells", name+".applied"), nil
+}
+
+// legacyRenderedFile is where the rendered definition used to be written, in
+// the cell's own directory. Cells created before that changed still have one.
+func legacyRenderedFile(name string) (string, error) {
 	dir, err := CellDir(name)
 	if err != nil {
 		return "", err

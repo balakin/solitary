@@ -1,11 +1,14 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // scaffold is written by 'solitary init'. It is a commented file rather than
@@ -78,35 +81,111 @@ func InitCell(name string, force bool) (string, error) {
 	return path, nil
 }
 
-// WriteRendered records the Lima definition applied for a cell, so that later
-// changes to the vm block can be detected.
-func WriteRendered(name, rendered string) error {
-	path, err := RenderedFile(name)
+// Digest summarises a rendered Lima definition. Only equality matters, so a
+// digest is recorded rather than the definition itself: there is nothing in it
+// for anyone to edit, and the definition it describes is regenerated on demand.
+func Digest(rendered string) string {
+	sum := sha256.Sum256([]byte(rendered))
+	return hex.EncodeToString(sum[:])
+}
+
+// WriteApplied records what a cell's machine was created from.
+func WriteApplied(name, rendered string) error {
+	path, err := AppliedFile(name)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(rendered), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(Digest(rendered)+"\n"), 0o600); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
+
+	// A cell created before the record moved still has the old file in its own
+	// directory. It is generated, so clear it rather than leave it to be edited.
+	if old, err := legacyRenderedFile(name); err == nil {
+		_ = os.Remove(old)
+	}
+
 	return nil
 }
 
-// ReadRendered returns the Lima definition last applied for a cell. It returns
-// an empty string when the cell has never been created.
-func ReadRendered(name string) (string, error) {
-	path, err := RenderedFile(name)
+// MigrateApplied moves a cell created before the record moved out of its
+// directory, so that no generated file is left where cells are edited.
+func MigrateApplied(name string) error {
+	state, err := AppliedFile(name)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(state); err == nil {
+		return nil // already migrated
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("checking %s: %w", state, err)
+	}
+
+	old, err := legacyRenderedFile(name)
+	if err != nil {
+		return err
+	}
+	legacy, err := os.ReadFile(old)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // nothing to migrate
+		}
+		return fmt.Errorf("reading %s: %w", old, err)
+	}
+
+	// WriteApplied stores the digest and clears the old file.
+	return WriteApplied(name, string(legacy))
+}
+
+// ReadApplied returns the digest a cell's machine was created from, or an empty
+// string when the cell has never been created.
+func ReadApplied(name string) (string, error) {
+	path, err := AppliedFile(name)
 	if err != nil {
 		return "", err
 	}
+
 	data, err := os.ReadFile(path)
+	if err == nil {
+		return strings.TrimSpace(string(data)), nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	// Fall back to a cell created before the record moved, so that its first
+	// up after upgrading does not report drift that is not there.
+	old, err := legacyRenderedFile(name)
+	if err != nil {
+		return "", err
+	}
+	legacy, err := os.ReadFile(old)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return "", nil
 		}
-		return "", fmt.Errorf("reading %s: %w", path, err)
+		return "", fmt.Errorf("reading %s: %w", old, err)
 	}
-	return string(data), nil
+
+	return Digest(string(legacy)), nil
+}
+
+// RemoveApplied forgets what a cell's machine was created from.
+func RemoveApplied(name string) error {
+	path, err := AppliedFile(name)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("removing %s: %w", path, err)
+	}
+
+	if old, err := legacyRenderedFile(name); err == nil {
+		_ = os.Remove(old)
+	}
+
+	return nil
 }

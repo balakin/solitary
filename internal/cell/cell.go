@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/dm-balakin/solitary/internal/config"
@@ -127,6 +128,10 @@ func Up(name string, progress io.Writer) error {
 		return err
 	}
 
+	if err := config.MigrateApplied(name); err != nil {
+		return err
+	}
+
 	instance := config.Instance(name)
 	inst, err := lima.Lookup(instance)
 	if err != nil {
@@ -140,14 +145,10 @@ func Up(name string, progress io.Writer) error {
 	switch {
 	case inst == nil:
 		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
-		if err := config.WriteRendered(name, rendered); err != nil {
+		if err := createMachine(instance, rendered); err != nil {
 			return err
 		}
-		path, err := config.RenderedFile(name)
-		if err != nil {
-			return err
-		}
-		if err := lima.Create(instance, path); err != nil {
+		if err := config.WriteApplied(name, rendered); err != nil {
 			return err
 		}
 
@@ -351,6 +352,24 @@ func Shell(name string) error {
 	return podman.Shell(instance)
 }
 
+// createMachine builds a machine from a definition rendered for this call. The
+// definition is a temporary file: it is derived from cell.yaml and the defaults
+// compiled in, so keeping a copy would only invite someone to edit the copy.
+func createMachine(instance, rendered string) error {
+	dir, err := os.MkdirTemp("", "solitary-")
+	if err != nil {
+		return fmt.Errorf("creating a temporary directory: %w", err)
+	}
+	defer os.RemoveAll(dir)
+
+	path := filepath.Join(dir, "lima.yaml")
+	if err := os.WriteFile(path, []byte(rendered), 0o600); err != nil {
+		return fmt.Errorf("writing the machine definition: %w", err)
+	}
+
+	return lima.Create(instance, path)
+}
+
 // verifyMemory refuses a machine the host cannot back, and warns about one it
 // can only just back. A machine larger than its backing store starts, reports
 // itself running and then dies with nothing written anywhere the user looks.
@@ -378,8 +397,8 @@ func verifyMemory(memory string, progress io.Writer) error {
 // Lima cannot apply those changes to an existing machine, and silently ignoring
 // them would leave the cell running settings the file no longer describes.
 func warnDrift(name, rendered string, w io.Writer) {
-	applied, err := config.ReadRendered(name)
-	if err != nil || applied == "" || applied == rendered {
+	applied, err := config.ReadApplied(name)
+	if err != nil || applied == "" || applied == config.Digest(rendered) {
 		return
 	}
 	fmt.Fprintf(w, "Warning: the vm settings for %q changed since its machine was created.\n", name)
@@ -493,10 +512,8 @@ func Remove(name string, progress io.Writer) error {
 
 	// Drop the record of what was applied, so a later up starts clean rather
 	// than comparing against a machine that no longer exists.
-	if path, err := config.RenderedFile(name); err == nil {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("removing %s: %w", path, err)
-		}
+	if err := config.RemoveApplied(name); err != nil {
+		return err
 	}
 
 	fmt.Fprintf(progress, "The definition and secrets for %q are kept; 'solitary up %s' rebuilds it.\n", name, name)
