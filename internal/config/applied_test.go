@@ -67,67 +67,6 @@ func TestAppliedRecordIsNotInTheCellDirectory(t *testing.T) {
 	}
 }
 
-// A cell created before the record moved keeps working, and its stale file is
-// cleared rather than left to be edited.
-func TestMigrateAppliedAdoptsTheOldFile(t *testing.T) {
-	isolate(t)
-
-	dir, err := CellDir("cell")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	legacy := filepath.Join(dir, "lima.yaml")
-	if err := os.WriteFile(legacy, []byte("old definition"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	// Before migrating, the old file is still honoured so no drift is reported.
-	got, err := ReadApplied("cell")
-	if err != nil {
-		t.Fatalf("ReadApplied() error = %v", err)
-	}
-	if want := Digest("old definition"); got != want {
-		t.Errorf("ReadApplied() = %q, want the old file's digest %q", got, want)
-	}
-
-	if err := MigrateApplied("cell"); err != nil {
-		t.Fatalf("MigrateApplied() error = %v", err)
-	}
-
-	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
-		t.Error("the old definition is still in the cell directory after migrating")
-	}
-	got, err = ReadApplied("cell")
-	if err != nil {
-		t.Fatalf("ReadApplied() after migrating error = %v", err)
-	}
-	if want := Digest("old definition"); got != want {
-		t.Errorf("migrating changed the recorded digest: got %q, want %q", got, want)
-	}
-}
-
-func TestMigrateAppliedLeavesAMigratedCellAlone(t *testing.T) {
-	isolate(t)
-
-	if err := WriteApplied("cell", "current"); err != nil {
-		t.Fatal(err)
-	}
-	if err := MigrateApplied("cell"); err != nil {
-		t.Fatalf("MigrateApplied() error = %v", err)
-	}
-
-	got, err := ReadApplied("cell")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := Digest("current"); got != want {
-		t.Errorf("ReadApplied() = %q, want %q", got, want)
-	}
-}
-
 func TestRemoveApplied(t *testing.T) {
 	isolate(t)
 

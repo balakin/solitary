@@ -102,42 +102,7 @@ func WriteApplied(name, rendered string) error {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
 
-	// A cell created before the record moved still has the old file in its own
-	// directory. It is generated, so clear it rather than leave it to be edited.
-	if old, err := legacyRenderedFile(name); err == nil {
-		_ = os.Remove(old)
-	}
-
 	return nil
-}
-
-// MigrateApplied moves a cell created before the record moved out of its
-// directory, so that no generated file is left where cells are edited.
-func MigrateApplied(name string) error {
-	state, err := AppliedFile(name)
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(state); err == nil {
-		return nil // already migrated
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("checking %s: %w", state, err)
-	}
-
-	old, err := legacyRenderedFile(name)
-	if err != nil {
-		return err
-	}
-	legacy, err := os.ReadFile(old)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil // nothing to migrate
-		}
-		return fmt.Errorf("reading %s: %w", old, err)
-	}
-
-	// WriteApplied stores the digest and clears the old file.
-	return WriteApplied(name, string(legacy))
 }
 
 // ReadApplied returns the digest a cell's machine was created from, or an empty
@@ -149,28 +114,14 @@ func ReadApplied(name string) (string, error) {
 	}
 
 	data, err := os.ReadFile(path)
-	if err == nil {
-		return strings.TrimSpace(string(data)), nil
-	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return "", fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	// Fall back to a cell created before the record moved, so that its first
-	// up after upgrading does not report drift that is not there.
-	old, err := legacyRenderedFile(name)
-	if err != nil {
-		return "", err
-	}
-	legacy, err := os.ReadFile(old)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return "", nil
 		}
-		return "", fmt.Errorf("reading %s: %w", old, err)
+		return "", fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	return Digest(string(legacy)), nil
+	return strings.TrimSpace(string(data)), nil
 }
 
 // RemoveApplied forgets what a cell's machine was created from.
@@ -181,10 +132,6 @@ func RemoveApplied(name string) error {
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("removing %s: %w", path, err)
-	}
-
-	if old, err := legacyRenderedFile(name); err == nil {
-		_ = os.Remove(old)
 	}
 
 	return nil

@@ -102,7 +102,6 @@ func TestBuildContextExcludesCellFiles(t *testing.T) {
 	containerfile := writeContext(t, map[string]string{
 		"Containerfile": "FROM ubuntu:24.04\n",
 		"cell.yaml":     "build: ./Containerfile\n",
-		"lima.yaml":     "cpus: 2\n",
 		".env":          "CLAUDE_API_KEY=\"sk-ant-secret\"\n",
 		"setup.sh":      "echo hello\n",
 	})
@@ -125,7 +124,7 @@ func TestBuildContextExcludesCellFiles(t *testing.T) {
 	}
 	defer os.RemoveAll(staged)
 
-	for _, name := range []string{".env", "cell.yaml", "lima.yaml"} {
+	for _, name := range []string{".env", "cell.yaml"} {
 		if _, err := os.Stat(filepath.Join(staged, name)); err == nil {
 			t.Errorf("staged context contains %s", name)
 		}

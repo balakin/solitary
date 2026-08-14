@@ -92,16 +92,6 @@ func AppliedFile(name string) (string, error) {
 	return filepath.Join(dir, "cells", name+".applied"), nil
 }
 
-// legacyRenderedFile is where the rendered definition used to be written, in
-// the cell's own directory. Cells created before that changed still have one.
-func legacyRenderedFile(name string) (string, error) {
-	dir, err := CellDir(name)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "lima.yaml"), nil
-}
-
 // UserConfigFile is the user-wide defaults file.
 func UserConfigFile() (string, error) {
 	root, err := Root()

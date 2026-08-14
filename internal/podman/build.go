@@ -29,7 +29,6 @@ const buildDir = "/tmp/solitary-build"
 var excluded = map[string]bool{
 	".env":         true,
 	"cell.yaml":    true,
-	"lima.yaml":    true,
 	".git":         true,
 	"node_modules": true,
 }

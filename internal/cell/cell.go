@@ -128,10 +128,6 @@ func Up(name string, progress io.Writer) error {
 		return err
 	}
 
-	if err := config.MigrateApplied(name); err != nil {
-		return err
-	}
-
 	instance := config.Instance(name)
 	inst, err := lima.Lookup(instance)
 	if err != nil {
