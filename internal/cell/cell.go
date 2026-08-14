@@ -135,12 +135,11 @@ func Up(name string, progress io.Writer) error {
 		return err
 	}
 
-	if err := verifyMemory(c.VM.Memory, progress); err != nil {
-		return err
-	}
-
 	switch {
 	case inst == nil:
+		if err := verifyMemory(c.VM.Memory, progress); err != nil {
+			return err
+		}
 		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
 		if err := createMachine(instance, rendered); err != nil {
 			return err
@@ -166,6 +165,9 @@ func Up(name string, progress io.Writer) error {
 
 	default:
 		warnDrift(name, rendered, progress)
+		if err := verifyMemory(c.VM.Memory, progress); err != nil {
+			return err
+		}
 		fmt.Fprintf(progress, "Starting cell %q...\n", name)
 		if err := lima.Start(instance); err != nil {
 			return err
@@ -419,6 +421,11 @@ func createMachine(instance, rendered string) error {
 // verifyMemory refuses a machine the host cannot back, and warns about one it
 // can only just back. A machine larger than its backing store starts, reports
 // itself running and then dies with nothing written anywhere the user looks.
+//
+// Only call this before a machine takes its memory. A running machine's memory
+// is a file in the backing store, so measuring free space while it is up counts
+// the machine's own memory as missing and warns that what is already running
+// will not fit.
 func verifyMemory(memory string, progress io.Writer) error {
 	backing, err := host.MemoryBacking()
 	if err != nil {
