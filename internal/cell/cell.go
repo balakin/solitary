@@ -196,7 +196,14 @@ func Up(name string, progress io.Writer) error {
 	// say — has nowhere else to read it from.
 	env = append(env, "SOLITARY_CELL="+name)
 
-	return ensureContainer(name, instance, c, env, progress)
+	if err := ensureContainer(name, instance, c, env, progress); err != nil {
+		return err
+	}
+
+	// After the container, since the tool has to be linked onto the PATH of
+	// whatever is running now, and unconditionally, since a container that
+	// did not need replacing may still predate this.
+	return installArtifacts(instance)
 }
 
 // resolveSecrets collects the values this cell is allowed to see, asking for

@@ -105,19 +105,5 @@ func parsePeer(state *TunnelState, line string) {
 
 // Transferred renders what has gone through the tunnel.
 func (t TunnelState) Transferred() string {
-	return "↓ " + bytes(t.Received) + "  ↑ " + bytes(t.Sent)
-}
-
-func bytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-
-	value, exp := float64(n)/unit, 0
-	for value >= unit && exp < 3 {
-		value, exp = value/unit, exp+1
-	}
-
-	return fmt.Sprintf("%.1f %ciB", value, "KMGT"[exp])
+	return "↓ " + Size(t.Received) + "  ↑ " + Size(t.Sent)
 }
