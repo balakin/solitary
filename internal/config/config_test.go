@@ -115,3 +115,31 @@ func TestNetworkIsUnrestrictedUntilSomethingIsAllowed(t *testing.T) {
 		t.Error("a cell with an allow list is not restricted")
 	}
 }
+
+func TestNetworkResolvers(t *testing.T) {
+	if got := (Network{}).ResolverAddresses(); !reflect.DeepEqual(got, DefaultResolvers()) {
+		t.Errorf("ResolverAddresses() = %q, want the defaults", got)
+	}
+
+	n := Network{Resolvers: []string{HostResolver, "10.0.0.53"}}
+	if got, want := n.ResolverAddresses(), []string{"10.0.0.53"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("ResolverAddresses() = %q, want %q", got, want)
+	}
+	if !n.UsesHostResolver() {
+		t.Error("UsesHostResolver() = false for a cell that asks for it")
+	}
+	if (Network{Resolvers: []string{"10.0.0.53"}}).UsesHostResolver() {
+		t.Error("UsesHostResolver() = true for a cell that named only addresses")
+	}
+}
+
+// A typo here would render a machine whose resolver forwards nowhere, which
+// looks like every name being unreachable.
+func TestNetworkRejectsAResolverThatIsNeither(t *testing.T) {
+	if err := (Network{Resolvers: []string{"dns.corp.example"}}).validateResolvers(); err == nil {
+		t.Error("a hostname was accepted as a resolver")
+	}
+	if err := (Network{Resolvers: []string{HostResolver, "10.0.0.53"}}).validateResolvers(); err != nil {
+		t.Errorf("validateResolvers() error = %v", err)
+	}
+}

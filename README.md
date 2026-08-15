@@ -125,6 +125,25 @@ network:
     - 10.1.2.0/24                # addresses and CIDR blocks work as given
 ```
 
+By default the cell's resolver forwards to `1.1.1.1` and `8.8.8.8`. That is the
+wrong answer on a network whose names only its own resolver knows — a corporate
+one, a split horizon, anything behind a proxy that intercepts DNS — and on one
+that refuses to carry DNS to a public resolver at all. Name the resolvers
+instead:
+
+```yaml
+network:
+  resolvers:
+    - host          # the resolver this machine is given, which is the host's
+    - 10.0.0.53     # or name them outright
+```
+
+`host` is discovered at boot from the machine's DHCP lease, so it follows the
+network you are on. It is the one hole in VM→host isolation and a narrow one:
+the cell's own resolver, port 53, and nothing else — a process in the cell still
+cannot reach the resolver directly, only ask the one in front of it, which
+answers for the allowed names only.
+
 Two pieces enforce it, both in the machine and outside the container. A resolver
 answers for the listed names only — anything else gets NXDOMAIN, so a query
 cannot carry data out to a resolver of an agent's choosing — and it records the

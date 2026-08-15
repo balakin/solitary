@@ -36,6 +36,8 @@ image: docker.io/library/ubuntu:24.04
 # have to be listed themselves, as does the registry an image is pulled from.
 #
 # network:
+#   resolvers:        # optional; defaults to 1.1.1.1 and 8.8.8.8.
+#     - host          # use the machine's own resolver — corporate DNS, VPNs
 #   allow:
 #     - github.com
 #     - api.anthropic.com

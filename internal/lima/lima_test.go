@@ -126,8 +126,10 @@ func TestRenderRestrictedNetwork(t *testing.T) {
 
 	for _, want := range []struct{ rule, why string }{
 		{"policy drop", "anything not allowed must be denied by default"},
-		{"server=/github.com/", "an allowed domain must resolve"},
-		{"nftset=/github.com/inet#solitary#allowed4", "resolving it must be what opens the firewall for it"},
+		{"for domain in github.com", "an allowed domain must be configured"},
+		{`echo "server=/$domain/$resolver"`, "an allowed domain must resolve"},
+		{`echo "nftset=/$domain/inet#solitary#allowed4"`, "resolving it must be what opens the firewall for it"},
+		{`resolvers="1.1.1.1 8.8.8.8"`, "a cell that names no resolvers gets the default ones"},
 		{"local=/#/", "an unlisted name must not resolve at all"},
 		{"elements = { 10.1.2.0/24 }", "a configured address must be allowed directly"},
 		{"ip daddr 127.0.0.1 udp dport 53 accept", "the cell may only ask its own resolver"},
@@ -152,5 +154,35 @@ func TestRenderLeavesAnUnrestrictedNetworkAlone(t *testing.T) {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("a cell with no allow list carries %q", unwanted)
 		}
+	}
+}
+
+// A network whose names only its own resolver knows — a corporate one, a split
+// horizon, a proxy that intercepts DNS — cannot be served by a public resolver.
+func TestRenderHostResolver(t *testing.T) {
+	got, err := Render(config.Defaults(), nil, config.Network{
+		Allow:     []string{"github.com"},
+		Resolvers: []string{config.HostResolver, "10.0.0.53"},
+	})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	for _, want := range []struct{ rule, why string }{
+		{`resolvers="10.0.0.53"`, "an address given here is used as it is"},
+		{"/run/systemd/netif/leases", "the machine's own resolver is discovered from its lease"},
+		{`resolvers="$resolvers $host_dns"`, "and forwarded to alongside the configured ones"},
+		{`nft add element inet solitary upstream`, "a discovered resolver has to be allowed once it is known"},
+		{"elements = { 10.0.0.53 }", "a configured one is allowed from the start"},
+	} {
+		if !strings.Contains(got, want.rule) {
+			t.Errorf("missing %q: %s", want.rule, want.why)
+		}
+	}
+
+	// Discovery must fail loudly: a machine that cannot find its resolver
+	// would otherwise come up resolving nothing at all.
+	if !strings.Contains(got, "could not find the resolver this machine was given") {
+		t.Error("a machine that cannot discover its resolver does not say so")
 	}
 }

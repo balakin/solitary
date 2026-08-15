@@ -93,6 +93,16 @@ type VM struct {
 // reaches. Setting it turns the cell default-deny — nothing leaves except to
 // what is listed, the host and the local network included.
 type Network struct {
+	// Resolvers are the DNS servers the cell's own resolver forwards to.
+	//
+	// Empty means the public resolvers in DefaultResolvers. The entry
+	// "host" means the resolver the machine is given by its network, which
+	// is the host's — the answer for a network whose names only its own
+	// resolver knows, or where reaching a public one is blocked outright.
+	// It is the one hole in VM→host isolation, and a narrow one: the
+	// cell's resolver alone, on port 53.
+	Resolvers []string `yaml:"resolvers,omitempty"`
+
 	// Allow lists domains and addresses the cell may open connections to.
 	// A domain covers its subdomains, so "github.com" reaches
 	// "api.github.com"; it does not cover a different domain the site
@@ -100,6 +110,61 @@ type Network struct {
 	// too. An entry that parses as an IP address or CIDR block is used as
 	// given.
 	Allow []string `yaml:"allow,omitempty"`
+}
+
+// HostResolver is the entry that means "whatever this machine is told to use".
+const HostResolver = "host"
+
+// DefaultResolvers are used when a cell names none. They are public on purpose:
+// the host is otherwise unreachable from a restricted cell, and a resolver on
+// the host's network would see every name the cell looks up.
+func DefaultResolvers() []string {
+	return []string{"1.1.1.1", "8.8.8.8"}
+}
+
+// ResolverAddresses are the fixed addresses to forward to. It is empty when the
+// cell asks only for the host's resolver, which is not known until the machine
+// boots.
+func (n Network) ResolverAddresses() []string {
+	if len(n.Resolvers) == 0 {
+		return DefaultResolvers()
+	}
+
+	var addresses []string
+	for _, entry := range n.Resolvers {
+		if entry != HostResolver {
+			addresses = append(addresses, entry)
+		}
+	}
+
+	return addresses
+}
+
+// UsesHostResolver reports whether the machine has to discover a resolver at
+// boot rather than being given one here.
+func (n Network) UsesHostResolver() bool {
+	for _, entry := range n.Resolvers {
+		if entry == HostResolver {
+			return true
+		}
+	}
+
+	return false
+}
+
+// validateResolvers refuses an entry that is neither an address nor the host
+// keyword, rather than rendering a machine whose resolver silently does
+// nothing.
+func (n Network) validateResolvers() error {
+	for _, entry := range n.Resolvers {
+		if entry == HostResolver || net.ParseIP(entry) != nil {
+			continue
+		}
+
+		return fmt.Errorf("network.resolvers: %q is neither an IP address nor %q", entry, HostResolver)
+	}
+
+	return nil
 }
 
 // Restricted reports whether this network is default-deny.
@@ -285,6 +350,9 @@ func LoadCell(name string) (*Cell, error) {
 	// to it: what a cell may reach should be readable from one place.
 	if len(cell.Network.Allow) == 0 {
 		cell.Network = user.Network
+	}
+	if err := cell.Network.validateResolvers(); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 
 	return &cell, nil
