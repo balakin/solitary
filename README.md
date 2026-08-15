@@ -234,6 +234,8 @@ solitary exec <name> <cmd...>   run one command in a running cell
 solitary down <name>            stop the cell, keep the disk
 solitary rm <name>              destroy the VM; definition and secrets stay
 solitary ls                     list cells and their state
+solitary fetch <name>           collect what a cell published
+solitary send <name> <file...>  put files into a cell's inbox
 solitary dashboard              manage cells in a live view
 solitary secrets <name>         set the values a cell is allowed to see
 ```
@@ -242,6 +244,49 @@ solitary secrets <name>         set the values a cell is allowed to see
 the cell if absent, boots it if stopped, and attaches if it is already running.
 It also replaces the container when the image or the secrets changed, so
 editing `cell.yaml` and running `up` again is all a change ever takes.
+
+### Handing files in and out
+
+Nothing is mounted from the host, so a cell has no path to your files and its own
+work has no way out. Two folders and two commands close that gap without opening
+one: the host is always the party that moves the bytes.
+
+Inside the cell:
+
+```
+artifact report.pdf dist/app   publish these, for the host to collect
+artifact --list                what is published, and what is waiting to come in
+```
+
+On the host:
+
+```
+solitary fetch claude          copy everything published into the current directory
+solitary fetch claude --list   see what is there without copying it
+solitary fetch claude a.pdf    or name what you want
+solitary send claude notes.md  copy a file into the cell's inbox ($HOME/inbox)
+```
+
+`fetch` copies rather than moves — the cell keeps its copy, so fetching twice is
+not a mistake and an interrupted fetch loses nothing. Both folders live in the
+cell's home, so they survive the container being replaced and go when the cell
+is destroyed.
+
+Only the machine has to be running, not the container: what a cell published can
+still be collected after whatever produced it has died.
+
+**The outbox is untrusted input, and is treated that way.** Its contents are
+named by whatever runs in the cell, and those names become paths on your machine:
+
+- solitary does the listing itself — regular files only, one level deep. A
+  symlink is not followed and a directory is not descended into (pack it into an
+  archive and publish that).
+- a name that is not a plain file name — `../escape`, `-rf`, an empty one — is
+  refused *by name* rather than silently skipped, and the rest still come out.
+- nothing is written over something already there without `--force`, and the
+  check happens before the first file is copied.
+- nothing arrives executable. What a cell produces is data on the host, never a
+  program.
 
 ### The dashboard
 
