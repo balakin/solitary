@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/dm-balakin/solitary/internal/cell"
+	"github.com/dm-balakin/solitary/internal/config"
 )
 
 // press sends one key, the way a person would.
@@ -247,5 +248,39 @@ func TestCancelledRemoveRunsNothing(t *testing.T) {
 	m, _ = press(t, m, "d")
 	if _, _ = press(t, m, "n"); len(rec.calls) != 0 {
 		t.Errorf("cancelling ran %q", rec.calls)
+	}
+}
+
+// A cell that restricts nothing must say so as plainly as one that does: the
+// absence of an allow list is the thing worth noticing.
+func TestNetworkPreview(t *testing.T) {
+	m := listed(t)
+
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude"}})
+	if view := next.(model).View(); !strings.Contains(view, "unrestricted") {
+		t.Errorf("a cell with no allow list does not say so:\n%s", view)
+	}
+
+	next, _ = m.Update(detailMsg{detail: cell.Detail{
+		Name: "claude",
+		Network: config.Network{Allow: []string{
+			"github.com", "api.anthropic.com", "registry.npmjs.org",
+			"deb.debian.org", "objects.githubusercontent.com", "10.1.2.0/24",
+		}},
+	}})
+	view := next.(model).View()
+
+	if !strings.Contains(view, "6 allowed") {
+		t.Errorf("the allow list is not counted:\n%s", view)
+	}
+	if !strings.Contains(view, "github.com") {
+		t.Errorf("the allow list is not previewed:\n%s", view)
+	}
+	// Six entries would crowd out everything else, so the rest are summarised.
+	if !strings.Contains(view, "+2 more") {
+		t.Errorf("a long allow list is not summarised:\n%s", view)
+	}
+	if strings.Contains(view, "10.1.2.0/24") {
+		t.Errorf("the whole list was shown rather than a preview:\n%s", view)
 	}
 }

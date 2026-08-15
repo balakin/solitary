@@ -193,6 +193,9 @@ state, refreshed as it changes, with the actions that apply to the selected one.
  │ › ● claude  running ││ image   build:./Containerfile    │
  │   ○ demo    stopped ││ machine 4 cpus · 4GiB · 40GiB    │
  ╰─────────────────────╯│ ports   all reach host localhost │
+                        │ network 2 allowed                │
+                        │         github.com               │
+                        │         api.anthropic.com        │
                         │ secrets 2 of 2 set               │
                         ╰──────────────────────────────────╯
  ↑↓ move · ⏎ shell · u up · s stop · e secrets · d rm · r refresh · q quit

@@ -93,10 +93,41 @@ func (m model) detailPane() string {
 		field("image", m.detail.Image),
 		field("machine", machine),
 		field("ports", ports),
-		field("secrets", m.secretsSummary()),
 	}
+	lines = append(lines, m.network()...)
+	lines = append(lines, field("secrets", m.secretsSummary()))
 
 	return pane(m.detail.Name, strings.Join(lines, "\n"))
+}
+
+// networkPreview is how many allowed entries are shown before the rest are
+// summarised. Enough to recognise a list; not enough to push everything else
+// off the pane.
+const networkPreview = 4
+
+// network shows what the cell may reach. Unlike everything else in this pane it
+// is a security control, so a cell that restricts nothing has to be as plain to
+// read as one that does — the absence is the thing worth noticing.
+func (m model) network() []string {
+	if !m.detail.Network.Restricted() {
+		return []string{field("network", statusStyle(cell.StatusDegraded).Render("unrestricted"))}
+	}
+
+	allow := m.detail.Network.Allow
+	lines := []string{field("network", noticeStyle.Render(fmt.Sprintf("%d allowed", len(allow))))}
+
+	shown := allow
+	if len(shown) > networkPreview {
+		shown = shown[:networkPreview]
+	}
+	for _, entry := range shown {
+		lines = append(lines, field("", valueStyle.Render(entry)))
+	}
+	if rest := len(allow) - len(shown); rest > 0 {
+		lines = append(lines, field("", labelStyle.Render(fmt.Sprintf("+%d more", rest))))
+	}
+
+	return lines
 }
 
 // secretsSummary says how many of a cell's secrets are ready without listing

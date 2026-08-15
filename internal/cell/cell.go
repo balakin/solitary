@@ -376,6 +376,7 @@ type Detail struct {
 	Image   string
 	VM      config.VM
 	Ports   []int
+	Network config.Network
 	Secrets []SecretState
 }
 
@@ -387,10 +388,11 @@ func Describe(name string) (Detail, error) {
 	}
 
 	detail := Detail{
-		Name:  name,
-		Image: c.Image,
-		VM:    c.VM,
-		Ports: c.Ports,
+		Name:    name,
+		Image:   c.Image,
+		VM:      c.VM,
+		Ports:   c.Ports,
+		Network: c.Network,
 	}
 	if c.Build != "" {
 		detail.Image = "build:" + c.Build
