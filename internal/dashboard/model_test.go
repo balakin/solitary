@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -341,6 +342,65 @@ func TestNetworkViewShowsTheTunnel(t *testing.T) {
 	}
 	if !strings.Contains(view, "nothing leaves at all") {
 		t.Errorf("the network view does not say what a tunnel being down means:\n%s", view)
+	}
+}
+
+// Configured and up are separate facts, and the gap between them is the one
+// worth seeing: a cell whose tunnel is down reaches nothing at all.
+func TestVPNRow(t *testing.T) {
+	tunnelled := cell.Detail{Name: "claude", Network: config.Network{
+		Allow:  []string{"github.com"},
+		VPN:    "./vpn.conf",
+		Tunnel: &config.Tunnel{EndpointHost: "de-ber.prod.surfshark.com", EndpointPort: "51820"},
+	}}
+
+	cases := []struct {
+		name   string
+		detail cell.Detail
+		state  *cell.TunnelState
+		want   string
+	}{
+		{"no tunnel", cell.Detail{Name: "claude"}, nil, "none"},
+		{"not asked yet", tunnelled, nil, "asking the machine"},
+		{"interface gone", tunnelled, &cell.TunnelState{}, "reaches nothing"},
+		{"up but silent", tunnelled, &cell.TunnelState{Up: true}, "no recent handshake"},
+		{
+			"working",
+			tunnelled,
+			&cell.TunnelState{Up: true, Handshook: true, Since: 12 * time.Second, Peer: "86.38.98.13"},
+			"handshake 12s ago",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := listed(t)
+			next, _ := m.Update(detailMsg{detail: tc.detail})
+			m = next.(model)
+			if tc.state != nil {
+				next, _ = m.Update(tunnelMsg{name: "claude", state: tc.state})
+				m = next.(model)
+			}
+
+			if view := m.View(); !strings.Contains(view, tc.want) {
+				t.Errorf("the cell pane does not say %q:\n%s", tc.want, view)
+			}
+		})
+	}
+}
+
+// The selection can move while a machine is answering, and the answer belongs
+// to whichever cell was asked.
+func TestTunnelStateOfAnotherCellIsIgnored(t *testing.T) {
+	m := listed(t)
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude", Network: config.Network{
+		VPN: "./vpn.conf", Tunnel: &config.Tunnel{EndpointHost: "de-ber.prod.surfshark.com", EndpointPort: "51820"},
+	}}})
+	m = next.(model)
+
+	next, _ = m.Update(tunnelMsg{name: "demo", state: &cell.TunnelState{Up: true, Handshook: true}})
+	if m := next.(model); m.tunnel != nil {
+		t.Error("the state of one cell's tunnel was shown for another")
 	}
 }
 

@@ -59,6 +59,10 @@ type model struct {
 
 	detail    cell.Detail
 	detailErr error
+	// tunnel is what the selected cell's tunnel is doing, when it has one
+	// and its machine could be asked. Nil means unknown, which is not the
+	// same as down.
+	tunnel *cell.TunnelState
 
 	traffic []trafficRow
 	stream  *stream
@@ -97,6 +101,12 @@ type (
 	savedMsg struct{ name string }
 	failMsg  struct{ err error }
 	tickMsg  struct{}
+	// tunnelMsg is the state of one cell's tunnel. It carries the name it
+	// was asked about, since the selection can move while it is in flight.
+	tunnelMsg struct {
+		name  string
+		state *cell.TunnelState
+	}
 )
 
 func newModel() model {
@@ -136,7 +146,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.withCells(msg.cells)
 
 	case detailMsg:
+		if msg.detail.Name != m.detail.Name {
+			// A different cell is being looked at, and the tunnel on
+			// screen belonged to the last one.
+			m.tunnel = nil
+		}
 		m.detail, m.detailErr = msg.detail, nil
+		if m.detail.Network.Tunnel != nil && m.selected().Status == cell.StatusRunning {
+			return m, tunnelStatus(m.detail.Name)
+		}
+		m.tunnel = nil
+		return m, nil
+
+	case tunnelMsg:
+		// The selection may have moved while the machine was answering.
+		if msg.name == m.detail.Name {
+			m.tunnel = msg.state
+		}
 		return m, nil
 
 	case savedMsg:
@@ -593,6 +619,22 @@ func describe(name string) tea.Cmd {
 		}
 
 		return detailMsg{detail}
+	}
+}
+
+// tunnelStatus asks the machine what its tunnel is doing. Unlike describe this
+// leaves the host, so it is only ever run for the cell being looked at, and
+// only when that cell has a tunnel and is running.
+func tunnelStatus(name string) tea.Cmd {
+	return func() tea.Msg {
+		state, err := cell.TunnelStatus(name)
+		if err != nil {
+			// Not worth a failure on screen: the row says what is known,
+			// and the next tick asks again.
+			return tunnelMsg{name: name}
+		}
+
+		return tunnelMsg{name: name, state: &state}
 	}
 }
 

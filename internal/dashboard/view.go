@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -101,6 +102,7 @@ func (m model) detailPane() string {
 		field("ports", ports),
 	}
 	lines = append(lines, m.network()...)
+	lines = append(lines, m.vpn()...)
 	lines = append(lines, field("secrets", m.secretsSummary()))
 
 	return pane(m.detail.Name, strings.Join(lines, "\n"))
@@ -140,6 +142,77 @@ func (m model) network() []string {
 	return lines
 }
 
+// vpn is where the cell's traffic leaves from, and whether it is leaving at
+// all. Configured and up are separate facts and the gap between them is the
+// one worth seeing: a cell whose tunnel is down reaches nothing.
+func (m model) vpn() []string {
+	tunnel := m.detail.Network.Tunnel
+	if tunnel == nil {
+		return []string{field("vpn", labelStyle.Render("none"))}
+	}
+
+	endpoint := tunnel.EndpointHost + ":" + tunnel.EndpointPort
+	switch {
+	case m.selected().Status != cell.StatusRunning:
+		return []string{
+			field("vpn", labelStyle.Render("configured")),
+			field("", valueStyle.Render(endpoint)),
+		}
+
+	case m.tunnel == nil:
+		return []string{
+			field("vpn", labelStyle.Render("asking the machine…")),
+			field("", valueStyle.Render(endpoint)),
+		}
+
+	case !m.tunnel.Up:
+		return []string{
+			field("vpn", errorStyle.Render("down — this cell reaches nothing")),
+			field("", valueStyle.Render(endpoint)),
+		}
+
+	case !m.tunnel.Healthy():
+		// Up but silent. From inside the cell this is indistinguishable
+		// from the network being broken, which is why it is said here.
+		return []string{
+			field("vpn", statusStyle(cell.StatusDegraded).Render("up, no recent handshake")),
+			field("", valueStyle.Render(m.peer(endpoint))),
+			field("", labelStyle.Render(m.tunnel.Transferred())),
+		}
+
+	default:
+		return []string{
+			field("vpn", noticeStyle.Render("up · handshake "+ago(m.tunnel.Since))),
+			field("", valueStyle.Render(m.peer(endpoint))),
+			field("", labelStyle.Render(m.tunnel.Transferred())),
+		}
+	}
+}
+
+// peer names what the cell is actually talking to. A provider that balances one
+// hostname across servers moves this between handshakes, so the address is
+// worth showing next to the name it came from.
+func (m model) peer(endpoint string) string {
+	if m.tunnel == nil || m.tunnel.Peer == "" {
+		return endpoint
+	}
+
+	return endpoint + " → " + m.tunnel.Peer
+}
+
+// ago renders how long since something happened, at the precision worth reading
+// at a glance.
+func ago(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	}
+}
+
 // networkBody is the whole allow list, for when the preview is not enough.
 func (m model) networkBody() string {
 	if !m.detail.Network.Restricted() {
@@ -156,7 +229,9 @@ func (m model) networkBody() string {
 		rows = append(rows,
 			labelStyle.Render("And what is allowed is reached only through the tunnel to ")+
 				valueStyle.Render(tunnel.EndpointHost)+labelStyle.Render(","),
-			labelStyle.Render("so while that is down, nothing leaves at all."))
+			labelStyle.Render("so while that is down, nothing leaves at all."),
+			"")
+		rows = append(rows, m.vpn()...)
 	}
 	if m.detail.Network.HostResolverOutsideTunnel() {
 		rows = append(rows, "", statusStyle(cell.StatusDegraded).Render(
