@@ -77,6 +77,7 @@ network:            # omit and the cell reaches whatever the host reaches;
   allow:            # set and it reaches these and nothing else
     - github.com
     - api.anthropic.com
+  vpn: ./vpn.conf   # optional; send all of it through this WireGuard tunnel
 
 git:                # optional; usually set once in config.yaml instead
   name: Ada Lovelace
@@ -163,6 +164,48 @@ dial tcp: lookup production.cloudfront.docker.com on 127.0.0.1:53: no such host
 
 Changing the list takes effect when the machine next starts: `solitary down
 <name> && solitary up <name>`.
+
+### Sending a cell out through a VPN
+
+`network.vpn` points at a WireGuard configuration — the `.conf` your provider
+gives you, saved beside `cell.yaml` and used unchanged:
+
+```yaml
+network:
+  vpn: ./vpn.conf
+  allow:
+    - github.com
+```
+
+Everything the cell reaches then leaves through that tunnel, so it has its own
+exit address rather than your host's. The tunnel is brought up in the machine,
+where the container cannot touch it; the container needs no configuration at all,
+because it runs on the machine's own network.
+
+The allow list is enforced exactly as before, with one difference: what it allows
+is reachable **through the tunnel only**. If the tunnel is down, nothing leaves —
+rather than the same traffic quietly going out the way it came. The one exception
+is the cell's resolver asking the servers under `resolvers:`, because the tunnel's
+own peer has to be resolved before there is a tunnel to resolve it through.
+
+Two things a configuration must not have: a `DNS =` line — a cell resolves through
+its own resolver, and if you want the tunnel's, name its address under
+`resolvers:` — and a missing `Endpoint`. Both are refused when the cell is read,
+rather than leaving you with a machine whose tunnel never comes up.
+
+**The `.conf` is not part of the cell.** It holds a private key, so solitary never
+puts it in the machine's definition; it is placed into the running machine
+separately, and read from your disk each time. That is what makes a cell
+definition shareable: publish `cell.yaml` and your `Containerfile`, keep `.env`
+and `vpn.conf` out of it, and whoever copies the cell supplies their own — from
+any provider, with no edit to `cell.yaml`, since the peer to allow is read out of
+whichever configuration is present.
+
+```gitignore
+# in a repo of cell definitions
+.env
+vpn.conf
+```
 
 ### Building the image
 
