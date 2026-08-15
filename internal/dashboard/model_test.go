@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -371,15 +372,21 @@ func TestTrafficViewNeedsARunningCell(t *testing.T) {
 }
 
 // The view is live, so leaving it has to end the follow rather than leave a
-// command reading a machine's log for nobody.
+// command reading a machine's log for nobody. Only esc and q leave: the other
+// keys move around the feed, and losing it to a stray keystroke is worse than
+// having to press escape.
 func TestLeavingTrafficStopsFollowing(t *testing.T) {
 	m := listed(t)
 	m.mode = watchingTraffic
 	m.traffic = []trafficRow{{entry: cell.Traffic{Kind: cell.TrafficDenied, Detail: "1.1.1.1:443"}, count: 1}}
 
-	m, _ = press(t, m, "x")
+	if stayed, _ := press(t, m, "x"); stayed.mode != watchingTraffic {
+		t.Error("a key with nothing bound to it left the view")
+	}
+
+	m, _ = press(t, m, "esc")
 	if m.mode != browsing {
-		t.Errorf("mode = %v after a key, want to be back in the list", m.mode)
+		t.Errorf("mode = %v after esc, want to be back in the list", m.mode)
 	}
 	if m.stream != nil {
 		t.Error("the follow was left running")
@@ -393,5 +400,96 @@ func TestTrafficIgnoredWhenNotWatching(t *testing.T) {
 
 	if got := next.(model).traffic; len(got) != 0 {
 		t.Errorf("recorded %+v while not watching", got)
+	}
+}
+
+// watched is a traffic view holding a mixed feed.
+func watched(t *testing.T, entries ...cell.Traffic) model {
+	t.Helper()
+
+	m := listed(t)
+	m.mode = watchingTraffic
+	for _, entry := range entries {
+		m.traffic = add(m.traffic, entry)
+	}
+
+	return m
+}
+
+var feed = []cell.Traffic{
+	{At: "12:00:01", Kind: cell.TrafficResolved, Detail: "api.github.com → 140.82.121.6"},
+	{At: "12:00:02", Kind: cell.TrafficRefused, Detail: "example.com"},
+	{At: "12:00:03", Kind: cell.TrafficQuery, Detail: "registry.npmjs.org"},
+	{At: "12:00:04", Kind: cell.TrafficDenied, Detail: "1.1.1.1:443"},
+}
+
+// Someone opening this view after something failed wants the failures.
+func TestTrafficFilters(t *testing.T) {
+	m := watched(t, feed...)
+
+	m, _ = press(t, m, "b")
+	kinds := map[cell.TrafficKind]bool{}
+	for _, row := range m.visibleTraffic() {
+		kinds[row.entry.Kind] = true
+	}
+	if kinds[cell.TrafficResolved] || kinds[cell.TrafficQuery] {
+		t.Errorf("refused-only still shows what succeeded: %v", kinds)
+	}
+	if len(m.visibleTraffic()) != 2 {
+		t.Errorf("kept %d rows, want the 2 that were blocked", len(m.visibleTraffic()))
+	}
+
+	// Typed filters narrow by name, and match however they are cased.
+	m, _ = press(t, m, "b") // off again
+	m, _ = press(t, m, "/")
+	if m.mode != filteringTraffic {
+		t.Fatalf("mode = %v after /, want to be typing a filter", m.mode)
+	}
+	for _, r := range "GITHUB" {
+		m, _ = press(t, m, string(r))
+	}
+	if got := m.visibleTraffic(); len(got) != 1 || !strings.Contains(got[0].entry.Detail, "github") {
+		t.Errorf("filter kept %+v, want only the github row", got)
+	}
+
+	// Escape leaves the view showing everything again.
+	m, _ = press(t, m, "esc")
+	if len(m.visibleTraffic()) != len(feed) {
+		t.Errorf("clearing the filter kept %d rows, want all %d", len(m.visibleTraffic()), len(feed))
+	}
+}
+
+// Scrolling back has to hold the view still, and say that it is holding it.
+func TestTrafficScrollingPausesTheFeed(t *testing.T) {
+	m := watched(t, feed...)
+	// More rows than fit, so there is something to scroll through.
+	for i := 0; i < trafficShown*2; i++ {
+		m.traffic = add(m.traffic, cell.Traffic{At: "12:01:00", Kind: cell.TrafficQuery, Detail: fmt.Sprintf("n%d.example.org", i)})
+	}
+
+	if !strings.Contains(m.View(), "live") {
+		t.Error("a feed at the newest end does not say it is live")
+	}
+
+	m, _ = press(t, m, "up")
+	if m.offset != 1 {
+		t.Fatalf("offset = %d after scrolling up once, want 1", m.offset)
+	}
+	if view := m.View(); !strings.Contains(view, "paused · 1 newer") {
+		t.Errorf("a held feed does not say so:\n%s", view)
+	}
+
+	// G returns to following, which is the way out of being paused.
+	m, _ = press(t, m, "G")
+	if m.offset != 0 || !strings.Contains(m.View(), "live") {
+		t.Errorf("G left offset = %d", m.offset)
+	}
+
+	// Scrolling stops at the oldest rather than running off the end.
+	m, _ = press(t, m, "g")
+	before := m.offset
+	m, _ = press(t, m, "up")
+	if m.offset != before {
+		t.Errorf("scrolled past the oldest row: %d then %d", before, m.offset)
 	}
 }

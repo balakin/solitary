@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -38,6 +39,8 @@ const (
 	viewingNetwork
 	// watchingTraffic is a live view of what it is actually reaching.
 	watchingTraffic
+	// filteringTraffic is typing what to narrow that view to.
+	filteringTraffic
 	// managingSecrets is the secrets view for the selected cell.
 	managingSecrets
 	// typing is entering a value for one secret, hidden as it is typed.
@@ -59,6 +62,15 @@ type model struct {
 
 	traffic []trafficRow
 	stream  *stream
+	// offset is how far back through the traffic the view is scrolled, in
+	// rows from the newest. Zero means the newest, which is where it stays
+	// unless someone scrolls: a feed that jumps while being read is worse
+	// than one that has to be sent back to the end.
+	offset int
+	// onlyBlocked narrows the view to what was refused, which is what
+	// someone opening it after something failed is looking for.
+	onlyBlocked bool
+	filter      textinput.Model
 
 	mode    mode
 	secret  int // index into detail.Secrets, in the secrets views
@@ -94,7 +106,12 @@ func newModel() model {
 	input.Prompt = "value "
 	input.CharLimit = 4096
 
-	return model{run: run, input: input}
+	filter := textinput.New()
+	filter.Prompt = "/"
+	filter.Placeholder = "name or address"
+	filter.CharLimit = 64
+
+	return model{run: run, input: input, filter: filter}
 }
 
 func (m model) Init() tea.Cmd {
@@ -165,11 +182,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.key(msg)
 	}
 
-	// The text input owns everything else while it has focus: cursor blink,
+	// The text inputs own everything else while focused: cursor blink,
 	// paste, and the rest.
-	if m.mode == typing {
+	switch m.mode {
+	case typing:
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	case filteringTraffic:
+		var cmd tea.Cmd
+		m.filter, cmd = m.filter.Update(msg)
 		return m, cmd
 	}
 
@@ -219,6 +241,8 @@ func (m model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.networkKey(msg)
 	case watchingTraffic:
 		return m.trafficKey(msg)
+	case filteringTraffic:
+		return m.filterKey(msg)
 	case managingSecrets:
 		return m.secretsKey(msg)
 	case typing:
@@ -302,6 +326,8 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.mode, m.traffic = watchingTraffic, nil
+		m.offset, m.onlyBlocked = 0, false
+		m.filter.SetValue("")
 		return m.clear(), tea.Batch(describe(name), follow(name))
 	}
 
@@ -340,19 +366,122 @@ func (m model) networkKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // trafficKey handles the live view. Leaving it ends the follow: a cell's log
 // should not be read over a connection nobody is watching.
 func (m model) trafficKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	rows := len(m.visibleTraffic())
+
 	switch msg.String() {
 	case "ctrl+c":
 		m.stream.stop()
 		m.quitting = true
 		return m, tea.Quit
-	case "c":
-		m.traffic = nil
-		return m, nil
-	default:
+
+	case "q", "esc":
 		m.stream.stop()
 		m.stream, m.mode = nil, browsing
 		return m.clear(), nil
+
+	case "up", "k":
+		return m.scroll(1, rows), nil
+	case "down", "j":
+		return m.scroll(-1, rows), nil
+	case "pgup", "ctrl+b":
+		return m.scroll(trafficShown, rows), nil
+	case "pgdown", "ctrl+f", " ":
+		return m.scroll(-trafficShown, rows), nil
+	case "g", "home":
+		return m.scroll(rows, rows), nil
+	case "G", "end":
+		m.offset = 0
+		return m, nil
+
+	case "b":
+		m.onlyBlocked = !m.onlyBlocked
+		m.offset = 0
+		return m, nil
+
+	case "/":
+		m.mode = filteringTraffic
+		m.filter.Focus()
+		return m, textinput.Blink
+
+	case "c":
+		m.traffic, m.offset = nil, 0
+		return m, nil
 	}
+
+	return m, nil
+}
+
+// filterKey narrows the view as it is typed, so what is being looked for shows
+// up before it has been fully spelled.
+func (m model) filterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.stream.stop()
+		m.quitting = true
+		return m, tea.Quit
+
+	case "enter":
+		m.mode = watchingTraffic
+		m.filter.Blur()
+		return m, nil
+
+	case "esc":
+		m.mode = watchingTraffic
+		m.filter.Blur()
+		m.filter.SetValue("")
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.filter, cmd = m.filter.Update(msg)
+	m.offset = 0
+
+	return m, cmd
+}
+
+// scroll moves the view back through what has been kept, stopping at either
+// end rather than wrapping.
+func (m model) scroll(by, rows int) model {
+	limit := rows - trafficShown
+	if limit < 0 {
+		limit = 0
+	}
+
+	m.offset += by
+	if m.offset > limit {
+		m.offset = limit
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
+
+	return m
+}
+
+// visibleTraffic is what the current filters leave.
+func (m model) visibleTraffic() []trafficRow {
+	needle := strings.ToLower(m.filter.Value())
+	if !m.onlyBlocked && needle == "" {
+		return m.traffic
+	}
+
+	rows := make([]trafficRow, 0, len(m.traffic))
+	for _, row := range m.traffic {
+		if m.onlyBlocked && !blocked(row.entry.Kind) {
+			continue
+		}
+		if needle != "" && !strings.Contains(strings.ToLower(row.entry.Detail), needle) {
+			continue
+		}
+		rows = append(rows, row)
+	}
+
+	return rows
+}
+
+// blocked is what someone opening this view after a failure is looking for.
+func blocked(kind cell.TrafficKind) bool {
+	return kind == cell.TrafficDenied || kind == cell.TrafficRefused
 }
 
 func (m model) secretsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

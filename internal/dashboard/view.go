@@ -76,7 +76,7 @@ func (m model) detailPane() string {
 	if m.mode == viewingNetwork {
 		return pane("network · "+m.detail.Name, m.networkBody())
 	}
-	if m.mode == watchingTraffic {
+	if m.mode == watchingTraffic || m.mode == filteringTraffic {
 		return pane("traffic · "+m.detail.Name, m.trafficBody())
 	}
 
@@ -158,7 +158,11 @@ const trafficShown = 14
 
 // trafficBody is what the cell's network is doing, as it happens.
 func (m model) trafficBody() string {
-	if len(m.traffic) == 0 {
+	if len(m.traffic) > 0 {
+		return strings.Join(append(m.trafficRows(), "", m.trafficStatus()), "\n")
+	}
+
+	{
 		if m.stream == nil {
 			return labelStyle.Render("Waiting for the machine's log…")
 		}
@@ -169,11 +173,24 @@ func (m model) trafficBody() string {
 
 		return labelStyle.Render("Nothing yet. This is live: it fills as the cell talks.")
 	}
+}
 
-	entries := m.traffic
-	if len(entries) > trafficShown {
-		entries = entries[len(entries)-trafficShown:]
+// trafficRows is the window of the feed currently being looked at.
+func (m model) trafficRows() []string {
+	visible := m.visibleTraffic()
+	if len(visible) == 0 {
+		return []string{labelStyle.Render("Nothing matches.")}
 	}
+
+	end := len(visible) - m.offset
+	if end < 1 {
+		end = 1
+	}
+	start := end - trafficShown
+	if start < 0 {
+		start = 0
+	}
+	entries := visible[start:end]
 
 	rows := make([]string, 0, len(entries))
 	for _, row := range entries {
@@ -188,7 +205,35 @@ func (m model) trafficBody() string {
 		rows = append(rows, line)
 	}
 
-	return strings.Join(rows, "\n")
+	return rows
+}
+
+// trafficStatus says whether what is on screen is still moving, and what is
+// being left out. A feed that has quietly stopped following looks identical to
+// a cell that has gone quiet, and the difference matters.
+func (m model) trafficStatus() string {
+	parts := []string{}
+
+	if m.offset > 0 {
+		parts = append(parts, statusStyle(cell.StatusDegraded).Render(
+			fmt.Sprintf("paused · %d newer", m.offset)))
+	} else {
+		parts = append(parts, noticeStyle.Render("live"))
+	}
+
+	if m.onlyBlocked {
+		parts = append(parts, errorStyle.Render("refused only"))
+	}
+	if m.mode == filteringTraffic {
+		parts = append(parts, m.filter.View())
+	} else if value := m.filter.Value(); value != "" {
+		parts = append(parts, valueStyle.Render("/"+value))
+	}
+
+	kept := len(m.visibleTraffic())
+	parts = append(parts, labelStyle.Render(fmt.Sprintf("%d of %d", kept, len(m.traffic))))
+
+	return strings.Join(parts, labelStyle.Render(" · "))
 }
 
 // trafficStyle colours what happened: what was refused is the point of the
@@ -283,8 +328,10 @@ func (m model) help() string {
 		return "enter save · esc cancel"
 	case viewingNetwork:
 		return "any key back"
+	case filteringTraffic:
+		return "type to narrow · enter keep · esc clear"
 	case watchingTraffic:
-		return "live · c clear · any other key back"
+		return "↑↓ scroll · G live · / filter · b refused only · c clear · esc back"
 	case managingSecrets:
 		return "↑↓ move · enter set value · esc back"
 	default:
