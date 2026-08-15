@@ -164,7 +164,12 @@ func Up(name string, progress io.Writer) error {
 		warnDrift(name, rendered, progress)
 
 	default:
-		warnDrift(name, rendered, progress)
+		// A stopped machine reads its definition again when it starts, so
+		// this is the moment a change to the vm block can take effect
+		// without destroying the disk that machine carries.
+		if err := applyDrift(name, instance, rendered, progress); err != nil {
+			return err
+		}
 		if err := verifyMemory(c.VM.Memory, progress); err != nil {
 			return err
 		}
@@ -526,13 +531,39 @@ func verifyMemory(memory string, progress io.Writer) error {
 // Lima cannot apply those changes to an existing machine, and silently ignoring
 // them would leave the cell running settings the file no longer describes.
 func warnDrift(name, rendered string, w io.Writer) {
-	applied, err := config.ReadApplied(name)
-	if err != nil || applied == "" || applied == config.Digest(rendered) {
+	if !drifted(name, rendered) {
 		return
 	}
-	fmt.Fprintf(w, "Warning: the vm settings for %q changed since its machine was created.\n", name)
+	fmt.Fprintf(w, "Warning: the vm settings for %q changed since its machine started.\n", name)
 	fmt.Fprintf(w, "         The running cell still uses the old ones. To apply the change:\n")
-	fmt.Fprintf(w, "           solitary rm %s && solitary up %s\n", name, name)
+	fmt.Fprintf(w, "           solitary down %s && solitary up %s\n", name, name)
+}
+
+// applyDrift gives a stopped machine the definition the cell now describes.
+//
+// The vm block is settings a machine reads at boot, so a stopped one can be
+// handed new ones and simply start with them. Only what solitary generates is
+// replaced, and only when the cell says something different from what was last
+// applied — a machine nobody has changed is not rewritten.
+func applyDrift(name, instance, rendered string, progress io.Writer) error {
+	if !drifted(name, rendered) {
+		return nil
+	}
+
+	fmt.Fprintf(progress, "The vm settings for %q changed; applying them to its machine.\n", name)
+	if err := lima.Apply(instance, rendered); err != nil {
+		return err
+	}
+
+	return config.WriteApplied(name, rendered)
+}
+
+// drifted reports whether a cell now describes a machine different from the one
+// its definition was last applied to.
+func drifted(name, rendered string) bool {
+	applied, err := config.ReadApplied(name)
+
+	return err == nil && applied != "" && applied != config.Digest(rendered)
 }
 
 // SetSecrets asks for every secret a cell declares, keeping values that are

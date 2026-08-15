@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -187,6 +188,116 @@ func Copy(hostPath, name, target string) error {
 // Delete destroys a machine and its disk.
 func Delete(name string) error {
 	return run("delete", "--force", name)
+}
+
+// Apply replaces a stopped machine's definition with a new one, so that
+// settings a machine takes at boot — how much memory it gets, which ports reach
+// the host — can change without destroying the disk that machine carries.
+//
+// Lima keeps the definition it was created from inside the machine's own
+// directory and reads it again on every start. Writing it there is what
+// 'limactl edit' does; this does the same thing without an editor.
+//
+// The machine must be stopped: a running one has already read the file.
+func Apply(name, definition string) error {
+	// What a machine stores is not the template it was created from: Lima
+	// resolves base: into the image list it picked, and panics on a stored
+	// definition that still refers to a template. Resolve it here, which
+	// also validates it — a machine must never be left holding a definition
+	// that cannot start it.
+	resolved, err := resolve(definition)
+	if err != nil {
+		return err
+	}
+
+	dir, err := dirOf(name)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(dir, "lima.yaml")
+	// Written beside the file it replaces and renamed over it, so that an
+	// interrupted write cannot leave a machine with half a definition.
+	temp, err := os.CreateTemp(dir, "lima.yaml.*")
+	if err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	defer os.Remove(temp.Name())
+
+	if _, err := temp.WriteString(resolved); err != nil {
+		temp.Close()
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	if err := os.Chmod(temp.Name(), 0o600); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	if err := os.Rename(temp.Name(), path); err != nil {
+		return fmt.Errorf("replacing %s: %w", path, err)
+	}
+
+	return nil
+}
+
+// resolve turns a template into the form a machine stores: every reference it
+// names — the base template, the images it chooses — replaced by what it refers
+// to. It fails when the definition is not valid, which is the point of doing it
+// before anything is replaced.
+func resolve(definition string) (string, error) {
+	bin, err := limactl()
+	if err != nil {
+		return "", err
+	}
+
+	temp, err := os.CreateTemp("", "solitary-*.yaml")
+	if err != nil {
+		return "", fmt.Errorf("resolving the machine definition: %w", err)
+	}
+	defer os.Remove(temp.Name())
+
+	if _, err := temp.WriteString(definition); err != nil {
+		temp.Close()
+		return "", fmt.Errorf("resolving the machine definition: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return "", fmt.Errorf("resolving the machine definition: %w", err)
+	}
+
+	cmd := exec.Command(bin, "template", "copy", "--embed-all", temp.Name(), "-")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		return "", fmt.Errorf("resolving the machine definition: %w\n%s", err, msg)
+	}
+	if stdout.Len() == 0 {
+		return "", errors.New("resolving the machine definition produced nothing")
+	}
+
+	return stdout.String(), nil
+}
+
+// dirOf asks Lima where a machine keeps its files, rather than assuming the
+// default location: LIMA_HOME moves it.
+func dirOf(name string) (string, error) {
+	bin, err := limactl()
+	if err != nil {
+		return "", err
+	}
+
+	out, err := exec.Command(bin, "list", "--format", "{{.Dir}}", name).Output()
+	if err != nil {
+		return "", fmt.Errorf("finding the directory of machine %q: %w", name, err)
+	}
+
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		return "", fmt.Errorf("machine %q has no directory", name)
+	}
+
+	return dir, nil
 }
 
 // ErrUnreachable means a machine Lima considers running did not answer.
