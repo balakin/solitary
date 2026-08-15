@@ -7,6 +7,7 @@ The command surface is intentionally small:
 
 ```text
 solitary init <name>            scaffold a cell definition
+solitary clone <source>         install a cell definition from a repository
 solitary up <name|image-ref>    start the cell and attach
 solitary shell <name>           shell into a running cell
 solitary exec <name> <cmd...>   run one command in a running cell
@@ -41,6 +42,26 @@ If a cell of the derived name already exists with a different image, the command
 `down` keeps the disk. `rm` removes the VM and its disk but leaves the definition and host-held secrets, so the cell can be recreated already authenticated. That makes a clean rebuild a normal operation rather than incident response.
 
 `rm --force` skips the confirmation prompt. `init --force` overwrites an existing definition.
+
+## Taking someone else's cell
+
+`clone` installs one cell definition out of a git repository — a repository that is a single cell, or one directory out of a catalogue of them.
+
+```sh
+solitary clone owner/repo               # a repository that is one cell
+solitary clone owner/repo/claude        # one cell out of a catalogue
+solitary clone owner/repo               # a catalogue, unnamed: lists it
+solitary clone ../my-cells#claude       # any git URL or local path, #cell inside it
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--as <name>` | Install under a different name. |
+| `--force` | Replace an existing definition, keeping its `.env`. |
+| `--yes` | Install without asking. |
+| `--list` | Show what the definition asks for without installing it. |
+
+See [sharing cells](/docs/sharing) for what is copied, what is refused, and how updating one works.
 
 ## Direct execution
 

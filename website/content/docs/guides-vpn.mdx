@@ -19,7 +19,7 @@ network:
 
 The path is relative to the cell definition. Use the `.conf` your provider gives you, unchanged.
 
-The configuration is **not part of the cell definition**. It holds a private key, so solitary never writes it into the machine's definition file; it is read from your disk on every `up` and placed into the running machine separately. That is what keeps a cell definition shareable: publish `cell.yaml`, keep `vpn.conf` and `.env` out of version control, and whoever copies the cell supplies their own — from any provider, with no edit to `cell.yaml`, because the peer to allow is read out of whichever configuration is present.
+The configuration is **not part of the cell definition**. It holds a private key, so solitary never writes it into the machine's definition file; it is read from your disk on every `up` and placed into the running machine separately. That is what keeps a cell definition shareable: publish `cell.yaml`, keep `vpn.conf` and `.env` out of version control, and whoever [clones the cell](/docs/sharing) supplies their own — from any provider, with no edit to `cell.yaml`, because the peer to allow is read out of whichever configuration is present.
 
 ```text
 # .gitignore, in a repo of cell definitions

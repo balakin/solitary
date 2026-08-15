@@ -1,0 +1,100 @@
+---
+title: Sharing cells
+description: Publish a cell definition, and take one cell out of someone else's repository.
+---
+
+A cell definition is a `cell.yaml` and, usually, a `Containerfile` beside it. Neither holds a credential, so both are meant to be published: what a cell reaches, what it is built from and which secrets it expects are exactly the things worth reading before you run one.
+
+`solitary clone` is the other half of that. It takes **one** cell out of a repository, so a repository can show all of yours and someone else can take the two they want.
+
+## Taking one
+
+```sh
+solitary clone dm-balakin/nvim-cell        # a repository that is one cell
+solitary clone dm-balakin/cells/claude     # one cell out of a catalogue
+solitary clone dm-balakin/cells            # a catalogue, unnamed: lists what is in it
+```
+
+`owner/repo` is GitHub shorthand. Anything else is passed to git as it stands — a full URL, an SSH remote, or a path on this machine — and the cell inside it is named with a `#fragment`:
+
+```sh
+solitary clone https://gitlab.com/me/cells.git#rust
+solitary clone git@github.com:me/cells.git#rust
+solitary clone ../my-cells#claude
+```
+
+Fetching is `git clone`, so your existing credentials, SSH agent and rewriting rules apply and a private repository needs no new configuration.
+
+## Two layouts, no flag
+
+A `cell.yaml` at the repository's root means the repository **is** one cell, the shape a dotfiles repository has; it installs under the repository's own name. No root `cell.yaml` means the directories inside it are the cells, and naming one is how you pick:
+
+```text
+$ solitary clone dm-balakin/cells
+github.com/dm-balakin/cells holds 3 cells:
+  claude
+  go
+  rust
+Take one with: solitary clone github.com/dm-balakin/cells#claude
+```
+
+## You see what it asks for first
+
+A cell names the secrets it wants, and running it hands them to an image someone else chose. So the definition is shown and the install is asked for:
+
+```text
+Cell "claude" from github.com/dm-balakin/cells
+  image    build:./Containerfile
+  machine  4 cpus · 8GiB · 40GiB
+  secrets  CLAUDE_API_KEY, GITHUB_TOKEN
+           set them with: solitary secrets claude
+  ports    all reach host localhost
+  network  2 allowed
+           github.com
+           api.anthropic.com
+
+Install it? [y/N]
+```
+
+Nothing has started either way — `up` does that, afterwards. `--yes` skips the question and `--list` shows this without installing anything.
+
+Install under your own name with `--as`:
+
+```sh
+solitary clone dm-balakin/cells/claude --as work
+```
+
+## What is refused
+
+A repository is written by someone else and its file names become paths on your machine, so what may be copied is decided here rather than by whatever the repository happens to contain. Anything refused is named rather than quietly skipped:
+
+- **`.env`, `*.env` and `vpn.conf` never arrive.** They are the two files that carry credentials, and those belong to whoever runs a cell rather than to the cell. One in a published repository is a mistake in it, or an attempt to seed your machine with someone else's key.
+- **A symlink is refused, at any depth.** It is the one entry whose target need not be inside the repository.
+- `.git` is left behind. A cloned cell is a copy, with no link back to where it came from.
+- What lands is written the way `init` writes a cell: `0600`, or `0700` for something the repository marked executable — a build context runs inside the machine, never here.
+
+The definition is then parsed before it becomes a cell, so a broken one is refused rather than half-installed.
+
+## Updating one
+
+Clone the same source again with `--force`:
+
+```sh
+solitary clone dm-balakin/cells/claude --force
+```
+
+That replaces the files the repository provides and leaves everything else in the cell's directory alone — your `.env`, your `vpn.conf`, anything you added. So an update keeps you authenticated, and `solitary up claude` afterwards is the whole of applying it.
+
+Without `--force`, an existing cell of that name is refused before anything is fetched, naming both ways out: `--as` for a second copy, `--force` to replace this one.
+
+## Publishing yours
+
+A repository of cells is one directory per cell, each holding its `cell.yaml` and whatever it builds from. Keep the credentials out of it:
+
+```gitignore
+# in a repo of cell definitions
+.env
+vpn.conf
+```
+
+A `network.vpn:` line is fine to publish — the file it names is deliberately absent, and whoever clones the cell supplies their own, from any provider, with no edit to `cell.yaml`. `clone` says so when it shows the definition.
