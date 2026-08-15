@@ -19,17 +19,21 @@ func TestRenderedDefinitionsPassLimactlValidate(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		vm    config.VM
-		ports []int
+		vm      config.VM
+		ports   []int
+		network config.Network
 	}{
 		"defaults":  {vm: config.Defaults()},
 		"withPorts": {vm: config.Defaults(), ports: []int{8080, 3000}},
 		"provision": {vm: config.VM{Base: "ubuntu-lts", CPUs: 4, Memory: "8GiB", Disk: "40GiB", Provision: "echo hello\necho world"}},
+		"restricted": {vm: config.Defaults(), network: config.Network{
+			Allow: []string{"github.com", "api.anthropic.com", "10.1.2.0/24"},
+		}},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			rendered, err := Render(tc.vm, tc.ports)
+			rendered, err := Render(tc.vm, tc.ports, tc.network)
 			if err != nil {
 				t.Fatalf("Render() error = %v", err)
 			}

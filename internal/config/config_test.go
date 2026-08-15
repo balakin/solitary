@@ -93,3 +93,25 @@ func TestResolveGitFallsBackFieldByField(t *testing.T) {
 		t.Errorf("ResolveGit() = %+v, want %+v", got, want)
 	}
 }
+
+func TestNetworkSplitsDomainsFromAddresses(t *testing.T) {
+	n := Network{Allow: []string{"github.com", "10.1.2.0/24", "api.anthropic.com", "192.0.2.7"}}
+
+	if got, want := n.Domains(), []string{"github.com", "api.anthropic.com"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Domains() = %q, want %q", got, want)
+	}
+	if got, want := n.Addresses(), []string{"10.1.2.0/24", "192.0.2.7"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Addresses() = %q, want %q", got, want)
+	}
+}
+
+// An empty allow list means the cell's network is left alone. Anything else
+// would silently cut off every cell that predates this setting.
+func TestNetworkIsUnrestrictedUntilSomethingIsAllowed(t *testing.T) {
+	if (Network{}).Restricted() {
+		t.Error("a cell with no allow list is restricted")
+	}
+	if !(Network{Allow: []string{"github.com"}}).Restricted() {
+		t.Error("a cell with an allow list is not restricted")
+	}
+}

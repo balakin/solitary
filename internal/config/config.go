@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -52,6 +53,9 @@ type Cell struct {
 	// VM overrides the machine the container runs in.
 	VM VM `yaml:"vm"`
 
+	// Network restricts what the cell can reach.
+	Network Network `yaml:"network"`
+
 	// Git is the identity commits made in this cell are attributed to.
 	// Usually set once in the user-wide config rather than per cell.
 	Git Git `yaml:"git"`
@@ -81,6 +85,61 @@ type VM struct {
 	// podman setup. A value here replaces the user-wide one rather than
 	// appending to it.
 	Provision string `yaml:"provision,omitempty"`
+}
+
+// Network says what a cell is allowed to reach.
+//
+// An empty Allow leaves the cell's network alone: it reaches whatever the host
+// reaches. Setting it turns the cell default-deny — nothing leaves except to
+// what is listed, the host and the local network included.
+type Network struct {
+	// Allow lists domains and addresses the cell may open connections to.
+	// A domain covers its subdomains, so "github.com" reaches
+	// "api.github.com"; it does not cover a different domain the site
+	// happens to use, so "objects.githubusercontent.com" has to be listed
+	// too. An entry that parses as an IP address or CIDR block is used as
+	// given.
+	Allow []string `yaml:"allow,omitempty"`
+}
+
+// Restricted reports whether this network is default-deny.
+func (n Network) Restricted() bool {
+	return len(n.Allow) > 0
+}
+
+// Domains and Addresses split the allow list by what each entry is, because the
+// two are enforced differently: an address goes straight into the firewall,
+// while a domain is resolved by the cell's own resolver, which records what it
+// resolves to. That is what keeps a rule working when a site changes its
+// addresses.
+func (n Network) Domains() []string {
+	var domains []string
+	for _, entry := range n.Allow {
+		if !isAddress(entry) {
+			domains = append(domains, entry)
+		}
+	}
+
+	return domains
+}
+
+func (n Network) Addresses() []string {
+	var addresses []string
+	for _, entry := range n.Allow {
+		if isAddress(entry) {
+			addresses = append(addresses, entry)
+		}
+	}
+
+	return addresses
+}
+
+func isAddress(entry string) bool {
+	if _, _, err := net.ParseCIDR(entry); err == nil {
+		return true
+	}
+
+	return net.ParseIP(entry) != nil
 }
 
 // Git is who a cell commits as.
@@ -114,8 +173,9 @@ func (g Git) Env() []string {
 // UserConfig is ~/.config/solitary/config.yaml: defaults applied to every cell
 // that does not override them.
 type UserConfig struct {
-	VM  VM  `yaml:"vm"`
-	Git Git `yaml:"git"`
+	VM      VM      `yaml:"vm"`
+	Git     Git     `yaml:"git"`
+	Network Network `yaml:"network"`
 }
 
 // DefaultCommand keeps a container alive without assuming anything about the
@@ -221,6 +281,11 @@ func LoadCell(name string) (*Cell, error) {
 	}
 	cell.VM = Resolve(cell.VM, user.VM, Defaults())
 	cell.Git = ResolveGit(cell.Git, user.Git)
+	// A cell's own allow list replaces the user-wide one rather than adding
+	// to it: what a cell may reach should be readable from one place.
+	if len(cell.Network.Allow) == 0 {
+		cell.Network = user.Network
+	}
 
 	return &cell, nil
 }

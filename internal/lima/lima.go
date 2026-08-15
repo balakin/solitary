@@ -18,8 +18,9 @@ var cellTemplate string
 
 // templateData is what cell.yaml.tmpl is rendered against.
 type templateData struct {
-	VM    config.VM
-	Ports []int
+	VM      config.VM
+	Ports   []int
+	Network config.Network
 }
 
 var funcs = template.FuncMap{
@@ -36,18 +37,20 @@ var funcs = template.FuncMap{
 		}
 		return strings.Join(lines, "\n")
 	},
+	// join is strings.Join, for rendering a list into one line of a rule.
+	"join": strings.Join,
 }
 
 // Render fills the embedded template with the resolved machine settings and
 // returns a Lima machine definition.
-func Render(vm config.VM, ports []int) (string, error) {
+func Render(vm config.VM, ports []int, network config.Network) (string, error) {
 	tmpl, err := template.New("cell").Funcs(funcs).Parse(cellTemplate)
 	if err != nil {
 		return "", fmt.Errorf("parsing embedded template: %w", err)
 	}
 
 	var out strings.Builder
-	if err := tmpl.Execute(&out, templateData{VM: vm, Ports: ports}); err != nil {
+	if err := tmpl.Execute(&out, templateData{VM: vm, Ports: ports, Network: network}); err != nil {
 		return "", fmt.Errorf("rendering machine definition: %w", err)
 	}
 

@@ -2,8 +2,8 @@
 
 **Hypervisor-isolated cells for running coding agents off the leash.**
 
-> ⚠️ Pre-alpha. Cells build, run, persist and take secrets. Egress from a cell
-> is not restricted yet — see [what this does not protect against](#what-this-does-not-protect-against).
+> ⚠️ Pre-alpha. Cells build, run, persist, take secrets and can be held to an
+> egress allow list — see [what this does not protect against](#what-this-does-not-protect-against).
 
 ## The problem
 
@@ -34,8 +34,10 @@ A cell is a Lima VM with a container inside it.
 - **Secrets are whitelisted per cell.** This cell sees a GitHub token; that one
   does not.
 - **Ports are the way in.** Run a dev server in the cell, open it in your
-  browser on the host. Traffic the other way — a cell reaching your machine or
-  your network — is not blocked yet.
+  browser on the host. Set `ports:` and only those reach it.
+- **Egress is yours to allow.** Set `network.allow` and the cell reaches the
+  domains you list and nothing else — not the rest of the internet, not your
+  machine, not your local network.
 
 Cells are meant to be thrown away. `rm` then `up` gets you a clean one, still
 authenticated, because secrets live on the host and not in the VM.
@@ -43,9 +45,9 @@ authenticated, because secrets live on the host and not in the VM.
 ### What this does not protect against
 
 Isolation stops a compromise of your machine. It does not stop an agent
-misusing the authority you granted it. It can still push to any repository the
-token you whitelisted can reach, and until egress filtering lands it can still
-send data anywhere. The image you run is trusted code.
+misusing the authority you granted it: it can still push to any repository the
+token you whitelisted can reach, and reach anything you allowed. A cell with no
+`network.allow` reaches the whole internet. The image you run is trusted code.
 
 A secret passed to a cell lives inside that cell. The `.env` file never leaves
 the host, but the values reach the container as environment variables, and
@@ -71,6 +73,11 @@ secrets:            # only these names are passed into the cell
 ports:              # omit and every listening port reaches host localhost;
   - 8080            # set and only these do
 
+network:            # omit and the cell reaches whatever the host reaches;
+  allow:            # set and it reaches these and nothing else
+    - github.com
+    - api.anthropic.com
+
 git:                # optional; usually set once in config.yaml instead
   name: Ada Lovelace
   email: ada@example.com
@@ -89,8 +96,10 @@ that are missing, and `solitary secrets <name>` sets or rotates them later.
 Because the values live on the host, `rm` followed by `up` gives you a clean
 cell that is still authenticated.
 
-`~/.config/solitary/config.yaml` holds `vm:` and `git:` blocks used as the
-defaults for every cell.
+`~/.config/solitary/config.yaml` holds `vm:`, `git:` and `network:` blocks used
+as the defaults for every cell. A cell that sets `network.allow` replaces the
+user-wide list rather than adding to it: what a cell may reach should be
+readable in one place.
 
 A cell has nowhere of its own to keep a git identity — nothing is mounted from
 the host, and anything configured by hand inside a cell is gone when it is
@@ -98,6 +107,43 @@ rebuilt. So `git:` is passed in as environment variables, which git reads ahead
 of any config file. git wants an author and a committer, each with a name and
 an email, and has no single setting for both; solitary fills in all four from
 these two fields. Write it once in `config.yaml` and every cell commits as you.
+
+### Restricting what a cell can reach
+
+Without `network.allow`, a cell reaches whatever your host reaches. With it, the
+cell is default-deny: the listed domains resolve and are reachable, and nothing
+else is — not the rest of the internet, not your machine, not your local
+network. Connections the host starts *into* the cell keep working, so forwarded
+ports are unaffected.
+
+```yaml
+network:
+  allow:
+    - github.com                 # covers api.github.com
+    - objects.githubusercontent.com   # a different domain: list it too
+    - registry.npmjs.org
+    - 10.1.2.0/24                # addresses and CIDR blocks work as given
+```
+
+Two pieces enforce it, both in the machine and outside the container. A resolver
+answers for the listed names only — anything else gets NXDOMAIN, so a query
+cannot carry data out to a resolver of an agent's choosing — and it records the
+addresses it hands out in a set that the firewall allows. So a name resolves and
+is reachable, or does neither, and a site that changes its addresses keeps
+working without anyone editing a rule. The container is rootless: nothing inside
+it can load a firewall rule, stop the resolver, or edit either one's config.
+
+The catch is that an allow list has to be complete. A restricted cell cannot
+pull its own image unless the registry is listed, and a build cannot install
+packages unless its package sources are. When something is missing you see it
+immediately, as a name that does not resolve:
+
+```
+dial tcp: lookup production.cloudfront.docker.com on 127.0.0.1:53: no such host
+```
+
+Changing the list takes effect when the machine next starts: `solitary down
+<name> && solitary up <name>`.
 
 ### Building the image
 
@@ -243,13 +289,8 @@ secret or an image needs no separate command.
 
 ## Roadmap
 
-- `network: allowlist` — default-deny egress with a domain allowlist, modelled
-  on Anthropic's [`init-firewall.sh`](https://github.com/anthropics/claude-code/blob/main/.devcontainer/init-firewall.sh),
-  later replaced by an SNI-filtering proxy so IP churn stops mattering. The
-  firewall runs in the VM, outside the rootless container, so the agent cannot
-  disable it.
-- Blocking VM→host and VM→LAN traffic while keeping host-initiated connections.
-- Building a cell image from a local `Containerfile`.
+- An SNI-filtering proxy as a second way to allow a domain, for sites whose
+  addresses are shared with everything else behind the same CDN.
 - Distributing cell definitions as OCI artifacts.
 - VM snapshots, so a new cell does not reinstall podman from scratch.
 

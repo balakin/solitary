@@ -124,7 +124,7 @@ func Up(name string, progress io.Writer) error {
 		return err
 	}
 
-	rendered, err := lima.Render(c.VM, c.Ports)
+	rendered, err := lima.Render(c.VM, c.Ports, c.Network)
 	if err != nil {
 		return err
 	}

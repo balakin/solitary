@@ -30,6 +30,17 @@ image: docker.io/library/ubuntu:24.04
 #   - CLAUDE_API_KEY
 #   - GITHUB_TOKEN
 
+# What this cell may reach. Leave it out and the cell reaches whatever the host
+# reaches. Set it and nothing leaves except to what is listed — the host and the
+# local network included. A domain covers its subdomains; a site's other domains
+# have to be listed themselves, as does the registry an image is pulled from.
+#
+# network:
+#   allow:
+#     - github.com
+#     - api.anthropic.com
+#     - registry.npmjs.org
+
 # Who this cell commits as. Set it once in ~/.config/solitary/config.yaml and
 # every cell uses it; set it here only to differ from that.
 #
