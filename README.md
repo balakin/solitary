@@ -229,7 +229,7 @@ nothing has, so iterating on a `Containerfile` is just `up` again.
 ```
 solitary init <name>            scaffold a cell definition
 solitary clone <source>         install a cell definition from a repository
-solitary up <name|image-ref>    start the cell and attach
+solitary up <name>              start the cell and attach
 solitary shell <name>           shell into a running cell
 solitary exec <name> <cmd...>   run one command in a running cell
 solitary down <name>            stop the cell, keep the disk
@@ -242,7 +242,8 @@ solitary secrets <name>         set the values a cell is allowed to see
 ```
 
 `up` is the only command that changes state, and it is idempotent: it creates
-the cell if absent, boots it if stopped, and attaches if it is already running.
+the cell's machine if absent, boots it if stopped, and attaches if it is already
+running.
 It also replaces the container when the image or the secrets changed, so
 editing `cell.yaml` and running `up` again is all a change ever takes.
 

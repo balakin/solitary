@@ -8,7 +8,7 @@ The command surface is intentionally small:
 ```text
 solitary init <name>            scaffold a cell definition
 solitary clone <source>         install a cell definition from a repository
-solitary up <name|image-ref>    start the cell and attach
+solitary up <name>              start the cell and attach
 solitary shell <name>           shell into a running cell
 solitary exec <name> <cmd...>   run one command in a running cell
 solitary down <name>            stop the cell, keep the disk
@@ -22,20 +22,13 @@ solitary dashboard              manage cells in a live view
 
 ## `up` is the only command that changes state
 
-It is idempotent: it creates the cell if absent, boots it if stopped, and attaches if it is already running. It also replaces the container when the image or the secrets changed, so editing `cell.yaml` and running `up` again is all a change ever takes.
+It is idempotent: it creates the cell's machine if absent, boots it if stopped, and attaches if it is already running. It also replaces the container when the image or the secrets changed, so editing `cell.yaml` and running `up` again is all a change ever takes.
 
 | Flag | Meaning |
 | --- | --- |
 | `--detach` | Start the cell without attaching a shell. |
-| `--as <name>` | The name to give a cell created from an image reference. |
 
-Given an **image reference** rather than a known cell name, `up` creates a cell from it with default settings:
-
-```sh
-solitary up docker.io/library/ubuntu:24.04
-```
-
-If a cell of the derived name already exists with a different image, the command fails and asks for `--as`.
+`up` takes a cell that is already defined. `init` scaffolds one; [`clone`](/docs/sharing) takes one from a repository.
 
 ## Lifecycle
 
