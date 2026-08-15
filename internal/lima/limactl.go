@@ -192,6 +192,11 @@ func CopyFile(hostPath, name, target string) error {
 	return run("copy", hostPath, name+":"+target)
 }
 
+// CopyOut brings a single file out of a machine, to hostPath exactly.
+func CopyOut(name, source, hostPath string) error {
+	return run("copy", name+":"+source, hostPath)
+}
+
 // Delete destroys a machine and its disk.
 func Delete(name string) error {
 	return run("delete", "--force", name)
