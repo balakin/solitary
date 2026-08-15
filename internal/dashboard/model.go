@@ -34,6 +34,10 @@ const (
 	browsing mode = iota
 	// confirming is waiting for an answer before destroying a machine.
 	confirming
+	// viewingNetwork is the full list of what the selected cell may reach.
+	viewingNetwork
+	// watchingTraffic is a live view of what it is actually reaching.
+	watchingTraffic
 	// managingSecrets is the secrets view for the selected cell.
 	managingSecrets
 	// typing is entering a value for one secret, hidden as it is typed.
@@ -52,6 +56,9 @@ type model struct {
 
 	detail    cell.Detail
 	detailErr error
+
+	traffic []trafficRow
+	stream  *stream
 
 	mode    mode
 	secret  int // index into detail.Secrets, in the secrets views
@@ -126,6 +133,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.failure, m.notice = msg.err, msg.notice
 		return m, refresh()
 
+	case streamMsg:
+		// The view may already have been left by the time the follow
+		// started, in which case nothing should be reading it.
+		if m.mode != watchingTraffic {
+			msg.stream.stop()
+			return m, nil
+		}
+		m.stream = msg.stream
+		return m, next(msg.stream.lines)
+
+	case trafficMsg:
+		if m.mode != watchingTraffic {
+			return m, nil
+		}
+		m.traffic = add(m.traffic, msg.entry)
+		if len(m.traffic) > trafficKept {
+			m.traffic = m.traffic[len(m.traffic)-trafficKept:]
+		}
+		return m, next(msg.lines)
+
+	case trafficStoppedMsg:
+		m.stream = nil
+		return m, nil
+
 	case failMsg:
 		m.failure = msg.err
 		return m, nil
@@ -184,6 +215,10 @@ func (m model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case confirming:
 		return m.confirmKey(msg)
+	case viewingNetwork:
+		return m.networkKey(msg)
+	case watchingTraffic:
+		return m.trafficKey(msg)
 	case managingSecrets:
 		return m.secretsKey(msg)
 	case typing:
@@ -198,6 +233,7 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "q", "ctrl+c", "esc":
+		m.stream.stop()
 		m.quitting = true
 		return m, tea.Quit
 
@@ -249,6 +285,24 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.mode, m.secret = managingSecrets, 0
 		return m.clear(), describe(name)
+
+	case "n":
+		if name == "" {
+			return m, nil
+		}
+		m.mode = viewingNetwork
+		return m.clear(), describe(name)
+
+	case "t":
+		if name == "" {
+			return m, nil
+		}
+		if m.selected().Status != cell.StatusRunning {
+			m.failure = fmt.Errorf("cell %q is not running, so it has no traffic to watch", name)
+			return m, nil
+		}
+		m.mode, m.traffic = watchingTraffic, nil
+		return m.clear(), tea.Batch(describe(name), follow(name))
 	}
 
 	return m, nil
@@ -267,6 +321,37 @@ func (m model) confirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = browsing
 		m.notice = "Cancelled."
 		return m, nil
+	}
+}
+
+// networkKey handles the full allow list, which is read rather than edited:
+// what a cell may reach is decided in its definition, not in a dashboard.
+func (m model) networkKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	default:
+		m.mode = browsing
+		return m.clear(), nil
+	}
+}
+
+// trafficKey handles the live view. Leaving it ends the follow: a cell's log
+// should not be read over a connection nobody is watching.
+func (m model) trafficKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.stream.stop()
+		m.quitting = true
+		return m, tea.Quit
+	case "c":
+		m.traffic = nil
+		return m, nil
+	default:
+		m.stream.stop()
+		m.stream, m.mode = nil, browsing
+		return m.clear(), nil
 	}
 }
 

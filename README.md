@@ -207,7 +207,27 @@ build prints and a cell missing a secret asks for it the way it always does.
 The dashboard steps out of the way and comes back rather than owning a second,
 worse version of each.
 
-`e` manages the selected cell's secrets: which are set, which are not, and a
+`t` follows what the selected cell's network is doing, as it happens: every name
+it asks about, what it resolved to, and every connection the firewall refused.
+
+```
+ ╭─────────────────────╮╭─────────────────────────────────────────────────╮
+ │ cells               ││ traffic · claude                                │
+ │ › ● claude  running ││ 12:07:53 query    api.github.com ×2             │
+ ╰─────────────────────╯│ 12:07:53 resolved api.github.com → 140.82.121.6 │
+                        │ 12:07:53 refused  example.com                   │
+                        │ 12:07:53 denied   1.1.1.1:443                   │
+                        ╰─────────────────────────────────────────────────╯
+ live · c clear · any other key back
+```
+
+It reads the machine's log, where both halves of the allow list record what they
+did — so a cell cannot see, let alone edit, what is recorded about it. Repeats
+fold into a count, since one lookup answers with every address a name has. This
+is also the fastest way to find what an allow list is missing: a `refused` line
+names it.
+
+`n` shows the whole allow list, and `e` manages the selected cell's secrets: which are set, which are not, and a
 masked field to set or rotate one. Values are never displayed — the dashboard
 reads only whether each name has one.
 

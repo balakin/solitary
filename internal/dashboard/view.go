@@ -73,6 +73,12 @@ func (m model) detailPane() string {
 	if m.mode == managingSecrets || m.mode == typing {
 		return pane("secrets · "+m.detail.Name, m.secretsBody())
 	}
+	if m.mode == viewingNetwork {
+		return pane("network · "+m.detail.Name, m.networkBody())
+	}
+	if m.mode == watchingTraffic {
+		return pane("traffic · "+m.detail.Name, m.trafficBody())
+	}
 
 	if m.detailErr != nil {
 		return pane(m.selected().Name, errorStyle.Render(m.detailErr.Error()))
@@ -128,6 +134,74 @@ func (m model) network() []string {
 	}
 
 	return lines
+}
+
+// networkBody is the whole allow list, for when the preview is not enough.
+func (m model) networkBody() string {
+	if !m.detail.Network.Restricted() {
+		return valueStyle.Render("This cell reaches whatever the host reaches.") + "\n" +
+			labelStyle.Render("Restrict it with network.allow in its cell.yaml.")
+	}
+
+	rows := make([]string, 0, len(m.detail.Network.Allow)+1)
+	for _, entry := range m.detail.Network.Allow {
+		rows = append(rows, "  "+valueStyle.Render(entry))
+	}
+	rows = append(rows, "", labelStyle.Render("Everything else is refused, including the host."))
+
+	return strings.Join(rows, "\n")
+}
+
+// trafficShown is how many entries fit in the pane. The newest are the ones
+// worth seeing, so the list is cut from the top.
+const trafficShown = 14
+
+// trafficBody is what the cell's network is doing, as it happens.
+func (m model) trafficBody() string {
+	if len(m.traffic) == 0 {
+		if m.stream == nil {
+			return labelStyle.Render("Waiting for the machine's log…")
+		}
+		if !m.detail.Network.Restricted() {
+			return valueStyle.Render("Nothing is logged for this cell.") + "\n" +
+				labelStyle.Render("Traffic is recorded where it is filtered; set network.allow to see it.")
+		}
+
+		return labelStyle.Render("Nothing yet. This is live: it fills as the cell talks.")
+	}
+
+	entries := m.traffic
+	if len(entries) > trafficShown {
+		entries = entries[len(entries)-trafficShown:]
+	}
+
+	rows := make([]string, 0, len(entries))
+	for _, row := range entries {
+		line := fmt.Sprintf("%s %s %s",
+			labelStyle.Render(row.entry.At),
+			trafficStyle(row.entry.Kind).Render(fmt.Sprintf("%-8s", string(row.entry.Kind))),
+			valueStyle.Render(row.entry.Detail),
+		)
+		if row.count > 1 {
+			line += labelStyle.Render(fmt.Sprintf(" ×%d", row.count))
+		}
+		rows = append(rows, line)
+	}
+
+	return strings.Join(rows, "\n")
+}
+
+// trafficStyle colours what happened: what was refused is the point of the
+// view, what was allowed is context.
+func trafficStyle(kind cell.TrafficKind) lipgloss.Style {
+	switch kind {
+	case cell.TrafficDenied, cell.TrafficRefused:
+		return lipgloss.NewStyle().Foreground(red)
+	case cell.TrafficResolved:
+		return lipgloss.NewStyle().Foreground(green)
+	default:
+		return lipgloss.NewStyle().Foreground(dim)
+	}
 }
 
 // secretsSummary says how many of a cell's secrets are ready without listing
@@ -207,10 +281,14 @@ func (m model) help() string {
 		return "y destroy · any other key cancel"
 	case typing:
 		return "enter save · esc cancel"
+	case viewingNetwork:
+		return "any key back"
+	case watchingTraffic:
+		return "live · c clear · any other key back"
 	case managingSecrets:
 		return "↑↓ move · enter set value · esc back"
 	default:
-		return "↑↓ move · ⏎ shell · u up · s stop · e secrets · d rm · r refresh · q quit"
+		return "↑↓ move · ⏎ shell · u up · s stop · e secrets · n network · t traffic · d rm · q quit"
 	}
 }
 

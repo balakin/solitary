@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/dm-balakin/solitary/internal/config"
@@ -355,6 +356,118 @@ func ShellCommand(name string) (*exec.Cmd, error) {
 	}
 
 	return podman.ShellCommand(instance)
+}
+
+// TrafficCommand prepares a command that follows what a cell's network is
+// doing: every name it asks about, every answer it gets, and every connection
+// the firewall refuses.
+//
+// It reads the machine's log rather than the container's, because that is where
+// both halves of the allow list live — and because a container cannot see, let
+// alone edit, what is recorded about it.
+//
+// The command runs until it is killed, so the caller owns its lifetime.
+func TrafficCommand(name string) (*exec.Cmd, error) {
+	if _, err := config.LoadCell(name); err != nil {
+		return nil, err
+	}
+
+	instance := config.Instance(name)
+	inst, err := lima.Lookup(instance)
+	if err != nil {
+		return nil, err
+	}
+	if inst == nil || inst.Status != lima.StatusRunning {
+		return nil, fmt.Errorf("%w: run 'solitary up %s'", ErrNotRunning, name)
+	}
+
+	// Filtered in the machine: following the whole journal would send far
+	// more over the connection than is ever displayed. Matched on who wrote
+	// each line rather than on its text — the resolver's name is in the
+	// identifier, not in the message, so a text match finds none of it — and
+	// "+" is how journalctl is asked for either.
+	return lima.Command(instance, "sudo", "journalctl", "--follow", "--lines=50",
+		"--output=short-iso", "--no-pager",
+		"SYSLOG_IDENTIFIER=kernel", "+", "SYSLOG_IDENTIFIER=dnsmasq")
+}
+
+// Traffic is one thing a cell's network did.
+type Traffic struct {
+	At     string
+	Kind   TrafficKind
+	Detail string
+}
+
+// TrafficKind is what happened, which is what decides how a line reads.
+type TrafficKind string
+
+const (
+	// TrafficQuery is a name the cell asked about.
+	TrafficQuery TrafficKind = "query"
+	// TrafficResolved is a name it was given an address for, which is also
+	// what opens the firewall for that address.
+	TrafficResolved TrafficKind = "resolved"
+	// TrafficRefused is a name that is not on the allow list, so it does not
+	// resolve at all.
+	TrafficRefused TrafficKind = "refused"
+	// TrafficDenied is a connection the firewall dropped.
+	TrafficDenied TrafficKind = "denied"
+)
+
+var (
+	queryLine    = regexp.MustCompile(`query\[[A-Z]+\] (\S+) from`)
+	answerLine   = regexp.MustCompile(`(?:reply|cached) (\S+) is (\S+)`)
+	refusedLine  = regexp.MustCompile(`config (\S+) is NXDOMAIN`)
+	deniedFields = regexp.MustCompile(`DST=(\S+).*?(?:DPT=(\d+))?`)
+	deniedPort   = regexp.MustCompile(`DPT=(\d+)`)
+	logTime      = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2}))`)
+)
+
+// ParseTraffic reads one journal line. It reports ok=false for a line that says
+// nothing about the network, which most lines do.
+func ParseTraffic(line string) (Traffic, bool) {
+	at := ""
+	if m := logTime.FindStringSubmatch(line); m != nil {
+		at = m[2]
+	}
+
+	switch {
+	case strings.Contains(line, "solitary-deny"):
+		target := ""
+		if m := deniedFields.FindStringSubmatch(line); m != nil {
+			target = m[1]
+		}
+		if m := deniedPort.FindStringSubmatch(line); m != nil {
+			target += ":" + m[1]
+		}
+		if target == "" {
+			return Traffic{}, false
+		}
+
+		return Traffic{At: at, Kind: TrafficDenied, Detail: target}, true
+
+	case refusedLine.MatchString(line):
+		m := refusedLine.FindStringSubmatch(line)
+
+		return Traffic{At: at, Kind: TrafficRefused, Detail: m[1]}, true
+
+	case answerLine.MatchString(line):
+		m := answerLine.FindStringSubmatch(line)
+		// filter-AAAA answers every AAAA question with nothing, which is
+		// an implementation detail rather than something that happened.
+		if strings.HasPrefix(m[2], "NODATA") || strings.HasPrefix(m[2], "NXDOMAIN") {
+			return Traffic{}, false
+		}
+
+		return Traffic{At: at, Kind: TrafficResolved, Detail: m[1] + " → " + m[2]}, true
+
+	case queryLine.MatchString(line):
+		m := queryLine.FindStringSubmatch(line)
+
+		return Traffic{At: at, Kind: TrafficQuery, Detail: m[1]}, true
+	}
+
+	return Traffic{}, false
 }
 
 // SecretState is whether one of a cell's declared secrets has a value. The

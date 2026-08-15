@@ -284,3 +284,114 @@ func TestNetworkPreview(t *testing.T) {
 		t.Errorf("the whole list was shown rather than a preview:\n%s", view)
 	}
 }
+
+// The preview is a preview; the whole list has to be readable somewhere, and
+// the dashboard is where someone is already looking.
+func TestNetworkViewShowsEveryEntry(t *testing.T) {
+	allow := []string{
+		"anthropic.com", "claude.ai", "mcp.context7.com", "github.com",
+		"githubusercontent.com", "npmjs.org", "nodejs.org", "ubuntu.com",
+		"docker.io", "docker.com",
+	}
+	m := listed(t)
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude", Network: config.Network{Allow: allow}}})
+	m = next.(model)
+
+	m, _ = press(t, m, "n")
+	if m.mode != viewingNetwork {
+		t.Fatalf("mode = %v after n, want the network view", m.mode)
+	}
+
+	view := m.View()
+	for _, entry := range allow {
+		if !strings.Contains(view, entry) {
+			t.Errorf("the network view leaves out %q:\n%s", entry, view)
+		}
+	}
+	if strings.Contains(view, "more") {
+		t.Error("the network view summarises instead of showing everything")
+	}
+
+	// Reading it changes nothing, and any key returns.
+	if m, _ = press(t, m, "x"); m.mode != browsing {
+		t.Errorf("mode = %v, want to be back in the list", m.mode)
+	}
+}
+
+// An unrestricted cell has no list to read, and the view should say what that
+// means rather than showing an empty pane.
+func TestNetworkViewOfAnUnrestrictedCell(t *testing.T) {
+	m := listed(t)
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude"}})
+	m, _ = press(t, next.(model), "n")
+
+	if view := m.View(); !strings.Contains(view, "reaches whatever the host reaches") {
+		t.Errorf("the network view does not explain an unrestricted cell:\n%s", view)
+	}
+}
+
+// One lookup answers with every address a name has, and a refused program
+// retries. Without folding, one event fills the pane and hides the rest.
+func TestTrafficFoldsRepeats(t *testing.T) {
+	var rows []trafficRow
+	for _, entry := range []cell.Traffic{
+		{At: "12:07:53", Kind: cell.TrafficResolved, Detail: "registry.npmjs.org → 104.16.2.34"},
+		{At: "12:07:53", Kind: cell.TrafficResolved, Detail: "registry.npmjs.org → 104.16.0.34"},
+		{At: "12:07:54", Kind: cell.TrafficResolved, Detail: "registry.npmjs.org → 104.16.5.34"},
+		{At: "12:07:55", Kind: cell.TrafficRefused, Detail: "example.com"},
+		{At: "12:07:56", Kind: cell.TrafficRefused, Detail: "example.com"},
+		{At: "12:07:57", Kind: cell.TrafficResolved, Detail: "github.com → 140.82.121.4"},
+	} {
+		rows = add(rows, entry)
+	}
+
+	if len(rows) != 3 {
+		t.Fatalf("folded into %d rows, want 3: %+v", len(rows), rows)
+	}
+	if rows[0].count != 3 || rows[1].count != 2 || rows[2].count != 1 {
+		t.Errorf("counts = %d, %d, %d; want 3, 2, 1", rows[0].count, rows[1].count, rows[2].count)
+	}
+	// The newest time wins, so a folded row does not look stale.
+	if rows[0].entry.At != "12:07:54" {
+		t.Errorf("folded row shows %s, want the most recent time", rows[0].entry.At)
+	}
+}
+
+func TestTrafficViewNeedsARunningCell(t *testing.T) {
+	m := listed(t)
+	m, _ = press(t, m, "down") // scratch, uninitialized
+
+	m, cmd := press(t, m, "t")
+	if cmd != nil || m.mode == watchingTraffic {
+		t.Error("followed a cell that is not running")
+	}
+	if m.failure == nil || !strings.Contains(m.failure.Error(), "no traffic") {
+		t.Errorf("failure = %v, want it to explain why", m.failure)
+	}
+}
+
+// The view is live, so leaving it has to end the follow rather than leave a
+// command reading a machine's log for nobody.
+func TestLeavingTrafficStopsFollowing(t *testing.T) {
+	m := listed(t)
+	m.mode = watchingTraffic
+	m.traffic = []trafficRow{{entry: cell.Traffic{Kind: cell.TrafficDenied, Detail: "1.1.1.1:443"}, count: 1}}
+
+	m, _ = press(t, m, "x")
+	if m.mode != browsing {
+		t.Errorf("mode = %v after a key, want to be back in the list", m.mode)
+	}
+	if m.stream != nil {
+		t.Error("the follow was left running")
+	}
+}
+
+// An entry arriving after the view is left must not be recorded.
+func TestTrafficIgnoredWhenNotWatching(t *testing.T) {
+	m := listed(t)
+	next, _ := m.Update(trafficMsg{entry: cell.Traffic{Kind: cell.TrafficDenied, Detail: "1.1.1.1:443"}})
+
+	if got := next.(model).traffic; len(got) != 0 {
+		t.Errorf("recorded %+v while not watching", got)
+	}
+}
