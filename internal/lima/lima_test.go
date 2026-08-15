@@ -77,3 +77,32 @@ func TestRenderAlwaysDisablesMounts(t *testing.T) {
 		t.Error("Render() did not disable mounts")
 	}
 }
+
+// A rule with no guestIP matches only a listener on 127.0.0.1, and Lima's own
+// fallback then forwards anything bound to 0.0.0.0 — which is what a dev server
+// binds. An allow list that covers only one of the two lets through exactly the
+// ports it was written to keep out.
+func TestRenderCoversBothAddressesAServerCanBindTo(t *testing.T) {
+	got, err := Render(config.Defaults(), []int{3000})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	for _, want := range []string{
+		// allowed, bound to either address
+		"guestIP: \"0.0.0.0\"\n    guestPort: 3000",
+		"- guestPort: 3000\n    hostPort: 3000",
+		// everything else denied, bound to either address
+		"guestIP: \"0.0.0.0\"\n    guestPortRange: [1, 65535]\n    proto: any\n    ignore: true",
+		"- guestPortRange: [1, 65535]\n    proto: any\n    ignore: true",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered ports are missing a rule:\n%s\n--- rendered ---\n%s", want, got)
+		}
+	}
+
+	// Nothing may widen where a forwarded port is reachable from.
+	if strings.Contains(got, "hostIP:") {
+		t.Error("Render() set hostIP; forwarded ports must reach this host's localhost only")
+	}
+}

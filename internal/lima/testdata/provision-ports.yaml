@@ -49,10 +49,30 @@ probes:
 
 # ports: was set on the cell, so the default catch-all is replaced by an
 # explicit allow list.
+#
+# Every rule appears twice, once for each address a server binds. A rule with no
+# guestIP matches only a listener on 127.0.0.1, and Lima's own fallback rule
+# then forwards everything bound to 0.0.0.0 — which is what a dev server binds,
+# so a deny rule written once denies nothing at all. Rules are checked in order
+# and the first match wins, so the allows come before the denials.
+#
+# hostIP is left alone throughout: forwarded ports reach this host's localhost
+# and nowhere else.
 portForwards:
+  - guestIP: "0.0.0.0"
+    guestPort: 8080
+    hostPort: 8080
   - guestPort: 8080
     hostPort: 8080
+  - guestIP: "0.0.0.0"
+    guestPort: 3000
+    hostPort: 3000
   - guestPort: 3000
     hostPort: 3000
+  - guestIP: "0.0.0.0"
+    guestPortRange: [1, 65535]
+    proto: any
+    ignore: true
   - guestPortRange: [1, 65535]
+    proto: any
     ignore: true
