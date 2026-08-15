@@ -120,7 +120,11 @@ func (m model) network() []string {
 	}
 
 	allow := m.detail.Network.Allow
-	lines := []string{field("network", noticeStyle.Render(fmt.Sprintf("%d allowed", len(allow))))}
+	summary := fmt.Sprintf("%d allowed", len(allow))
+	if m.detail.Network.Tunnel != nil {
+		summary += " · tunnel"
+	}
+	lines := []string{field("network", noticeStyle.Render(summary))}
 
 	shown := allow
 	if len(shown) > networkPreview {
@@ -143,11 +147,17 @@ func (m model) networkBody() string {
 			labelStyle.Render("Restrict it with network.allow in its cell.yaml.")
 	}
 
-	rows := make([]string, 0, len(m.detail.Network.Allow)+1)
+	rows := make([]string, 0, len(m.detail.Network.Allow)+3)
 	for _, entry := range m.detail.Network.Allow {
 		rows = append(rows, "  "+valueStyle.Render(entry))
 	}
 	rows = append(rows, "", labelStyle.Render("Everything else is refused, including the host."))
+	if tunnel := m.detail.Network.Tunnel; tunnel != nil {
+		rows = append(rows,
+			labelStyle.Render("And what is allowed is reached only through the tunnel to ")+
+				valueStyle.Render(tunnel.EndpointHost)+labelStyle.Render(","),
+			labelStyle.Render("so while that is down, nothing leaves at all."))
+	}
 
 	return strings.Join(rows, "\n")
 }

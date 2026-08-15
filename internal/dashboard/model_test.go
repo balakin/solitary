@@ -319,6 +319,31 @@ func TestNetworkViewShowsEveryEntry(t *testing.T) {
 	}
 }
 
+// Whether a cell leaves through a tunnel changes what its allow list means, so
+// the list is not worth reading without it.
+func TestNetworkViewShowsTheTunnel(t *testing.T) {
+	m := listed(t)
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude", Network: config.Network{
+		Allow:  []string{"github.com"},
+		VPN:    "./vpn.conf",
+		Tunnel: &config.Tunnel{EndpointHost: "de-01.example.net", EndpointPort: "51820"},
+	}}})
+	m = next.(model)
+
+	if view := m.View(); !strings.Contains(view, "tunnel") {
+		t.Errorf("the cell pane does not say the cell is tunnelled:\n%s", view)
+	}
+
+	m, _ = press(t, m, "n")
+	view := m.View()
+	if !strings.Contains(view, "de-01.example.net") {
+		t.Errorf("the network view does not name the peer:\n%s", view)
+	}
+	if !strings.Contains(view, "nothing leaves at all") {
+		t.Errorf("the network view does not say what a tunnel being down means:\n%s", view)
+	}
+}
+
 // An unrestricted cell has no list to read, and the view should say what that
 // means rather than showing an empty pane.
 func TestNetworkViewOfAnUnrestrictedCell(t *testing.T) {
