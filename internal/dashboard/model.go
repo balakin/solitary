@@ -137,10 +137,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// The secrets views are a conversation; re-reading underneath them
 		// would move what is being talked about.
-		if m.mode == browsing {
-			return m, tea.Batch(refresh(), tick())
+		switch m.mode {
+		case browsing:
+			return m, tea.Batch(refresh(), m.watchTunnel(), tick())
+		case viewingNetwork:
+			// The list itself cannot change while it is being read, but
+			// the tunnel carrying it can.
+			return m, tea.Batch(m.watchTunnel(), tick())
+		default:
+			return m, tick()
 		}
-		return m, tick()
 
 	case cellsMsg:
 		return m.withCells(msg.cells)
@@ -152,8 +158,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tunnel = nil
 		}
 		m.detail, m.detailErr = msg.detail, nil
-		if m.detail.Network.Tunnel != nil && m.selected().Status == cell.StatusRunning {
-			return m, tunnelStatus(m.detail.Name)
+		if cmd := m.watchTunnel(); cmd != nil {
+			return m, cmd
 		}
 		m.tunnel = nil
 		return m, nil
@@ -249,6 +255,21 @@ func (m model) withCells(cells []cell.Info) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// watchTunnel re-reads what the selected cell's tunnel is doing, or nothing
+// when there is no tunnel to read.
+//
+// The tunnel is the one part of this pane that moves on its own: the definition
+// beside it only changes when someone edits a file, but a handshake ages and a
+// counter climbs by the second. A figure that has quietly stopped being re-read
+// looks exactly like a tunnel that has quietly stopped carrying anything.
+func (m model) watchTunnel() tea.Cmd {
+	if m.detail.Network.Tunnel == nil || m.selected().Status != cell.StatusRunning {
+		return nil
+	}
+
+	return tunnelStatus(m.detail.Name)
 }
 
 func (m model) selected() cell.Info {

@@ -389,6 +389,42 @@ func TestVPNRow(t *testing.T) {
 	}
 }
 
+// The handshake ages and the counters climb by the second, so this is the one
+// part of the pane that has to be re-read rather than read once. A figure that
+// stopped updating looks like a tunnel that is fine.
+func TestTunnelIsReReadOnEveryTick(t *testing.T) {
+	tunnelled := cell.Detail{Name: "claude", Network: config.Network{
+		VPN: "./vpn.conf", Tunnel: &config.Tunnel{EndpointHost: "de-ber.prod.surfshark.com", EndpointPort: "51820"},
+	}}
+
+	m := listed(t)
+	next, _ := m.Update(detailMsg{detail: tunnelled})
+	m = next.(model)
+
+	if m.watchTunnel() == nil {
+		t.Error("a running cell with a tunnel is not watched")
+	}
+	if _, cmd := m.Update(tickMsg{}); cmd == nil {
+		t.Error("a tick does not ask the machine anything")
+	}
+
+	// Reading the allow list must not stop the tunnel behind it updating.
+	m, _ = press(t, m, "n")
+	if _, cmd := m.Update(tickMsg{}); cmd == nil {
+		t.Error("the tunnel stops being re-read while the network view is open")
+	}
+
+	// Nothing to ask about when there is no tunnel, or no machine to ask.
+	next, _ = m.Update(detailMsg{detail: cell.Detail{Name: "claude"}})
+	if next.(model).watchTunnel() != nil {
+		t.Error("a cell with no tunnel is asked about one")
+	}
+	m.cursor = 1 // scratch, uninitialized
+	if m.watchTunnel() != nil {
+		t.Error("a cell with no machine is asked about its tunnel")
+	}
+}
+
 // The selection can move while a machine is answering, and the answer belongs
 // to whichever cell was asked.
 func TestTunnelStateOfAnotherCellIsIgnored(t *testing.T) {
