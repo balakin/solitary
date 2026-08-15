@@ -353,6 +353,38 @@ func LoadCell(name string) (*Cell, error) {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 
+	dir, err := CellDir(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return ParseCell(data, dir)
+}
+
+// ParseCell reads a definition that has already been read off disk, resolving
+// the paths inside it against dir, the directory the file came from.
+//
+// It is separate from LoadCell so that a definition can be checked before it
+// becomes a cell — a clone validates a staged copy this way, under the same
+// rules, rather than a second set of them.
+func ParseCell(data []byte, dir string) (*Cell, error) {
+	return parseCell(data, dir, true)
+}
+
+// CheckCell parses a definition without reading the WireGuard configuration a
+// network.vpn may name.
+//
+// A definition that is being shared rather than run is expected to arrive
+// without that file: it holds a private key, so it belongs to whoever runs the
+// cell and never to the cell. Everything else is checked exactly as it would be
+// on the way up.
+func CheckCell(data []byte, dir string) (*Cell, error) {
+	return parseCell(data, dir, false)
+}
+
+func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
+	path := filepath.Join(dir, "cell.yaml")
+
 	var cell Cell
 	if err := yaml.Unmarshal(data, &cell); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
@@ -364,10 +396,6 @@ func LoadCell(name string) (*Cell, error) {
 		return nil, fmt.Errorf("%s: set image or build, not both", path)
 	}
 	if cell.Build != "" {
-		dir, err := CellDir(name)
-		if err != nil {
-			return nil, err
-		}
 		cell.BuildPath = filepath.Join(dir, cell.Build)
 	}
 	if cell.Command == "" {
@@ -389,14 +417,12 @@ func LoadCell(name string) (*Cell, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if cell.Network.VPN != "" {
-		dir, err := CellDir(name)
-		if err != nil {
-			return nil, err
-		}
 		cell.Network.VPNPath = filepath.Join(dir, cell.Network.VPN)
-		cell.Network.Tunnel, err = ReadTunnel(cell.Network.VPNPath)
-		if err != nil {
-			return nil, err
+		if tunnel {
+			cell.Network.Tunnel, err = ReadTunnel(cell.Network.VPNPath)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

@@ -1,11 +1,7 @@
 package cli
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
-	"io"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -43,21 +39,4 @@ func newRmCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false, "skip the confirmation prompt")
 
 	return cmd
-}
-
-// confirm asks a yes/no question, defaulting to no.
-func confirm(cmd *cobra.Command, prompt string) (bool, error) {
-	fmt.Fprint(cmd.ErrOrStderr(), prompt)
-
-	line, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return false, nil // nothing to read from: refuse rather than guess
-		}
-		return false, fmt.Errorf("reading answer: %w", err)
-	}
-
-	answer := strings.ToLower(strings.TrimSpace(line))
-
-	return answer == "y" || answer == "yes", nil
 }

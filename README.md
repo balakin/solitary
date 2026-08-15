@@ -197,9 +197,9 @@ rather than leaving you with a machine whose tunnel never comes up.
 puts it in the machine's definition; it is placed into the running machine
 separately, and read from your disk each time. That is what makes a cell
 definition shareable: publish `cell.yaml` and your `Containerfile`, keep `.env`
-and `vpn.conf` out of it, and whoever copies the cell supplies their own — from
-any provider, with no edit to `cell.yaml`, since the peer to allow is read out of
-whichever configuration is present.
+and `vpn.conf` out of it, and whoever [clones the cell](#sharing-cells) supplies
+their own — from any provider, with no edit to `cell.yaml`, since the peer to
+allow is read out of whichever configuration is present.
 
 ```gitignore
 # in a repo of cell definitions
@@ -228,7 +228,8 @@ nothing has, so iterating on a `Containerfile` is just `up` again.
 
 ```
 solitary init <name>            scaffold a cell definition
-solitary up <name|image-ref>    start the cell and attach
+solitary clone <source>         install a cell definition from a repository
+solitary up <name>              start the cell and attach
 solitary shell <name>           shell into a running cell
 solitary exec <name> <cmd...>   run one command in a running cell
 solitary down <name>            stop the cell, keep the disk
@@ -241,9 +242,50 @@ solitary secrets <name>         set the values a cell is allowed to see
 ```
 
 `up` is the only command that changes state, and it is idempotent: it creates
-the cell if absent, boots it if stopped, and attaches if it is already running.
+the cell's machine if absent, boots it if stopped, and attaches if it is already
+running.
 It also replaces the container when the image or the secrets changed, so
 editing `cell.yaml` and running `up` again is all a change ever takes.
+
+### Sharing cells
+
+A cell definition holds no credential, so it is meant to be published: what a
+cell is built from, what it may reach and which secrets it expects are exactly
+what is worth reading before running one. `clone` is the other half — it takes
+**one** cell out of a repository, so you can publish all of yours and someone
+else takes the two they want.
+
+```
+solitary clone dm-balakin/nvim-cell        a repository that is one cell
+solitary clone dm-balakin/cells/claude     one cell out of a catalogue
+solitary clone dm-balakin/cells            a catalogue, unnamed: lists it
+solitary clone ../my-cells#claude          any git URL or path, #cell inside it
+```
+
+A `cell.yaml` at the root means the repository *is* one cell, the shape a
+dotfiles repository has. No root `cell.yaml` means the directories inside it are
+the cells. Fetching is `git clone`, so a private repository needs no new
+credentials, and `--as` installs under a name of your own.
+
+What the definition asks for is shown before anything is written — a cell names
+the secrets it wants, and running it hands them to an image someone else chose.
+Nothing starts either way; `up` does that, afterwards.
+
+**A repository is untrusted input, and is treated the way an outbox is.** Its
+file names become paths on your machine:
+
+- a `.env`, an `*.env` or a `vpn.conf` never arrives. Those carry credentials,
+  which belong to whoever runs a cell rather than to the cell.
+- a symlink is refused at any depth: it is the one entry whose target need not
+  be inside the repository.
+- anything refused is named rather than quietly skipped, and the rest still
+  arrives.
+- `.git` is left behind. A cloned cell is a copy, with nothing linking it back.
+
+Cloning the same source again with `--force` replaces the definition and leaves
+everything else in the cell's directory — your `.env`, your `vpn.conf` — where
+it is. So updating a shared cell keeps you authenticated, and without `--force`
+an existing cell is refused before anything is fetched.
 
 ### Handing files in and out
 
@@ -421,7 +463,8 @@ secret or an image needs no separate command.
 
 - An SNI-filtering proxy as a second way to allow a domain, for sites whose
   addresses are shared with everything else behind the same CDN.
-- Distributing cell definitions as OCI artifacts.
+- Distributing cell definitions as OCI artifacts, alongside the git repositories
+  `clone` reads today.
 - VM snapshots, so a new cell does not reinstall podman from scratch.
 
 ## License

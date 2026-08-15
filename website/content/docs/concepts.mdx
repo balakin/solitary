@@ -34,4 +34,4 @@ A cell receives authority in named pieces:
 
 A cell also has **no browser** and no launcher configured. Anything that would normally authenticate by opening one is authenticated on the host instead, and the resulting credential is passed in under `secrets`.
 
-The configuration should make those decisions reviewable before the cell runs. Because values are separated from names, the definition can be committed and shared as a reusable workflow without sharing credentials.
+The configuration should make those decisions reviewable before the cell runs. Because values are separated from names, the definition can be committed and shared as a reusable workflow without sharing credentials, and taken with [`solitary clone`](/docs/sharing).
