@@ -1,0 +1,49 @@
+---
+title: Moving work in and out
+description: Explicit file transfer without host mounts.
+---
+
+Nothing is mounted from the host, so a cell has no path to your files and its own work has no way out. Two folders and two commands close that gap without opening one: the host is always the party that moves the bytes.
+
+Both folders live in the cell's home, so they survive the container being replaced and are destroyed with the cell.
+
+## Send work in
+
+```sh
+solitary send claude notes.md
+solitary send claude patch.diff fixture.json
+```
+
+Files arrive in the cell's inbox at `/home/cell/inbox`. Use this for prompts, patches, fixtures, or other inputs you intentionally choose to share. Directories are refused — send an archive instead.
+
+## Publish work out
+
+Inside the cell, `artifact` publishes into the outbox:
+
+```sh
+artifact report.pdf dist/app   # publish these, for the host to collect
+artifact --list                # what is published, and what is waiting to come in
+```
+
+On the host:
+
+```sh
+solitary fetch claude               # copy everything published into the current directory
+solitary fetch claude --list        # see what is there without copying it
+solitary fetch claude report.pdf    # or name what you want
+solitary fetch claude --into ./out  # land them somewhere other than here
+solitary fetch claude --force       # replace files already there
+```
+
+Fetching copies rather than moves, so fetching twice is not a mistake and an interrupted fetch loses nothing. Clearing the outbox is the cell's own business (`rm` inside it).
+
+Only the **machine** has to be running, not the container: what a cell published can still be collected after whatever produced it has died.
+
+## The outbox is untrusted input
+
+Its contents are named by whatever runs in the cell, and those names become paths on your machine. Four rules, all enforced on the host:
+
+- **Solitary does the listing itself** — regular files only, one level deep. A symlink is not followed and a directory is not descended into. For a directory, create an archive inside the cell and publish the archive.
+- **A name that is not a plain file name** — `../escape`, `-rf`, an empty one — is refused *by name* rather than silently skipped, and the rest still come out.
+- **Nothing is written over something already there** without `--force`, and the check happens as a group, before the first file is copied.
+- **Nothing arrives executable.** Fetched files land `0644`. What a cell produces is data on the host, never a program.

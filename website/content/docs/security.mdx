@@ -1,0 +1,30 @@
+---
+title: Security model
+description: What the VM boundary and explicit permissions protect.
+---
+
+Solitary is designed to stop a compromised coding agent from modifying or executing through your host. Its primary defense is a hypervisor-backed VM with no host filesystem mounts.
+
+## Protected by default
+
+- A container-root process cannot directly access the host kernel.
+- The agent cannot read the host project, home directory, Git credentials, SSH agent, or Docker socket unless you deliberately provide an equivalent path.
+- Files produced in the cell do not silently appear on the host.
+- Secrets are selected by name and passed to individual cells rather than mounted as the host `.env` file.
+- A cell has no browser and no launcher, so nothing inside it can open a page on your machine. Authenticate on the host and pass the credential in as a secret.
+
+## Explicit permissions
+
+The boundary is only as useful as the permissions around it. Keep `secrets` lists narrow, allow only the domains required by the task, and expose only the ports you intend to open. A cell with no network allow list follows the host's network by default, so use an allow list when egress matters.
+
+## Secrets lifecycle
+
+Secret values live on the host and are passed into the container as environment variables. The `.env` file itself does not enter the VM, but the values do. Podman may record a container environment in the VM's metadata. Destroying the cell removes that metadata with the cell; rotate credentials if they may have been exposed.
+
+## Trusted inputs
+
+The image or `Containerfile` is trusted code. Building happens inside the VM, but a malicious image can still misuse the authority granted to its container. Review images and build definitions, and treat an outbox as untrusted input when fetching files onto the host.
+
+## Principle of use
+
+Give an agent a fresh cell, the minimum credentials, a narrow network, and an explicit path for artifacts. Assume the agent can do anything those permissions allow.

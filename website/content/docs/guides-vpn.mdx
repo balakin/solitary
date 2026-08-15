@@ -1,0 +1,60 @@
+---
+title: Route a cell through a VPN
+description: Send a cell's traffic through a WireGuard tunnel.
+---
+
+A cell can route its outbound traffic through a WireGuard tunnel brought up on the VM. The container needs no VPN software and no configuration of its own: it runs on the machine's network, so it inherits the tunnel.
+
+## Configure the cell
+
+Point `network.vpn` at a WireGuard configuration and keep the file private:
+
+```yaml
+network:
+  vpn: ./vpn.conf
+  allow:
+    - github.com
+    - api.anthropic.com
+```
+
+The path is relative to the cell definition. Use the `.conf` your provider gives you, unchanged.
+
+The configuration is **not part of the cell definition**. It holds a private key, so solitary never writes it into the machine's definition file; it is read from your disk on every `up` and placed into the running machine separately. That is what keeps a cell definition shareable: publish `cell.yaml`, keep `vpn.conf` and `.env` out of version control, and whoever copies the cell supplies their own — from any provider, with no edit to `cell.yaml`, because the peer to allow is read out of whichever configuration is present.
+
+```text
+# .gitignore, in a repo of cell definitions
+.env
+vpn.conf
+```
+
+## What happens to traffic
+
+Everything the cell reaches leaves through the tunnel, so it has its own exit address rather than your host's. The allow list is enforced exactly as before, with one difference: what it allows is reachable **through the tunnel only**.
+
+If the tunnel is down, nothing leaves — the same traffic does not quietly go out the way it came. The single exception is the cell's resolver reaching the servers under `resolvers:`, because the tunnel's own peer has to be resolved before there is a tunnel to resolve it through.
+
+## Two things a configuration must not have
+
+Both are refused when the cell is read, rather than leaving you with a machine whose tunnel never comes up:
+
+- **A missing `Endpoint`.** There is nothing to connect to, and nothing for the firewall to allow.
+- **A `DNS =` line.** A cell resolves through its own resolver. If you want the tunnel's resolver, name its address under `resolvers:` instead.
+
+## Not the host resolver
+
+Do not pair a tunnel with `resolvers: [host]`. Solitary warns about this combination on every `up` and again in the dashboard's network view, because it undoes much of what the tunnel is for.
+
+The host's resolver is discovered as the address the machine's own network hands it, which is link-local to that network. Queries to it therefore keep taking the interface the tunnel replaced — by design, since that is the only way to reach it. The cell's traffic leaves from somewhere else, but every name it looks up is still read by whoever runs that resolver, and it reopens the one hole in VM→host isolation.
+
+Name a resolver by address instead:
+
+```yaml
+network:
+  vpn: ./vpn.conf
+  resolvers:
+    - 10.0.0.53
+  allow:
+    - github.com
+```
+
+It is a warning rather than a refusal: a network whose names only its own resolver knows is a real thing to be on, and pairing it with a tunnel for everything else is a legitimate — if narrow — choice.

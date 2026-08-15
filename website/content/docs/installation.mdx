@@ -1,0 +1,33 @@
+---
+title: Installation
+description: Requirements and building solitary from source.
+---
+
+Solitary is **pre-alpha**. There are no released binaries yet, so the way in is a build from source. Interfaces and configuration shape can still change; read [the limitations](/docs/limitations) before trusting it with credentials.
+
+## Requirements
+
+- **macOS or Linux**
+- **[Lima](https://lima-vm.io) 2.0 or newer** — solitary drives `limactl` on the host and `podman` through it in the machine, so there is nothing else to install
+- **Go** to build the binary
+
+## Build it
+
+```sh
+git clone https://github.com/dm-balakin/solitary
+cd solitary
+go mod tidy
+make build
+```
+
+Dependencies are not vendored, which is what `go mod tidy` is for. `make lint` runs the linters if you intend to change anything.
+
+## What the first run costs
+
+Creating a cell takes a couple of minutes: it downloads a cloud image and installs podman inside the machine. Everything after that is container-speed — replacing a container, starting a stopped cell, or opening a shell.
+
+<Cards>
+  <Card title="Quickstart" href="/docs/quickstart" />
+  <Card title="Read the security model" href="/docs/security" />
+  <Card title="Review the limitations" href="/docs/limitations" />
+</Cards>

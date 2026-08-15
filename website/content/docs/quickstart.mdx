@@ -1,0 +1,82 @@
+---
+title: Quickstart
+description: Create, enter, use, and destroy a cell.
+---
+
+This walks one cell from nothing to gone. It assumes solitary is [built and on your PATH](/docs/installation).
+
+## Scaffold a definition
+
+```sh
+solitary init demo
+```
+
+That writes `~/.config/solitary/cells/demo/cell.yaml` — a commented file that explains its own options. The cell's name is the **directory** name, never a field inside the file, so the two cannot disagree.
+
+The only line that is active out of the box is the image:
+
+```yaml
+image: docker.io/library/ubuntu:24.04
+```
+
+Everything else — `secrets`, `network`, `ports`, `vm`, `git` — is commented out, which is also the default behaviour: no secrets, no port restriction, no egress restriction. See [the configuration reference](/docs/configuration) for the full surface.
+
+## Bring it up
+
+```sh
+solitary up demo
+```
+
+`up` creates the machine if it is missing, boots it if it is stopped, replaces the container if the image or the secrets changed, asks for any declared secret that has no value, and then opens a shell inside the container. The first run takes a couple of minutes; every one after is seconds.
+
+`up` is the only command that changes state, and it is idempotent. Editing `cell.yaml` and running `up` again is the entire change workflow.
+
+## Work in it
+
+You are in the container, in `/home/cell`. That directory lives on the **machine's** disk rather than in the container, so it survives a new image, a stop and start, and anything a tool installs into the home directory.
+
+```sh
+git clone https://github.com/you/project
+cd project && npm install && npm test
+```
+
+Nothing is mounted from the host, so the work starts by cloning rather than by finding your files already there. That is the point: an agent in this cell cannot write to your `.git/hooks`, your `package.json` scripts, or your editor configuration.
+
+## Drive it from the host
+
+Leave the shell and run one command at a time:
+
+```sh
+solitary exec demo git status
+solitary exec demo bash -lc 'npm test | tail -20'
+```
+
+`exec` exits with the command's status and leaves its streams alone, so a cell can be scripted from the host. The command is run directly rather than through a shell, so flags after it belong to it.
+
+## Get work out
+
+The cell publishes; the host collects.
+
+```sh
+solitary exec demo bash -lc 'artifact /home/cell/project/dist/app'
+solitary fetch demo --list
+solitary fetch demo
+```
+
+The file lands in your current directory, not executable. See [moving work in and out](/docs/artifacts).
+
+## Stop or destroy it
+
+```sh
+solitary ls           # every cell and its state
+solitary down demo    # stop the machine, keep the disk
+solitary rm demo      # destroy the machine and its disk
+```
+
+`rm` leaves the definition and the host-held secret values behind, so `solitary up demo` gives you a clean cell that is still authenticated. A clean rebuild is a normal operation here, not incident response.
+
+<Cards>
+  <Card title="The configuration reference" href="/docs/configuration" />
+  <Card title="Restrict what it can reach" href="/docs/guides-network-policy" />
+  <Card title="Manage cells in a live view" href="/docs/dashboard" />
+</Cards>

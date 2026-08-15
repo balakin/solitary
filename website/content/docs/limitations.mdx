@@ -1,0 +1,30 @@
+---
+title: Limitations and trade-offs
+description: What Solitary does not protect against.
+---
+
+Solitary is not a magic safety switch. It protects a machine boundary, not the authority you give an agent.
+
+## It does not protect granted authority
+
+An agent can still push to every repository reachable by a token, call every API allowed by the network policy, and modify anything inside its cell. Give it credentials with the smallest scope possible.
+
+## It does not make images trustworthy
+
+A VM prevents an image from directly modifying the host, but the image still runs code with the secrets and network access you granted. Review images and build definitions.
+
+## Secrets exist inside the cell
+
+The host `.env` file is not copied into the VM, but selected values become container environment variables. Container metadata can record those values until the cell is destroyed. Never treat a passed secret as invisible to the agent.
+
+## Isolation costs resources
+
+A VM uses memory, disk, and boot time. A cell is deliberately less convenient than a mounted container. That cost buys a stronger default boundary and a clean lifecycle.
+
+## Allow lists need maintenance
+
+A restricted build can fail because a package registry, image registry, DNS resolver, or CDN was omitted. This is an explicit trade-off: the policy is useful precisely because it does not silently expand.
+
+## Pre-alpha status
+
+The project is still pre-alpha. Interfaces, configuration shape, and platform support can change. Installation and operational documentation are pending; do not rely on it for production security decisions yet.

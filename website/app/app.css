@@ -1,0 +1,86 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/*
+ * Inter, self-hosted and subset.
+ *
+ * The variable face carries both axes the design uses — wght 100-900 and
+ * opsz 14-32, applied automatically by font-optical-sizing. The shipped files
+ * are cut down to the ranges this site writes in (Latin, punctuation, currency,
+ * arrows, a few maths symbols); the terminal art's box-drawing characters are
+ * deliberately absent, because those are set in the mono face below. Regenerate
+ * with the pyftsubset command in README.md.
+ *
+ * font-display: swap, because prose in a fallback face is better than no prose,
+ * and the metrics are close enough that the swap is not jarring.
+ */
+@font-face {
+  font-family: 'InterVariable';
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'InterVariable';
+  src: url('/fonts/InterVariable-Italic.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/*
+ * JetBrains Mono, self-hosted.
+ *
+ * The default mono stack falls through to Liberation Mono or Courier New on
+ * most Linux hosts, and neither has the box-drawing block. The browser then
+ * substitutes those glyphs from whatever else is installed, at a different
+ * advance width and baseline, so the terminal art on the home page draws its
+ * frame in pieces that do not meet.
+ *
+ * It is self-hosted rather than loaded from Google Fonts on purpose: the Google
+ * Fonts API serves subsets by unicode-range, and its `latin` subset stops well
+ * before U+2500, so the box-drawing glyphs would still be missing. This file is
+ * the full face.
+ *
+ * font-display: block, paired with the preload in root.tsx, because the failure
+ * mode while swapping is a visibly broken frame rather than a reflow.
+ */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@theme {
+  --font-sans:
+    'InterVariable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    'Noto Sans', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  --font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+}
+
+html {
+  /* Inter's opsz axis: let the browser pick the optical size per text size. */
+  font-optical-sizing: auto;
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}

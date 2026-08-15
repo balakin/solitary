@@ -1,0 +1,27 @@
+{
+  "pages": [
+    "index",
+    "installation",
+    "quickstart",
+    "---Understand solitary---",
+    "why-solitary",
+    "concepts",
+    "security",
+    "limitations",
+    "---Operate a cell---",
+    "commands",
+    "capabilities",
+    "networking",
+    "artifacts",
+    "dashboard",
+    "troubleshooting",
+    "---Guides---",
+    "guides-images",
+    "guides-network-policy",
+    "guides-secrets",
+    "guides-vpn",
+    "guides-workflows",
+    "---Reference---",
+    "configuration"
+  ]
+}

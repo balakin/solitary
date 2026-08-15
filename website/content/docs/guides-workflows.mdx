@@ -1,0 +1,57 @@
+---
+title: Shareable workflows
+description: Keep the environment in code, then reuse it for teams and experiments.
+---
+
+A cell definition is a reusable description of an agent environment. It captures the image or build, the command, the ports, the network policy, the secrets names, and the VM defaults without containing the secret values themselves.
+
+That makes a workflow easy to review, copy, version, and adapt.
+
+## Share the safe parts
+
+A repository can contain a cell definition and its `Containerfile`:
+
+```yaml
+image: ghcr.io/acme/review-agent:latest
+command: sleep infinity
+
+ports:
+  - 8080
+
+network:
+  allow:
+    - github.com
+    - registry.npmjs.org
+
+secrets:
+  - GITHUB_TOKEN
+```
+
+The definition says what the cell needs, not the values it receives. Each operator supplies their own `.env`, credentials, and optional VPN configuration locally.
+
+Keep these files out of version control:
+
+```text
+.env
+vpn.conf
+```
+
+## Reuse one workflow
+
+Use the same definition to:
+
+- Give every contributor a consistent agent environment.
+- Reproduce a bug with the same image, network policy, and resources.
+- Try a new image while preserving the cell's home directory.
+- Create a clean cell for a risky experiment, then destroy it without affecting the original.
+- Review permissions in a pull request before anyone runs the workflow.
+
+## Separate identity from configuration
+
+The shareable definition can name `GITHUB_TOKEN` without granting access to a particular account. The operator decides which value is supplied, and the cell decides which names are allowed in. This keeps workflow configuration portable without putting credentials in the repository.
+
+## Experiment safely
+
+Treat cells as disposable branches of an environment. Copy a definition, change the image or allow list, and run it as a separate cell. If the experiment is not useful, remove the VM. If it is useful, commit the definition change and recreate it for a clean run.
+
+The goal is not to hide the environment. It is to make the environment explicit, repeatable, and easy to throw away.

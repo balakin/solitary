@@ -1,0 +1,52 @@
+---
+title: Capabilities
+description: Everything a cell can do and the controls around it.
+---
+
+## Images and builds
+
+Use a published `image` or build from a `Containerfile`. A build context is copied into the machine and built there, so build instructions never execute on the host. The context is discarded after the build.
+
+## Secrets
+
+Declare only the names a cell needs:
+
+```yaml
+secrets:
+  - GITHUB_TOKEN
+  - CLAUDE_API_KEY
+```
+
+Values are kept on the host. `up` asks for missing values, and the secrets command can set or rotate them later.
+
+## Ports
+
+Ports are the way into a cell. Omit `ports` to forward every listening port to host localhost, or list only the ports a cell should expose:
+
+```yaml
+ports:
+  - 8080
+  - 3000
+```
+
+## Network egress
+
+An allow list turns network access into a default-deny policy:
+
+```yaml
+network:
+  allow:
+    - github.com
+    - api.anthropic.com
+    - registry.npmjs.org
+```
+
+Domains, IP addresses, and CIDR blocks are supported. Custom resolvers can be configured for corporate or split-horizon networks. A WireGuard configuration can route the cell's traffic through a separate exit.
+
+## Artifacts
+
+Inside the cell, publish regular files with `artifact`. On the host, `fetch` copies published files without making the cell's filesystem visible. `send` places selected host files in the cell's inbox. Transfers are explicit, repeatable, and validated rather than mounts.
+
+## Dashboard
+
+The dashboard is a live view over the same lifecycle operations as the CLI. It shows state, resources, network permissions, tunnel health, and secret presence without displaying secret values. It can also follow DNS and firewall events to explain an egress decision. See [the dashboard](/docs/dashboard).

@@ -1,0 +1,57 @@
+---
+title: Restrict network access
+description: Give a cell only the egress it needs.
+---
+
+By default, a cell can reach what the host can reach. Add `network.allow` when a task should have a default-deny network policy.
+
+## Define an allow list
+
+```yaml
+network:
+  allow:
+    - github.com
+    - objects.githubusercontent.com
+    - registry.npmjs.org
+    - 10.1.2.0/24
+```
+
+A domain covers its subdomains, so `github.com` reaches `api.github.com`. It does not cover a different domain the same site happens to use, so `objects.githubusercontent.com` has to be listed too. IP addresses and CIDR blocks are used as written.
+
+Two pieces enforce the list, both in the machine and outside the container. A resolver answers for the listed names only — anything else gets NXDOMAIN, so a query cannot carry data out to a resolver of an agent's choosing — and it records the addresses it hands out in a set the firewall allows. A name resolves and is reachable, or does neither, and a site that changes its addresses keeps working without anyone editing a rule. The container is rootless: nothing inside it can load a firewall rule, stop the resolver, or edit either one's configuration.
+
+## Include dependencies
+
+A restricted cell cannot pull its own image unless the registry is allowed. A build can also need package registries, source control, API endpoints, or a CDN. Missing destinations fail as DNS errors instead of silently expanding the policy:
+
+```text
+dial tcp: lookup production.cloudfront.docker.com on 127.0.0.1:53: no such host
+```
+
+The name in the error is the entry to add.
+
+## Configure DNS
+
+By default the cell's resolver forwards to `1.1.1.1` and `8.8.8.8`. Those are public on purpose: a restricted cell cannot reach the host, and a resolver on the host's network would see every name the cell looks up.
+
+That is the wrong answer on a network whose names only its own resolver knows — a corporate one, a split horizon, anything behind a proxy that intercepts DNS — and on one that refuses to carry DNS to a public resolver at all. Name the resolvers instead:
+
+```yaml
+network:
+  resolvers:
+    - host          # the resolver this machine is given, which is the host's
+    - 10.0.0.53     # or name them outright
+```
+
+`host` is discovered at boot from the machine's DHCP lease, so it follows the network you are on. It is the one hole in VM→host isolation and a narrow one: the cell's own resolver, port 53, and nothing else. A process inside the container still cannot reach any resolver directly — only ask the one in front of it, which answers for the allowed names only.
+
+Do not combine `host` with `network.vpn`; see [why](/docs/guides-vpn#not-the-host-resolver).
+
+## Debug a failure
+
+The dashboard's traffic view shows lookups, resolved addresses, and refused connections. The refused name usually identifies the entry to add. Changing the list takes effect after restarting the machine:
+
+```sh
+solitary down my-cell
+solitary up my-cell
+```

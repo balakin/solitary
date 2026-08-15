@@ -1,0 +1,87 @@
+---
+title: The dashboard
+description: Every cell and its state in one live view.
+---
+
+`solitary dashboard` is the same operations as the CLI in one live view: every cell, its state as it changes, and the actions that apply to the selected one.
+
+```text
+ solitary
+ ╭─────────────────────╮╭──────────────────────────────────╮
+ │ cells               ││ claude                           │
+ │ › ● claude  running ││ image   build:./Containerfile    │
+ │   ○ demo    stopped ││ machine 4 cpus · 4GiB · 40GiB    │
+ ╰─────────────────────╯│ ports   all reach host localhost │
+                        │ network 2 allowed                │
+                        │         github.com               │
+                        │         api.anthropic.com        │
+                        │ secrets 2 of 2 set               │
+                        ╰──────────────────────────────────╯
+ ↑↓ move · ⏎ shell · u up · s stop · e secrets · n network · t traffic · d rm · q quit
+```
+
+It does nothing the commands cannot, and the slow ones it runs *as* those commands: pressing `u` runs `solitary up --detach`, so a build prints what a build prints and a cell missing a secret asks for it the way it always does. The dashboard steps out of the way and comes back rather than owning a second, worse version of each.
+
+## Keys
+
+| Key | Action |
+| --- | --- |
+| `↑` `↓` / `k` `j` | Move between cells |
+| `⏎` | Shell into the selected cell |
+| `u` | Bring it up (`solitary up --detach`) |
+| `s` | Stop it |
+| `d` | Destroy its machine, after a confirmation |
+| `e` | Manage its secrets |
+| `n` | Show the whole allow list |
+| `t` | Follow its network traffic |
+| `r` | Refresh |
+| `q` | Quit |
+
+## The VPN row
+
+A cell with `network.vpn` set reports the tunnel in its detail view, refreshed as the view is open:
+
+| Shown | Means |
+| --- | --- |
+| `vpn none` | No tunnel configured. |
+| `vpn configured` | The cell is not running, so there is nothing to ask. |
+| `vpn down — this cell reaches nothing` | The tunnel is not up, and the kill switch is therefore dropping everything. |
+| `vpn up, no recent handshake` | Up but silent. From inside the cell this is indistinguishable from a broken network, which is why it is said here. |
+| `vpn up · handshake 12s ago` | Working, with the peer it is actually talking to and the bytes moved in each direction. |
+
+The peer address is read live rather than taken from the configuration: a provider that balances one hostname across servers moves it between handshakes.
+
+## The traffic view
+
+`t` follows what the selected cell's network is doing, as it happens: every name it asks about, what it resolved to, and every connection the firewall refused.
+
+```text
+ ╭─────────────────────╮╭─────────────────────────────────────────────────╮
+ │ cells               ││ traffic · claude                                │
+ │ › ● claude  running ││ 12:07:53 query    api.github.com ×2             │
+ ╰─────────────────────╯│ 12:07:53 resolved api.github.com → 140.82.121.6 │
+                        │ 12:07:53 refused  example.com                   │
+                        │ 12:07:53 denied   1.1.1.1:443                   │
+                        ╰─────────────────────────────────────────────────╯
+ ↑↓ scroll · G live · / filter · b refused only · c clear · esc back
+```
+
+| Key | Action |
+| --- | --- |
+| `↑` `↓` / `k` `j` | Scroll |
+| `pgup` `pgdown` / `ctrl+b` `ctrl+f` / `space` | Page |
+| `g` / `G` | Oldest / back to live |
+| `/` | Filter as you type; `⏎` keeps it, `esc` clears it |
+| `b` | Refused connections only |
+| `c` | Clear what is shown |
+| `esc` | Back to the cell list |
+
+It reads the machine's log, where both halves of the allow list record what they did — so a cell cannot see, let alone edit, what is recorded about it. Repeats fold into a count, since one lookup answers with every address a name has.
+
+This is the fastest way to find what an allow list is missing: a `refused` line names it.
+
+## Secrets
+
+`e` manages the selected cell's secrets: which names are set, which are not, and a masked field to set or rotate one (`↑↓` to move, `⏎` to set a value, `esc` to go back).
+
+Values are never displayed. The dashboard reads only whether each declared name has one.

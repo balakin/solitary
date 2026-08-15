@@ -1,0 +1,71 @@
+---
+title: Commands
+description: The command surface for managing cells.
+---
+
+The command surface is intentionally small:
+
+```text
+solitary init <name>            scaffold a cell definition
+solitary up <name|image-ref>    start the cell and attach
+solitary shell <name>           shell into a running cell
+solitary exec <name> <cmd...>   run one command in a running cell
+solitary down <name>            stop the cell, keep the disk
+solitary rm <name>              destroy the VM; definition and secrets stay
+solitary ls                     list cells and their state
+solitary fetch <name> [files]   collect what a cell published
+solitary send <name> <file...>  put files into a cell's inbox
+solitary secrets <name>         set the values a cell is allowed to see
+solitary dashboard              manage cells in a live view
+```
+
+## `up` is the only command that changes state
+
+It is idempotent: it creates the cell if absent, boots it if stopped, and attaches if it is already running. It also replaces the container when the image or the secrets changed, so editing `cell.yaml` and running `up` again is all a change ever takes.
+
+| Flag | Meaning |
+| --- | --- |
+| `--detach` | Start the cell without attaching a shell. |
+| `--as <name>` | The name to give a cell created from an image reference. |
+
+Given an **image reference** rather than a known cell name, `up` creates a cell from it with default settings:
+
+```sh
+solitary up docker.io/library/ubuntu:24.04
+```
+
+If a cell of the derived name already exists with a different image, the command fails and asks for `--as`.
+
+## Lifecycle
+
+`down` keeps the disk. `rm` removes the VM and its disk but leaves the definition and host-held secrets, so the cell can be recreated already authenticated. That makes a clean rebuild a normal operation rather than incident response.
+
+`rm --force` skips the confirmation prompt. `init --force` overwrites an existing definition.
+
+## Direct execution
+
+`exec` is `shell` for one command: it exits with the command's status and leaves its streams alone, so a cell can be scripted from the host without a terminal in the middle.
+
+```sh
+solitary exec claude git status
+solitary exec claude bash -lc 'npm test | tail -20'
+solitary exec claude cat notes.md > notes.md   # redirection is the host's
+```
+
+The command is run directly rather than through a shell, so flags after it are its own and quoting survives. Ask for a shell explicitly when you want one.
+
+## Moving files
+
+```sh
+solitary fetch <name>              # everything published, into the current directory
+solitary fetch <name> --list       # see what is there without copying it
+solitary fetch <name> --into <dir> # land them somewhere else
+solitary fetch <name> --force      # replace files already there
+solitary send <name> <file...>     # into the cell's inbox
+```
+
+See [moving work in and out](/docs/artifacts) for the rules that make this safe.
+
+## Your terminal comes with you
+
+A session you are watching carries your terminal into the cell: its name, whether it does true colour, and its description, compiled into the cell the first time you attach. Terminals that ship their own terminfo — ghostty, kitty, wezterm — work without the cell having heard of them, and a theme arrives in the colours it was written in.

@@ -1,0 +1,141 @@
+---
+title: Configuration reference
+description: Every field in cell.yaml and config.yaml.
+---
+
+## Files
+
+```text
+~/.config/solitary/
+  config.yaml              user-wide defaults
+  cells/<name>/cell.yaml   one cell
+  cells/<name>/.env        that cell's secret values, host-side only
+```
+
+A cell's name is the name of its **directory**, never a field inside the file, so the two can never disagree. `solitary init <name>` creates the directory and a commented `cell.yaml`.
+
+`config.yaml` holds `vm:`, `git:` and `network:` blocks used as the defaults for every cell. A cell that sets `network.allow` **replaces** the user-wide list rather than adding to it: what a cell may reach should be readable in one place.
+
+## A complete cell
+
+```yaml
+image: ghcr.io/you/nvim-claude:latest
+# build: ./Containerfile  # or build it instead — set one, not both
+
+command: sleep infinity   # optional; must not exit — it is the container's life
+
+secrets:            # only these names are passed into the cell
+  - CLAUDE_API_KEY
+  - GITHUB_TOKEN
+
+ports:              # omit and every listening port reaches host localhost;
+  - 8080            # set and only these do
+
+network:            # omit and the cell reaches whatever the host reaches;
+  allow:            # set and it reaches these and nothing else
+    - github.com
+    - api.anthropic.com
+  resolvers:        # optional; defaults to 1.1.1.1 and 8.8.8.8
+    - 10.0.0.53
+  vpn: ./vpn.conf   # optional; send all of it through this WireGuard tunnel
+
+git:                # optional; usually set once in config.yaml instead
+  name: Ada Lovelace
+  email: ada@example.com
+
+vm:                 # optional; falls back to config.yaml, then to built-ins
+  cpus: 4
+  memory: 8GiB
+```
+
+## The toolset
+
+### `image`
+
+A published container image holding the cell's tools. Exactly one of `image` or `build` is required.
+
+Changing it and running `up` again replaces the container while keeping the VM, its disk, and the cell's home. The container is the toolset, not the boundary.
+
+### `build`
+
+A `Containerfile` to build instead, as a path relative to the cell's directory. That directory becomes the build context: it is copied into the machine and built **there**, so nothing in a `Containerfile` ever runs on the host. `.git` and `node_modules` are left out of the copy, and the copy is deleted afterwards so a context that carried build-time secrets does not linger.
+
+`up` rebuilds when anything in the context changes and reuses the image when nothing has.
+
+Do not set both `image` and `build`.
+
+### `command`
+
+The command the container runs. It **must not exit** — it is the container's life, and shells opened by `up` or `shell` are separate from it. Defaults to `sleep infinity`.
+
+## Authority
+
+### `secrets`
+
+The environment variable names this cell is allowed to see:
+
+```yaml
+secrets:
+  - CLAUDE_API_KEY
+  - GITHUB_TOKEN
+```
+
+Values come from `cells/<name>/.env`, which stays on the host and is never copied into the VM; the values are passed to the container as environment variables when it starts. The file may hold more than a cell needs — only the names that cell declares are ever passed in. `up` asks for any that are missing, and `solitary secrets <name>` sets or rotates them later.
+
+Because the values live on the host, `rm` followed by `up` gives you a clean cell that is still authenticated.
+
+### `ports`
+
+Which guest ports reach the host. When empty, every port the container listens on is reachable on host localhost. When set, only these are forwarded.
+
+```yaml
+ports:
+  - 8080
+  - 3000
+```
+
+### `network`
+
+| Field | Meaning |
+| --- | --- |
+| `allow` | Domains, IP addresses, and CIDR blocks the cell may open connections to. Empty means the cell reaches whatever the host reaches; set means default-deny. A domain covers its subdomains. |
+| `resolvers` | The DNS servers the cell's own resolver forwards to. Empty means `1.1.1.1` and `8.8.8.8`. The entry `host` means the resolver the machine is given by its network, which is the host's. |
+| `vpn` | A `wg-quick` configuration, as a path relative to the cell's directory. Everything the cell reaches then leaves through that tunnel. |
+
+Each entry under `resolvers` must be an IP address or the literal `host`; anything else is refused when the cell is read. See [networking](/docs/networking) and [routing a cell through a VPN](/docs/guides-vpn).
+
+## The machine
+
+### `vm`
+
+Every field is optional and falls back to `config.yaml`, then to the defaults built into the binary:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `base` | `ubuntu-lts` | The Lima image template. |
+| `cpus` | `2` | |
+| `memory` | `4GiB` | On Linux this must fit `/dev/shm`; see [troubleshooting](/docs/troubleshooting). |
+| `disk` | `20GiB` | |
+| `provision` | — | A shell script run once, as root, after the built-in podman setup. A value here **replaces** the user-wide one rather than appending to it. |
+
+```yaml
+vm:
+  cpus: 4
+  memory: 8GiB
+  provision: |
+    apt-get install -y build-essential
+```
+
+The `vm` block describes settings a machine reads at boot. Change it while a cell is running and `up` warns that the running cell still uses the old ones; `down` then `up` applies them without touching the disk.
+
+### `git`
+
+```yaml
+git:
+  name: Ada Lovelace
+  email: ada@example.com
+```
+
+A cell has nowhere of its own to keep a git identity: nothing is mounted from the host, and anything configured by hand inside a cell is gone when it is rebuilt. So `git:` is passed in as environment variables, which git reads ahead of any config file. Git wants an author and a committer, each with a name and an email, and has no single setting for both — solitary fills in all four from these two fields.
+
+Write it once in `config.yaml` and every cell commits as you.

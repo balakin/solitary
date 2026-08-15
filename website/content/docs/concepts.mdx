@@ -1,0 +1,37 @@
+---
+title: Core concepts
+description: The pieces that make up a solitary cell.
+---
+
+## Cell
+
+A cell is the unit of isolation and lifecycle. It has a definition, a Lima VM, a persistent disk, and a container. Cells are meant to be disposable: destroy one when its state is no longer useful, then create a clean one from the same definition.
+
+## VM
+
+The VM is the boundary. It is the part that separates a cell from the host kernel. On macOS and Linux, solitary uses Lima to create and manage it.
+
+## Container
+
+The container is the toolset, not the security boundary. Change `image:` or `build:` and bring the cell up again to replace the container while retaining the cell's disk.
+
+## Host
+
+The host is the operator and the display. It starts machines, forwards selected ports, stores secrets, and performs explicit file transfers. It does not mount your repository into a cell.
+
+## Persistence
+
+The cell's home directory lives on the VM disk. It survives a stopped machine and a replaced container. `rm` destroys the VM and its disk; the cell definition and host-held secrets remain available for a fresh `up`.
+
+## Authority
+
+A cell receives authority in named pieces:
+
+- `secrets` controls which environment variables enter the container.
+- `ports` controls which listening ports are reachable from the host.
+- `network.allow` controls which destinations the cell can reach.
+- `image` or `build` determines which code is trusted inside the cell.
+
+A cell also has **no browser** and no launcher configured. Anything that would normally authenticate by opening one is authenticated on the host instead, and the resulting credential is passed in under `secrets`.
+
+The configuration should make those decisions reviewable before the cell runs. Because values are separated from names, the definition can be committed and shared as a reusable workflow without sharing credentials.

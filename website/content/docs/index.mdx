@@ -1,0 +1,54 @@
+---
+title: Overview
+description: Understand solitary before you run it.
+---
+
+Solitary is a pre-alpha tool for running coding agents in **hypervisor-isolated cells**. A cell is a Lima virtual machine with a container inside it: the VM is the security boundary, while the container is the replaceable toolset.
+
+These docs explain the problem, the model, and the capabilities. The project is pre-alpha, so the way in is a build from source.
+
+## Start here
+
+<Cards>
+  <Card title="Install solitary" href="/docs/installation" />
+  <Card title="Quickstart" href="/docs/quickstart" />
+  <Card title="Why Solitary exists" href="/docs/why-solitary" />
+  <Card title="Security model" href="/docs/security" />
+</Cards>
+
+## Operate a cell
+
+<Cards>
+  <Card title="Commands" href="/docs/commands" />
+  <Card title="Networking" href="/docs/networking" />
+  <Card title="Moving work in and out" href="/docs/artifacts" />
+  <Card title="The dashboard" href="/docs/dashboard" />
+  <Card title="Troubleshooting" href="/docs/troubleshooting" />
+  <Card title="Configuration reference" href="/docs/configuration" />
+</Cards>
+
+## Guides
+
+<Cards>
+  <Card title="Use an image or build a container" href="/docs/guides-images" />
+  <Card title="Restrict network access" href="/docs/guides-network-policy" />
+  <Card title="Pass secrets safely" href="/docs/guides-secrets" />
+  <Card title="Route a cell through a VPN" href="/docs/guides-vpn" />
+  <Card title="Shareable workflows" href="/docs/guides-workflows" />
+</Cards>
+
+## What you can do
+
+- Run an agent without mounting your repository into its environment.
+- Replace the container image without replacing the cell's persistent VM disk.
+- Pass only named secrets to the cells that need them.
+- Control which ports reach the host and which domains the cell can reach.
+- Send inputs in and fetch published artifacts out through explicit host commands.
+- Route everything a cell reaches through a WireGuard tunnel, with no fallback when it is down.
+- Watch every name a cell looks up and every connection it was refused, in a live dashboard.
+- Throw away a cell and recreate it without losing its host-held secrets.
+- Share the environment definition while keeping credentials and VPN files local.
+
+## Important boundary
+
+Isolation protects the host from a compromised cell. It does **not** make an agent harmless: it can still misuse any token, network destination, image, or other authority you grant it. Read [the security model](/docs/security) and [what solitary does not protect against](/docs/limitations) before trusting it with credentials.

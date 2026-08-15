@@ -1,0 +1,37 @@
+---
+title: Use an image or build a container
+description: Choose the toolset that runs inside a cell.
+---
+
+A cell uses either a published container image or a local `Containerfile`. The VM is the boundary; the container is replaceable tooling.
+
+## Use a published image
+
+Reference an image in the cell definition:
+
+```yaml
+image: ghcr.io/you/agent:latest
+command: sleep infinity
+```
+
+The command is optional, but if provided it must stay running. When the image changes, running `solitary up` replaces the container while keeping the VM disk and cell home.
+
+## Build a local image
+
+Use `build` instead of `image`:
+
+```yaml
+build: ./Containerfile
+```
+
+The path is relative to the cell definition directory, which becomes the build context. The context is copied into the VM and the build runs there, never on the host. `.git` and `node_modules` are excluded, and the temporary context is removed after the build.
+
+Do not set both `image` and `build`; choose one source.
+
+## Rebuild workflow
+
+`solitary up` reuses the existing image when the build context has not changed. Edit the `Containerfile` or its context and run `solitary up` again to rebuild. Replace the container when you want a new toolset without throwing away the cell's persistent home.
+
+## Trust the source
+
+VM isolation prevents build instructions from executing directly on the host, but the resulting image still runs with the secrets and network permissions you grant. Review images, base images, and build definitions before using them.

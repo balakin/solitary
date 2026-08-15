@@ -1,0 +1,82 @@
+---
+title: Troubleshooting
+description: The failure modes a cell actually has.
+---
+
+## A restricted cell cannot build or clone
+
+An allow list has to be complete. A restricted cell cannot pull its own image unless the registry is listed, and a build cannot install packages unless its package sources are. What you see is a name that does not resolve:
+
+```text
+dial tcp: lookup production.cloudfront.docker.com on 127.0.0.1:53: no such host
+```
+
+The name in the error is the entry to add. The dashboard's traffic view (`t`) shows the same thing live, and a `refused` line names it directly.
+
+Changing the list takes effect when the machine next starts:
+
+```sh
+solitary down my-cell
+solitary up my-cell
+```
+
+## A machine has to fit the host
+
+On Linux, a guest's entire memory is a file on `/dev/shm`, which is usually half of RAM. A machine asking for more than that filesystem holds boots, reports itself running, and then dies the moment it touches enough pages — the process stays alive and Lima still calls it running, so every command hangs instead of failing.
+
+`up` refuses to create such a machine and says what to lower `vm.memory` to:
+
+```text
+this machine asks for 16.0GiB of memory, but /dev/shm on this host holds 7.8GiB,
+and that is where the guest's memory lives
+A machine larger than that starts, reports itself running and then dies with no error
+Lower vm.memory to 7.8GiB or less, or raise /dev/shm
+```
+
+It also warns — without refusing — when a machine fits the filesystem but not the space free on it right now. Stop another cell if it then fails to start.
+
+This does not apply on macOS, where the hypervisor does not back guest memory with a file.
+
+## A cell that stops answering
+
+Solitary reports more than running and stopped:
+
+| State | Means |
+| --- | --- |
+| `uninitialized` | The cell is defined, but no machine was ever created for it. |
+| `stopped` | The machine exists but is not running. |
+| `running` | The machine is up and the container inside it is running. |
+| `degraded` | The machine is up, but its container is not. |
+| `unreachable` | Lima considers the machine running, but nothing inside it answers. |
+| `broken` | Lima reports the machine as broken. |
+
+`unreachable` exists so that a hung machine fails your commands in seconds instead of blocking them. `solitary down` then `up` recovers it without touching the disk.
+
+A `degraded` cell has lost its container, usually because `command` exited — it must not exit; it is the container's life. `up` starts a replacement.
+
+## A tunnel that will not come up
+
+Two things a WireGuard configuration must not have, both refused when the cell is read rather than at boot:
+
+- **A missing `Endpoint`.** There is nothing to connect to, and nothing for the firewall to allow.
+- **A `DNS =` line.** A cell resolves through its own resolver; name the address under `network.resolvers` instead.
+
+If the tunnel is configured and down, the cell reaches nothing at all — that is the kill switch working, not a separate fault. The dashboard's VPN row says so directly. See [routing a cell through a VPN](/docs/guides-vpn).
+
+## A change to `vm` that did not take
+
+Lima cannot apply machine settings to a running machine, so `up` warns rather than silently ignoring them:
+
+```text
+Warning: the vm settings for "claude" changed since its machine started.
+         The running cell still uses the old ones. To apply the change:
+           solitary down claude && solitary up claude
+```
+
+Stopping and starting applies them. The disk, the cell's home, and the secrets are untouched.
+
+## Work that disappeared
+
+Work belongs in `/home/cell`, which lives on the machine's disk rather than in the container. It survives a new image, a stop and start, and anything a tool installs into the home directory.
+
+`rm` is what discards it, and `rm` means destroy the machine. Nothing is synced back to the host, because a cell has no path to the host: anything you would be upset to lose belongs either in a git remote, in [the outbox](/docs/artifacts), or in `secrets`, which lives on the host and is passed in on every start.

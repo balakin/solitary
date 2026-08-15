@@ -1,0 +1,48 @@
+---
+title: Networking
+description: Egress control, DNS, ports, and VPN routing.
+---
+
+A cell has two independent networking directions:
+
+- **Inbound:** forwarded ports let the host open a service running in the cell.
+- **Outbound:** the network policy controls what the cell can reach.
+
+## Ports
+
+Omit `ports` and every port the container listens on reaches host localhost. Set it and only those do. Connections the host starts *into* a cell are unaffected by the egress policy, so forwarded ports keep working under the strictest allow list.
+
+## Allow lists
+
+Without `network.allow`, the cell reaches whatever the host reaches. With an allow list, the cell is default-deny: the listed domains, addresses, and CIDR blocks resolve and are reachable, and nothing else is — not the rest of the internet, not your machine, not your local network.
+
+A domain covers its subdomains; a different domain the same site uses has to be listed itself. The list must include every dependency: source control, container registries, package registries, APIs, and any CDN a build needs.
+
+Enforcement lives in the machine and outside the container, in two halves that agree with each other. A resolver answers for the listed names only, and records the addresses it hands out in a set the firewall allows. So a name resolves and is reachable, or does neither. The container is rootless and cannot load a firewall rule, stop the resolver, or edit either one's configuration.
+
+Changing the list takes effect when the machine next starts:
+
+```sh
+solitary down my-cell
+solitary up my-cell
+```
+
+## DNS
+
+By default the cell's resolver forwards to `1.1.1.1` and `8.8.8.8`. They are public on purpose: a restricted cell cannot reach the host, and a resolver on the host's network would see every name the cell looks up.
+
+Set `network.resolvers` for private or corporate DNS. The entry `host` means the resolver the machine is given by its own network, which is the host's — the answer for a network whose names only its own resolver knows. It is the one hole in VM→host isolation, and a narrow one: the cell's resolver alone, on port 53.
+
+Because the resolver and the firewall are driven from the same list, a query for a name outside the policy gets NXDOMAIN rather than an answer nothing can connect to. That also means a query cannot carry data out to a resolver of an agent's choosing.
+
+## VPN
+
+`network.vpn` points at a WireGuard configuration. The tunnel is brought up in the machine, where the container cannot touch it, and everything the cell reaches leaves through it.
+
+The allow list applies exactly as before, except that what it allows is reachable through the tunnel only: with the tunnel down, nothing leaves, rather than the same traffic quietly going out the way it came. See [routing a cell through a VPN](/docs/guides-vpn).
+
+## Observability
+
+The machine logs both halves of the policy: every name the cell asks about, what it resolved to, and every connection the firewall refused. The dashboard's traffic view (`t`) follows that log live. A cell cannot see, let alone edit, what is recorded about it.
+
+When a restricted build fails, a `refused` line names what is missing from the policy.

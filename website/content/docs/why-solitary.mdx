@@ -1,0 +1,27 @@
+---
+title: Why Solitary exists
+description: The host filesystem is an accidental execution surface for coding agents.
+---
+
+Most agent sandboxes start with a container and mount your project directory into it. That is convenient, but the mount is also a path from the agent to your machine's future behavior.
+
+An agent that can write to the project can write to `.git/hooks/pre-commit`, a `package.json` script, a `Makefile`, `.envrc`, an editor task, or a lint plugin resolved from the local tree. You may execute the payload later by running a command you already trust. No kernel escape is required.
+
+## Solitary's answer
+
+Solitary makes the safe path the convenient path:
+
+1. The agent works in a virtual machine with its own disk.
+2. A container supplies the tools and can be replaced independently.
+3. The host never mounts a project, home directory, socket, or secret file into the cell.
+4. The host explicitly moves files in and out when you ask it to.
+
+This is a boundary around the machine, not a promise that the agent will make good decisions with authority you deliberately give it.
+
+## Why a cell instead of a fresh container?
+
+A fresh container shares the host kernel. A cell uses a hypervisor-backed VM, so container root remains inside the guest. The VM also gives the cell a durable home: you can replace its container image while keeping the state that belongs to the cell.
+
+## The trade-off
+
+The stronger boundary costs more than a direct container: a VM takes resources and boot time, and work must be cloned or transferred rather than mounted. That friction is the feature when the cost of an agent mistake is higher than the convenience of a shared directory.
