@@ -103,6 +103,7 @@ func (m model) detailPane() string {
 	}
 	lines = append(lines, m.network()...)
 	lines = append(lines, m.vpn()...)
+	lines = append(lines, m.handoffLines()...)
 	lines = append(lines, field("secrets", m.secretsSummary()))
 
 	return pane(m.detail.Name, strings.Join(lines, "\n"))
@@ -336,6 +337,30 @@ func trafficStyle(kind cell.TrafficKind) lipgloss.Style {
 	default:
 		return lipgloss.NewStyle().Foreground(dim)
 	}
+}
+
+func (m model) handoffLines() []string {
+	if m.selected().Status != cell.StatusRunning {
+		return []string{field("handoff", labelStyle.Render("machine not running"))}
+	}
+	if m.handoff == nil {
+		return []string{field("handoff", labelStyle.Render("asking the machine…"))}
+	}
+	return []string{
+		field("inbox", queueSummary(m.handoff.Inbox)),
+		field("outbox", queueSummary(m.handoff.Outbox)),
+	}
+}
+
+func queueSummary(q cell.Queue) string {
+	return fmt.Sprintf("%d file%s · %s", q.Files, plural(q.Files), cell.Size(q.Bytes))
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // secretsSummary says how many of a cell's secrets are ready without listing

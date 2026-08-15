@@ -63,6 +63,8 @@ type model struct {
 	// and its machine could be asked. Nil means unknown, which is not the
 	// same as down.
 	tunnel *cell.TunnelState
+	// handoff is the live inbox/outbox count for the selected running cell.
+	handoff *cell.Handoff
 
 	traffic []trafficRow
 	stream  *stream
@@ -107,6 +109,10 @@ type (
 		name  string
 		state *cell.TunnelState
 	}
+	handoffMsg struct {
+		name  string
+		state *cell.Handoff
+	}
 )
 
 func newModel() model {
@@ -139,7 +145,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// would move what is being talked about.
 		switch m.mode {
 		case browsing:
-			return m, tea.Batch(refresh(), m.watchTunnel(), tick())
+			return m, tea.Batch(refresh(), m.watchTunnel(), m.watchHandoff(), tick())
 		case viewingNetwork:
 			// The list itself cannot change while it is being read, but
 			// the tunnel carrying it can.
@@ -158,16 +164,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tunnel = nil
 		}
 		m.detail, m.detailErr = msg.detail, nil
-		if cmd := m.watchTunnel(); cmd != nil {
-			return m, cmd
+		m.handoff = nil
+		tunnelCmd, handoffCmd := m.watchTunnel(), m.watchHandoff()
+		if tunnelCmd != nil {
+			return m, tea.Batch(tunnelCmd, handoffCmd)
 		}
 		m.tunnel = nil
-		return m, nil
+		return m, handoffCmd
 
 	case tunnelMsg:
 		// The selection may have moved while the machine was answering.
 		if msg.name == m.detail.Name {
 			m.tunnel = msg.state
+		}
+		return m, nil
+
+	case handoffMsg:
+		if msg.name == m.detail.Name {
+			m.handoff = msg.state
 		}
 		return m, nil
 
@@ -270,6 +284,13 @@ func (m model) watchTunnel() tea.Cmd {
 	}
 
 	return tunnelStatus(m.detail.Name)
+}
+
+func (m model) watchHandoff() tea.Cmd {
+	if m.detail.Name == "" || m.selected().Status != cell.StatusRunning {
+		return nil
+	}
+	return handoffStatus(m.detail.Name)
 }
 
 func (m model) selected() cell.Info {
@@ -640,6 +661,19 @@ func describe(name string) tea.Cmd {
 		}
 
 		return detailMsg{detail}
+	}
+}
+
+// handoffStatus asks the machine for the two hand-off queues. Errors are
+// intentionally quiet because the cell may stop between the row refresh and
+// this request.
+func handoffStatus(name string) tea.Cmd {
+	return func() tea.Msg {
+		state, err := cell.HandoffStatus(name)
+		if err != nil {
+			return handoffMsg{name: name}
+		}
+		return handoffMsg{name: name, state: &state}
 	}
 }
 

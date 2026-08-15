@@ -37,6 +37,19 @@ const (
 	toolLink = "/usr/local/bin/" + toolName
 )
 
+// Queue is a summary of one hand-off folder.
+type Queue struct {
+	Files int
+	Bytes int64
+}
+
+// Handoff reports what is waiting to cross the cell boundary. The machine has
+// to be running, but the container does not: these folders live on the VM disk.
+type Handoff struct {
+	Inbox  Queue
+	Outbox Queue
+}
+
 // Artifact is one file a cell has published.
 type Artifact struct {
 	Name string
@@ -128,6 +141,48 @@ func Artifacts(name string) ([]Artifact, error) {
 	}
 
 	return artifacts, nil
+}
+
+// HandoffStatus summarizes both queues for the dashboard.
+func HandoffStatus(name string) (Handoff, error) {
+	instance, err := usable(name)
+	if err != nil {
+		return Handoff{}, err
+	}
+	home, err := machineHome(instance)
+	if err != nil {
+		return Handoff{}, err
+	}
+
+	inbox, err := queue(filepath.Join(home, inboxDir), instance)
+	if err != nil {
+		return Handoff{}, fmt.Errorf("reading the inbox of %q: %w", name, err)
+	}
+	outbox, err := queue(filepath.Join(home, outboxDir), instance)
+	if err != nil {
+		return Handoff{}, fmt.Errorf("reading the outbox of %q: %w", name, err)
+	}
+	return Handoff{Inbox: inbox, Outbox: outbox}, nil
+}
+
+func queue(dir, instance string) (Queue, error) {
+	out, err := lima.Exec(instance, "find", dir, "-maxdepth", "1", "-type", "f", "-printf", "%s\\n")
+	if err != nil {
+		return Queue{}, err
+	}
+	var q Queue
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\\n") {
+		if line == "" {
+			continue
+		}
+		size, err := strconv.ParseInt(line, 10, 64)
+		if err != nil {
+			continue
+		}
+		q.Files++
+		q.Bytes += size
+	}
+	return q, nil
 }
 
 // Fetch copies what a cell published onto the host. With no names it takes
