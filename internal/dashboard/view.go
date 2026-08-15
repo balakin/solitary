@@ -158,6 +158,10 @@ func (m model) networkBody() string {
 				valueStyle.Render(tunnel.EndpointHost)+labelStyle.Render(","),
 			labelStyle.Render("so while that is down, nothing leaves at all."))
 	}
+	if m.detail.Network.HostResolverOutsideTunnel() {
+		rows = append(rows, "", statusStyle(cell.StatusDegraded).Render(
+			"Names are still resolved outside it: resolvers names host."))
+	}
 
 	return strings.Join(rows, "\n")
 }

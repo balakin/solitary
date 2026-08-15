@@ -343,6 +343,12 @@ func installTunnel(instance string, network config.Network, progress io.Writer) 
 	if network.Tunnel == nil {
 		return nil
 	}
+	if network.HostResolverOutsideTunnel() {
+		fmt.Fprint(progress, "Warning: network.resolvers names host, which the tunnel does not carry.\n"+
+			"  The cell's traffic leaves through the tunnel, but every name it looks up is\n"+
+			"  still asked of your own network's resolver. Name an address instead to keep\n"+
+			"  what this cell resolves inside the tunnel.\n")
+	}
 
 	// A missing file is the ordinary case on a machine that has never had
 	// one, and reads as an error here; whether the tunnel is installed is
@@ -354,7 +360,13 @@ func installTunnel(instance string, network config.Network, progress io.Writer) 
 
 	fmt.Fprintf(progress, "Bringing up the tunnel to %s...\n", network.Tunnel.EndpointHost)
 
-	if err := lima.Copy(network.VPNPath, instance, tunnelStaging); err != nil {
+	// Whatever is there is not what is about to be copied, and a copy lands
+	// inside a directory that happens to have the staging path's name rather
+	// than replacing it.
+	if _, err := lima.Exec(instance, "rm", "-rf", tunnelStaging); err != nil {
+		return fmt.Errorf("bringing up the tunnel: %w", err)
+	}
+	if err := lima.CopyFile(network.VPNPath, instance, tunnelStaging); err != nil {
 		return fmt.Errorf("copying the tunnel configuration into the machine: %w", err)
 	}
 	steps := [][]string{

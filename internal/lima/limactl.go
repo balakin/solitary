@@ -185,6 +185,13 @@ func Copy(hostPath, name, target string) error {
 	return run("copy", "--recursive", hostPath, name+":"+target)
 }
 
+// CopyFile places a single host file inside a machine, at target exactly.
+// Separate from Copy because --recursive makes limactl treat its source as a
+// directory, which a file is not.
+func CopyFile(hostPath, name, target string) error {
+	return run("copy", hostPath, name+":"+target)
+}
+
 // Delete destroys a machine and its disk.
 func Delete(name string) error {
 	return run("delete", "--force", name)

@@ -133,6 +133,33 @@ func TestNetworkResolvers(t *testing.T) {
 	}
 }
 
+// The host's resolver is reached over the interface the tunnel replaced, so a
+// cell paired this way hides where its traffic comes from while still telling
+// the network it is on every name it looks up.
+func TestHostResolverOutsideTunnel(t *testing.T) {
+	tunnel := &Tunnel{EndpointHost: "de-01.example.net", EndpointPort: "51820"}
+
+	cases := []struct {
+		name    string
+		network Network
+		want    bool
+	}{
+		{"host resolver behind a tunnel", Network{Tunnel: tunnel, Resolvers: []string{HostResolver}}, true},
+		{"named alongside an address", Network{Tunnel: tunnel, Resolvers: []string{HostResolver, "1.1.1.1"}}, true},
+		{"addresses only", Network{Tunnel: tunnel, Resolvers: []string{"1.1.1.1"}}, false},
+		{"the default resolvers", Network{Tunnel: tunnel}, false},
+		{"no tunnel to be outside of", Network{Resolvers: []string{HostResolver}}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.network.HostResolverOutsideTunnel(); got != tc.want {
+				t.Errorf("HostResolverOutsideTunnel() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // A typo here would render a machine whose resolver forwards nowhere, which
 // looks like every name being unreachable.
 func TestNetworkRejectsAResolverThatIsNeither(t *testing.T) {

@@ -169,6 +169,23 @@ func (n Network) UsesHostResolver() bool {
 	return false
 }
 
+// HostResolverOutsideTunnel reports a combination that undoes much of what a
+// tunnel is for.
+//
+// The host's resolver is discovered as the address the machine's own network
+// gives it, which is link-local to that network — so queries to it keep taking
+// the interface the tunnel replaced, by design, rather than going through it.
+// The cell's traffic leaves from somewhere else, but every name it looks up is
+// still read by whoever runs that resolver. It also reopens the one hole in
+// VM→host isolation.
+//
+// It is not refused: a network whose names only its own resolver knows is a
+// real thing to be on, and pairing it with a tunnel for everything else is a
+// legitimate — if narrow — choice. So this is said out loud instead.
+func (n Network) HostResolverOutsideTunnel() bool {
+	return n.Tunnel != nil && n.UsesHostResolver()
+}
+
 // validateResolvers refuses an entry that is neither an address nor the host
 // keyword, rather than rendering a machine whose resolver silently does
 // nothing.

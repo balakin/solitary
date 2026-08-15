@@ -344,6 +344,23 @@ func TestNetworkViewShowsTheTunnel(t *testing.T) {
 	}
 }
 
+// A tunnel hides where a cell's traffic comes from; the host's resolver still
+// sees every name it looks up. Reading the list is when that is worth knowing.
+func TestNetworkViewSaysWhenNamesLeaveOutsideTheTunnel(t *testing.T) {
+	m := listed(t)
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude", Network: config.Network{
+		Allow:     []string{"github.com"},
+		Resolvers: []string{config.HostResolver},
+		VPN:       "./vpn.conf",
+		Tunnel:    &config.Tunnel{EndpointHost: "de-01.example.net", EndpointPort: "51820"},
+	}}})
+	m, _ = press(t, next.(model), "n")
+
+	if view := m.View(); !strings.Contains(view, "resolved outside it") {
+		t.Errorf("the network view does not say names leave outside the tunnel:\n%s", view)
+	}
+}
+
 // An unrestricted cell has no list to read, and the view should say what that
 // means rather than showing an empty pane.
 func TestNetworkViewOfAnUnrestrictedCell(t *testing.T) {
