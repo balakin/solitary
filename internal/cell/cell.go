@@ -180,6 +180,10 @@ func Up(name string, progress io.Writer) error {
 		}
 	}
 
+	if err := installTunnel(instance, c.Network, progress); err != nil {
+		return err
+	}
+
 	env, err := resolveSecrets(name, c, progress)
 	if err != nil {
 		return err
@@ -317,6 +321,57 @@ func ensureImage(name, instance string, c *config.Cell, progress io.Writer) (ref
 	}
 
 	return tag, identity, nil
+}
+
+// tunnelStaging is where the configuration lands before it is installed. The
+// machine is copied into as the unprivileged user Lima logs in as, which cannot
+// write /etc, so it arrives here and is moved with sudo.
+const tunnelStaging = "/tmp/solitary-tunnel.conf"
+
+// installTunnel places a cell's WireGuard configuration in its machine and
+// brings the tunnel up.
+//
+// This happens here rather than in the machine definition because the file
+// holds a private key. A definition is kept for as long as the machine exists,
+// is handed to the guest through cloud-init, and is the part of a cell meant to
+// be read and copied by other people; a credential belongs in none of that.
+//
+// It is also why the file is compared before it is written: an up on a running
+// cell is a routine thing, and re-installing the same configuration would drop
+// every connection the cell has open for no reason.
+func installTunnel(instance string, network config.Network, progress io.Writer) error {
+	if network.Tunnel == nil {
+		return nil
+	}
+
+	// A missing file is the ordinary case on a machine that has never had
+	// one, and reads as an error here; whether the tunnel is installed is
+	// decided by what came back, not by whether the command succeeded.
+	out, _ := lima.Exec(instance, "sudo", "sha256sum", config.VPNConfigFile)
+	if installed, _, _ := strings.Cut(strings.TrimSpace(string(out)), " "); installed == network.Tunnel.Digest {
+		return nil
+	}
+
+	fmt.Fprintf(progress, "Bringing up the tunnel to %s...\n", network.Tunnel.EndpointHost)
+
+	if err := lima.Copy(network.VPNPath, instance, tunnelStaging); err != nil {
+		return fmt.Errorf("copying the tunnel configuration into the machine: %w", err)
+	}
+	steps := [][]string{
+		{"sudo", "install", "-D", "-m", "600", "-o", "root", "-g", "root", tunnelStaging, config.VPNConfigFile},
+		{"rm", "-f", tunnelStaging},
+		{"sudo", "systemctl", "enable", "wg-quick@" + config.VPNInterface},
+		// restart rather than start: this runs when the configuration
+		// changed, and a tunnel already up would otherwise keep the old one.
+		{"sudo", "systemctl", "restart", "wg-quick@" + config.VPNInterface},
+	}
+	for _, step := range steps {
+		if _, err := lima.Exec(instance, step...); err != nil {
+			return fmt.Errorf("bringing up the tunnel: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // machineHome is the directory inside the machine that backs a cell's home.

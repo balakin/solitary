@@ -39,6 +39,11 @@ var funcs = template.FuncMap{
 	},
 	// join is strings.Join, for rendering a list into one line of a rule.
 	"join": strings.Join,
+	// vpnInterface and vpnConfig name the tunnel inside the machine. They
+	// come from config so that the definition rendered here and the file
+	// solitary later places in the machine cannot disagree.
+	"vpnInterface": func() string { return config.VPNInterface },
+	"vpnConfig":    func() string { return config.VPNConfigFile },
 }
 
 // Render fills the embedded template with the resolved machine settings and

@@ -36,6 +36,16 @@ func TestRenderGolden(t *testing.T) {
 			network: config.Network{Allow: []string{"github.com", "api.anthropic.com", "10.1.2.0/24"}},
 			golden:  "network-allow.yaml",
 		},
+		{
+			name: "tunnelled network",
+			vm:   config.Defaults(),
+			network: config.Network{
+				Allow:  []string{"github.com"},
+				VPN:    "./vpn.conf",
+				Tunnel: &config.Tunnel{EndpointHost: "de-01.example.net", EndpointPort: "51820", Digest: "8f1e"},
+			},
+			golden: "network-vpn.yaml",
+		},
 	}
 
 	for _, tc := range cases {
@@ -153,6 +163,76 @@ func TestRenderLeavesAnUnrestrictedNetworkAlone(t *testing.T) {
 	for _, unwanted := range []string{"nftables", "dnsmasq", "policy drop"} {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("a cell with no allow list carries %q", unwanted)
+		}
+	}
+}
+
+// A tunnel is only worth having if it cannot be gone around, so these are the
+// properties that decide whether a cell leaks when it drops.
+func TestRenderTunnel(t *testing.T) {
+	named, err := Render(config.Defaults(), nil, config.Network{
+		Allow:  []string{"github.com"},
+		VPN:    "./vpn.conf",
+		Tunnel: &config.Tunnel{EndpointHost: "de-01.example.net", EndpointPort: "51820", Digest: "8f1e"},
+	})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	for _, want := range []struct{ rule, why string }{
+		{`oifname "vpn0" ip daddr @allowed4 accept`, "an allowed name must be reachable through the tunnel only"},
+		{`oifname "vpn0" ip daddr @static4 accept`, "and so must an allowed address"},
+		{"ip daddr @vpn4 udp dport 51820 accept", "the peer must be reachable without the tunnel, since it is what makes it"},
+		{"nftset=/de-01.example.net/inet#solitary#vpn4", "a peer named rather than addressed has to resolve into its own set"},
+		{"delete table inet solitary", "reloading must not flush the table wg-quick installs"},
+		{"wireguard-tools", "the machine needs the tools to bring the tunnel up"},
+		{"After=dnsmasq.service nftables.service", "the tunnel comes up after what resolves and permits its peer"},
+		{"8f1e", "replacing the configuration must count as a change to the cell"},
+	} {
+		if !strings.Contains(named, want.rule) {
+			t.Errorf("missing %q: %s\n--- rendered ---\n%s", want.rule, want.why, named)
+		}
+	}
+
+	// The plain allow rules are what a tunnelled cell must not carry: they
+	// would let the same traffic out of the interface the tunnel replaced.
+	for _, unwanted := range []string{"\n          ip daddr @allowed4 accept", "\n          ip daddr @static4 accept"} {
+		if strings.Contains(named, unwanted) {
+			t.Errorf("a tunnelled cell can reach %q outside its tunnel", strings.TrimSpace(unwanted))
+		}
+	}
+
+	addressed, err := Render(config.Defaults(), nil, config.Network{
+		Allow:  []string{"github.com"},
+		VPN:    "./vpn.conf",
+		Tunnel: &config.Tunnel{EndpointHost: "198.51.100.7", EndpointPort: "51820", Digest: "8f1e"},
+	})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	if !strings.Contains(addressed, "set vpn4 { type ipv4_addr;\n          elements = { 198.51.100.7 }") {
+		t.Errorf("a peer given as an address is not allowed from the start:\n%s", addressed)
+	}
+	if strings.Contains(addressed, "nftset=/198.51.100.7/") {
+		t.Error("a peer given as an address must not be handed to the resolver")
+	}
+}
+
+// The configuration holds a private key, and a machine definition is kept on
+// disk, handed to the guest, and meant to be shared.
+func TestRenderNeverCarriesTheTunnelConfiguration(t *testing.T) {
+	got, err := Render(config.Defaults(), nil, config.Network{
+		Allow:  []string{"github.com"},
+		VPN:    "./vpn.conf",
+		Tunnel: &config.Tunnel{EndpointHost: "de-01.example.net", EndpointPort: "51820", Digest: "8f1e"},
+	})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	for _, unwanted := range []string{"PrivateKey", "[Interface]", "[Peer]"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("the rendered definition contains %q", unwanted)
 		}
 	}
 }

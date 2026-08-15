@@ -5,11 +5,11 @@
 minimumLimaVersion: 2.0.0
 
 base:
-  - template:_images/{{ .VM.Base }}
+  - template:_images/ubuntu-lts
 
-cpus: {{ .VM.CPUs }}
-memory: "{{ .VM.Memory }}"
-disk: "{{ .VM.Disk }}"
+cpus: 2
+memory: "4GiB"
+disk: "20GiB"
 
 # Load-bearing, not stylistic. A cell exists so that code an agent wrote is
 # never interpreted by a process on the host; a mount here would hand it a
@@ -29,15 +29,6 @@ provision:
       export DEBIAN_FRONTEND=noninteractive
       apt-get update
       apt-get install -y podman uidmap slirp4netns fuse-overlayfs
-{{- if .VM.Provision }}
-
-  - mode: system
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-{{ .VM.Provision | indent 6 }}
-{{- end }}
-{{- if .Network.Tunnel }}
 
   # network.vpn was set, so everything this cell reaches leaves through a
   # WireGuard tunnel.
@@ -48,7 +39,7 @@ provision:
   # through cloud-init. solitary places the file separately, into the machine,
   # once it is running.
   #
-  # {{ .Network.Tunnel.Digest }}
+  # 8f1e
   #
   # That digest is what makes replacing the configuration a change to the cell:
   # nothing else here would differ, and the machine would keep dialling the old
@@ -66,15 +57,13 @@ provision:
       # that turns its peer into an address, and the firewall that lets it
       # reach it. Ordering only, not a hard requirement — an unrestricted cell
       # runs neither.
-      mkdir -p /etc/systemd/system/wg-quick@{{ vpnInterface }}.service.d
-      cat > /etc/systemd/system/wg-quick@{{ vpnInterface }}.service.d/solitary.conf <<'UNIT'
+      mkdir -p /etc/systemd/system/wg-quick@vpn0.service.d
+      cat > /etc/systemd/system/wg-quick@vpn0.service.d/solitary.conf <<'UNIT'
       # Written by solitary. Edits are lost on the next boot.
       [Unit]
       After=dnsmasq.service nftables.service
       UNIT
       systemctl daemon-reload
-{{- end }}
-{{- if .Network.Restricted }}
 
   # network.allow was set, so this cell reaches what it lists and nothing else.
   #
@@ -95,24 +84,7 @@ provision:
       command -v nft >/dev/null 2>&1 || apt-get install -y nftables
       command -v dnsmasq >/dev/null 2>&1 || apt-get install -y dnsmasq
 
-      resolvers="{{ join .Network.ResolverAddresses " " }}"
-{{- if .Network.UsesHostResolver }}
-
-      # The machine's own resolver, discovered rather than configured: on a
-      # network whose names only its resolver knows — a corporate one, a split
-      # horizon, anything behind a proxy that intercepts DNS — a public
-      # resolver answers with the wrong address or nothing at all.
-      #
-      # Read from the DHCP lease, which survives this script disabling
-      # systemd-resolved and replacing resolv.conf, so it still works on the
-      # boots after the first.
-      host_dns=$(sed -n 's/^DNS=//p' /run/systemd/netif/leases/* 2>/dev/null | tr ' ' '\n' | grep -v '^127\.' | head -n 1 || true)
-      if [ -z "$host_dns" ]; then
-        echo >&2 "solitary: could not find the resolver this machine was given"
-        exit 1
-      fi
-      resolvers="$resolvers $host_dns"
-{{- end }}
+      resolvers="1.1.1.1 8.8.8.8"
 
       # The resolver answers for the allowed names and nothing else: an
       # unlisted name gets NXDOMAIN rather than an address, so a query cannot
@@ -133,22 +105,20 @@ provision:
       # resolver has to keep in step with this one.
       filter-AAAA
       DNSMASQ
-      for domain in {{ join .Network.Domains " " }}; do
+      for domain in github.com; do
         for resolver in $resolvers; do
           echo "server=/$domain/$resolver"
         done
         echo "nftset=/$domain/inet#solitary#allowed4"
       done >> /etc/dnsmasq.d/solitary.conf
-{{- if and .Network.Tunnel (not .Network.Tunnel.EndpointIsAddress) }}
 
       # The tunnel's own peer, resolved like any other allowed name but into a
       # set of its own: everything else is reachable only through the tunnel,
       # and the peer is what there is no tunnel without.
       for resolver in $resolvers; do
-        echo "server=/{{ .Network.Tunnel.EndpointHost }}/$resolver"
+        echo "server=/de-01.example.net/$resolver"
       done >> /etc/dnsmasq.d/solitary.conf
-      echo "nftset=/{{ .Network.Tunnel.EndpointHost }}/inet#solitary#vpn4" >> /etc/dnsmasq.d/solitary.conf
-{{- end }}
+      echo "nftset=/de-01.example.net/inet#solitary#vpn4" >> /etc/dnsmasq.d/solitary.conf
 
       # Nothing resolves through systemd-resolved any more, and left running it
       # retries an upstream it can no longer reach once a second, filling the
@@ -189,23 +159,19 @@ provision:
         set allowed4 { type ipv4_addr; }
 
         # Addresses the cell was configured with directly.
-        set static4 { type ipv4_addr; flags interval;{{ if .Network.Addresses }}
-          elements = { {{ join .Network.Addresses ", " }} }{{ end }}
+        set static4 { type ipv4_addr; flags interval;
         }
 
         # The resolver's own upstream. Nothing else may reach it, so a
         # process in the cell cannot ask a question this resolver refuses.
-        set upstream { type ipv4_addr;{{ if .Network.ResolverAddresses }}
-          elements = { {{ join .Network.ResolverAddresses ", " }} }{{ end }}
+        set upstream { type ipv4_addr;
+          elements = { 1.1.1.1, 8.8.8.8 }
         }
-{{- if .Network.Tunnel }}
 
         # The tunnel's peer. Its own set, because it is the one thing that
         # has to be reachable without the tunnel.
-        set vpn4 { type ipv4_addr;{{ if .Network.Tunnel.EndpointIsAddress }}
-          elements = { {{ .Network.Tunnel.EndpointHost }} }{{ end }}
+        set vpn4 { type ipv4_addr;
         }
-{{- end }}
 
         chain output {
           type filter hook output priority filter; policy drop;
@@ -216,33 +182,27 @@ provision:
           # Answers to whatever reached the cell from the host.
           ct state new tcp sport 22 accept
 
-{{ if .Network.Tunnel }}          # Not limited to the tunnel, unlike everything below: the peer's own
+          # Not limited to the tunnel, unlike everything below: the peer's own
           # name has to be resolved before there is a tunnel to resolve it
           # through. So while the tunnel is down these queries — and nothing
           # else — still leave.
-{{ end }}          meta skuid dnsmasq ip daddr @upstream udp dport 53 accept
+          meta skuid dnsmasq ip daddr @upstream udp dport 53 accept
           meta skuid dnsmasq ip daddr @upstream tcp dport 53 accept
           ip daddr 127.0.0.1 udp dport 53 accept
           ip daddr 127.0.0.1 tcp dport 53 accept
 
           # Keeping the address the machine was given.
           udp dport { 67, 68 } accept
-{{- if .Network.Tunnel }}
 
           # Making the tunnel. This is the only thing the cell sends that
           # does not go through it.
-          ip daddr @vpn4 udp dport {{ .Network.Tunnel.EndpointPort }} accept
+          ip daddr @vpn4 udp dport 51820 accept
 
           # And everything allowed is allowed through the tunnel only. This
           # is what network.vpn means: no tunnel, nothing leaves — rather
           # than the same traffic quietly going out the way it came.
-          oifname "{{ vpnInterface }}" ip daddr @allowed4 accept
-          oifname "{{ vpnInterface }}" ip daddr @static4 accept
-{{- else }}
-
-          ip daddr @allowed4 accept
-          ip daddr @static4 accept
-{{- end }}
+          oifname "vpn0" ip daddr @allowed4 accept
+          oifname "vpn0" ip daddr @static4 accept
 
           # The machine has no IPv6 route, so its neighbour and router
           # discovery goes nowhere. Dropped without a line each time.
@@ -274,7 +234,6 @@ provision:
       # and only the resolver refills it. Restarted so they ask again, under
       # the allow list this time.
       systemctl try-restart chrony 2>/dev/null || true
-{{- end }}
 
 probes:
   - script: |
@@ -285,33 +244,3 @@ probes:
         exit 1
       fi
     hint: See "/var/log/cloud-init-output.log" in the guest
-
-{{- if .Ports }}
-
-# ports: was set on the cell, so the default catch-all is replaced by an
-# explicit allow list.
-#
-# Every rule appears twice, once for each address a server binds. A rule with no
-# guestIP matches only a listener on 127.0.0.1, and Lima's own fallback rule
-# then forwards everything bound to 0.0.0.0 — which is what a dev server binds,
-# so a deny rule written once denies nothing at all. Rules are checked in order
-# and the first match wins, so the allows come before the denials.
-#
-# hostIP is left alone throughout: forwarded ports reach this host's localhost
-# and nowhere else.
-portForwards:
-{{- range .Ports }}
-  - guestIP: "0.0.0.0"
-    guestPort: {{ . }}
-    hostPort: {{ . }}
-  - guestPort: {{ . }}
-    hostPort: {{ . }}
-{{- end }}
-  - guestIP: "0.0.0.0"
-    guestPortRange: [1, 65535]
-    proto: any
-    ignore: true
-  - guestPortRange: [1, 65535]
-    proto: any
-    ignore: true
-{{- end }}

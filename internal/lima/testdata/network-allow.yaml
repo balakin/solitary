@@ -100,7 +100,12 @@ provision:
       cat > /etc/nftables.conf <<'NFT'
       #!/usr/sbin/nft -f
       # Written by solitary. Edits are lost on the next boot.
-      flush ruleset
+      #
+      # Only this table is replaced, never the whole ruleset: wg-quick installs
+      # a table of its own when it routes everything, and flushing that from
+      # under it would leave the tunnel up with its own protections gone.
+      table inet solitary {}
+      delete table inet solitary
 
       table inet solitary {
         # Filled in by the resolver as it answers for the allowed names.

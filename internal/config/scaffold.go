@@ -42,6 +42,15 @@ image: docker.io/library/ubuntu:24.04
 #     - github.com
 #     - api.anthropic.com
 #     - registry.npmjs.org
+#
+# Set network.vpn as well and everything above leaves through that tunnel
+# instead, giving the cell its own exit address. Point it at the .conf your VPN
+# provider gives you, saved beside this file and left out of anything you
+# publish: it holds a private key, which is yours rather than the cell's.
+# Nothing else changes — the allow list is enforced the same way, except that
+# with the tunnel down nothing leaves at all.
+#
+#   vpn: ./vpn.conf
 
 # Who this cell commits as. Set it once in ~/.config/solitary/config.yaml and
 # every cell uses it; set it here only to differ from that.

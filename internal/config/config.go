@@ -103,6 +103,23 @@ type Network struct {
 	// cell's resolver alone, on port 53.
 	Resolvers []string `yaml:"resolvers,omitempty"`
 
+	// VPN is a wg-quick configuration file, as a path relative to the cell's
+	// directory. Setting it sends everything the cell reaches through that
+	// tunnel: the machine brings the interface up, and the container inherits
+	// it, since it runs on the machine's own network.
+	//
+	// The file is not part of the cell definition. It holds a private key, so
+	// it is read at run time and placed into the machine directly — a cell
+	// definition is meant to be readable, copied, and shared, and the
+	// credential that goes with it is whoever runs it.
+	VPN string `yaml:"vpn,omitempty"`
+
+	// VPNPath is VPN resolved against the cell's directory, and Tunnel is what
+	// was read out of it. Both are filled in by LoadCell rather than read from
+	// the file.
+	VPNPath string  `yaml:"-"`
+	Tunnel  *Tunnel `yaml:"-"`
+
 	// Allow lists domains and addresses the cell may open connections to.
 	// A domain covers its subdomains, so "github.com" reaches
 	// "api.github.com"; it does not cover a different domain the site
@@ -353,6 +370,17 @@ func LoadCell(name string) (*Cell, error) {
 	}
 	if err := cell.Network.validateResolvers(); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if cell.Network.VPN != "" {
+		dir, err := CellDir(name)
+		if err != nil {
+			return nil, err
+		}
+		cell.Network.VPNPath = filepath.Join(dir, cell.Network.VPN)
+		cell.Network.Tunnel, err = ReadTunnel(cell.Network.VPNPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &cell, nil
