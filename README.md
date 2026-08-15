@@ -126,6 +126,7 @@ solitary exec <name> <cmd...>   run one command in a running cell
 solitary down <name>            stop the cell, keep the disk
 solitary rm <name>              destroy the VM; definition and secrets stay
 solitary ls                     list cells and their state
+solitary dashboard              manage cells in a live view
 solitary secrets <name>         set the values a cell is allowed to see
 ```
 
@@ -133,6 +134,33 @@ solitary secrets <name>         set the values a cell is allowed to see
 the cell if absent, boots it if stopped, and attaches if it is already running.
 It also replaces the container when the image or the secrets changed, so
 editing `cell.yaml` and running `up` again is all a change ever takes.
+
+### The dashboard
+
+`solitary dashboard` is the same things in one live view: every cell and its
+state, refreshed as it changes, with the actions that apply to the selected one.
+
+```
+ solitary
+ ╭─────────────────────╮╭──────────────────────────────────╮
+ │ cells               ││ claude                           │
+ │ › ● claude  running ││ image   build:./Containerfile    │
+ │   ○ demo    stopped ││ machine 4 cpus · 4GiB · 40GiB    │
+ ╰─────────────────────╯│ ports   all reach host localhost │
+                        │ secrets 2 of 2 set               │
+                        ╰──────────────────────────────────╯
+ ↑↓ move · ⏎ shell · u up · s stop · e secrets · d rm · r refresh · q quit
+```
+
+It does nothing the commands cannot, and the slow ones it runs *as* those
+commands: pressing `u` runs `solitary up --detach`, so a build prints what a
+build prints and a cell missing a secret asks for it the way it always does.
+The dashboard steps out of the way and comes back rather than owning a second,
+worse version of each.
+
+`e` manages the selected cell's secrets: which are set, which are not, and a
+masked field to set or rotate one. Values are never displayed — the dashboard
+reads only whether each name has one.
 
 `exec` is `shell` for one command: it exits with the command's status and
 leaves its streams alone, so a cell can be scripted from the host without a

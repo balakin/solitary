@@ -144,6 +144,21 @@ func Env(declared []string, values map[string]string) []string {
 	return env
 }
 
+// Set records one value, leaving every other value in the file untouched.
+//
+// It exists so that a caller changing a single secret never has to hold the
+// others: it reads, replaces and writes in one step, and what it is given is
+// the only value it sees.
+func Set(path, name, value string) error {
+	values, err := Load(path)
+	if err != nil {
+		return err
+	}
+	values[name] = value
+
+	return Save(path, values)
+}
+
 // CanPrompt reports whether there is a terminal to ask on.
 func CanPrompt() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
