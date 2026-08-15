@@ -168,12 +168,22 @@ func Pull(instance, image string) error {
 	return lima.Attach(instance, "podman", "pull", image)
 }
 
+// shellCommand is the command a shell session runs: bash where the image has
+// it, sh everywhere else.
+var shellCommand = []string{
+	"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi",
+}
+
 // Shell opens an interactive shell in a cell's container.
 func Shell(instance string) error {
-	// bash where the image has it, sh everywhere else.
-	return Exec(instance, []string{
-		"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi",
-	})
+	return Exec(instance, shellCommand)
+}
+
+// ShellCommand prepares the same shell session as Shell, without running it,
+// for a caller that runs the process itself. It always asks for a terminal:
+// there is no reason to open a shell that has none.
+func ShellCommand(instance string) (*exec.Cmd, error) {
+	return lima.Command(instance, execArgs(true, shellCommand)...)
 }
 
 // Exec runs one command in a cell's container and returns when it is done. The

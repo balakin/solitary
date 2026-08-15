@@ -237,16 +237,27 @@ func Reachable(name string) bool {
 	return err == nil
 }
 
-// Attach runs a command inside a machine with the terminal attached, so that
-// interactive programs work. The command's exit status is returned as an error.
-func Attach(name string, args ...string) error {
+// Command prepares a command to run inside a machine, without running it. It is
+// for callers that have to own the process themselves — handing the terminal to
+// it and taking it back, say — rather than waiting for it like Attach does.
+func Command(name string, args ...string) (*exec.Cmd, error) {
 	bin, err := limactl()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	full := append([]string{"shell", "--workdir=/", name}, args...)
-	cmd := exec.Command(bin, full...)
+
+	return exec.Command(bin, full...), nil
+}
+
+// Attach runs a command inside a machine with the terminal attached, so that
+// interactive programs work. The command's exit status is returned as an error.
+func Attach(name string, args ...string) error {
+	cmd, err := Command(name, args...)
+	if err != nil {
+		return err
+	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

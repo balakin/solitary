@@ -339,6 +339,78 @@ func Shell(name string) error {
 	return exitStatus(podman.Shell(instance))
 }
 
+// ShellCommand prepares the shell Shell would open, without opening it, for a
+// caller that has to run the process itself — the dashboard hands it the
+// terminal and takes it back when it exits. The cell has to be usable, checked
+// the same way as for Shell.
+func ShellCommand(name string) (*exec.Cmd, error) {
+	instance, err := attachable(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return podman.ShellCommand(instance)
+}
+
+// SecretState is whether one of a cell's declared secrets has a value. The
+// value itself is deliberately absent: this describes secrets for display, and
+// nothing displaying them should be able to reveal one.
+type SecretState struct {
+	Name string
+	Set  bool
+}
+
+// Detail is what a cell's definition says about it, alongside which of its
+// secrets have values.
+//
+// A cell's state is deliberately not here: it costs a call into Lima to learn,
+// while this is read from files. List reports state for every cell at once, so
+// a caller showing both already has it.
+type Detail struct {
+	Name    string
+	Image   string
+	VM      config.VM
+	Ports   []int
+	Secrets []SecretState
+}
+
+// Describe reads a cell's definition.
+func Describe(name string) (Detail, error) {
+	c, err := config.LoadCell(name)
+	if err != nil {
+		return Detail{}, err
+	}
+
+	detail := Detail{
+		Name:  name,
+		Image: c.Image,
+		VM:    c.VM,
+		Ports: c.Ports,
+	}
+	if c.Build != "" {
+		detail.Image = "build:" + c.Build
+	}
+
+	if len(c.Secrets) > 0 {
+		path, err := config.EnvFile(name)
+		if err != nil {
+			return Detail{}, err
+		}
+		values, err := secrets.Load(path)
+		if err != nil {
+			return Detail{}, err
+		}
+		for _, declared := range c.Secrets {
+			detail.Secrets = append(detail.Secrets, SecretState{
+				Name: declared,
+				Set:  values[declared] != "",
+			})
+		}
+	}
+
+	return detail, nil
+}
+
 // ExitError reports that the command run by Exec failed. It carries the status
 // the command exited with, so that solitary can exit with it too and stay
 // usable from a script.
