@@ -287,6 +287,27 @@ func TestNetworkPreview(t *testing.T) {
 	}
 }
 
+// Every other setting is applied by stopping and starting the cell, so the
+// dashboard says nothing about them. vm.provision is not: the old script has
+// already run, and only destroying the machine discards what it did.
+func TestProvisionDriftIsShown(t *testing.T) {
+	m := listed(t)
+
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude"}})
+	if view := next.(model).View(); strings.Contains(view, "provision") {
+		t.Errorf("a cell whose provision script is unchanged mentions it:\n%s", view)
+	}
+
+	next, _ = m.Update(detailMsg{detail: cell.Detail{Name: "claude", ProvisionChanged: true}})
+	view := next.(model).View()
+	if !strings.Contains(view, "provision") || !strings.Contains(view, "changed") {
+		t.Errorf("a changed provision script is not reported:\n%s", view)
+	}
+	if !strings.Contains(view, "rebuilds it") {
+		t.Errorf("the dashboard does not say what applies the change:\n%s", view)
+	}
+}
+
 // The preview is a preview; the whole list has to be readable somewhere, and
 // the dashboard is where someone is already looking.
 func TestNetworkViewShowsEveryEntry(t *testing.T) {

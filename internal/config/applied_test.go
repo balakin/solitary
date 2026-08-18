@@ -20,11 +20,12 @@ func isolate(t *testing.T) {
 func TestAppliedRecordRoundTrip(t *testing.T) {
 	isolate(t)
 
-	if got, err := ReadApplied("cell"); err != nil || got != "" {
-		t.Fatalf("ReadApplied() = (%q, %v), want empty for a cell never created", got, err)
+	if got, err := ReadApplied("cell"); err != nil || got.Recorded() {
+		t.Fatalf("ReadApplied() = (%+v, %v), want nothing recorded for a cell never created", got, err)
 	}
 
-	if err := WriteApplied("cell", "rendered definition"); err != nil {
+	want := NewApplied("rendered definition", "apt-get install -y ripgrep")
+	if err := WriteApplied("cell", want); err != nil {
 		t.Fatalf("WriteApplied() error = %v", err)
 	}
 
@@ -32,8 +33,69 @@ func TestAppliedRecordRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadApplied() error = %v", err)
 	}
-	if want := Digest("rendered definition"); got != want {
-		t.Errorf("ReadApplied() = %q, want %q", got, want)
+	if got != want {
+		t.Errorf("ReadApplied() = %+v, want %+v", got, want)
+	}
+	if !got.Recorded() {
+		t.Error("Recorded() = false for a record that was written")
+	}
+	if got.ProvisionChanged("apt-get install -y ripgrep") {
+		t.Error("ProvisionChanged() = true for the script that was recorded")
+	}
+	if !got.ProvisionChanged("apt-get install -y ripgrep fd-find") {
+		t.Error("ProvisionChanged() = false for a script that was edited")
+	}
+}
+
+// A record written before the file had fields is one bare digest of the
+// definition. The machine it describes is still the machine it describes, so it
+// is read rather than discarded — and what it does not say about vm.provision
+// is treated as not known, not as unchanged.
+func TestAppliedRecordReadsTheOlderFormat(t *testing.T) {
+	isolate(t)
+
+	path, err := AppliedFile("cell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(Digest("rendered definition")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReadApplied("cell")
+	if err != nil {
+		t.Fatalf("ReadApplied() error = %v", err)
+	}
+	if got.Definition != Digest("rendered definition") {
+		t.Errorf("Definition = %q, want the digest the file holds", got.Definition)
+	}
+	if !got.Recorded() {
+		t.Error("Recorded() = false for a machine the older format describes")
+	}
+	if got.ProvisionChanged("anything at all") {
+		t.Error("ProvisionChanged() = true for a record that says nothing about the script")
+	}
+}
+
+// A cell with no vm.provision has nothing to record for it, and the field it
+// leaves empty must not be read back as part of another one.
+func TestAppliedRecordRoundTripsAnEmptyField(t *testing.T) {
+	isolate(t)
+
+	want := Applied{Definition: Digest("rendered definition")}
+	if err := WriteApplied("cell", want); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReadApplied("cell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("ReadApplied() = %+v, want %+v", got, want)
 	}
 }
 
@@ -42,7 +104,7 @@ func TestAppliedRecordRoundTrip(t *testing.T) {
 func TestAppliedRecordIsNotInTheCellDirectory(t *testing.T) {
 	isolate(t)
 
-	if err := WriteApplied("cell", "rendered definition"); err != nil {
+	if err := WriteApplied("cell", NewApplied("rendered definition", "")); err != nil {
 		t.Fatalf("WriteApplied() error = %v", err)
 	}
 
@@ -70,14 +132,14 @@ func TestAppliedRecordIsNotInTheCellDirectory(t *testing.T) {
 func TestRemoveApplied(t *testing.T) {
 	isolate(t)
 
-	if err := WriteApplied("cell", "rendered"); err != nil {
+	if err := WriteApplied("cell", NewApplied("rendered", "")); err != nil {
 		t.Fatal(err)
 	}
 	if err := RemoveApplied("cell"); err != nil {
 		t.Fatalf("RemoveApplied() error = %v", err)
 	}
-	if got, err := ReadApplied("cell"); err != nil || got != "" {
-		t.Errorf("ReadApplied() = (%q, %v), want empty after removal", got, err)
+	if got, err := ReadApplied("cell"); err != nil || got.Recorded() {
+		t.Errorf("ReadApplied() = (%+v, %v), want nothing recorded after removal", got, err)
 	}
 
 	// Removing twice is not an error: rm runs on cells that were never created.

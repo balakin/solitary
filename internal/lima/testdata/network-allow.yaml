@@ -30,6 +30,33 @@ provision:
       apt-get update
       apt-get install -y podman uidmap slirp4netns fuse-overlayfs
 
+  # network.vpn is not set, so this cell sends its traffic the way it came.
+  #
+  # A machine keeps its disk across a change to the cell that describes it, and
+  # a tunnel installed by an earlier definition would otherwise still be
+  # enabled: the interface would come up at every boot from a configuration
+  # nothing here mentions any more. So the machine is put back the way an
+  # untunnelled one starts out, rather than left carrying a tunnel the cell no
+  # longer asks for.
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # Nothing to undo on a machine that never had a tunnel, which is the
+      # ordinary case: this runs on every boot of every untunnelled cell.
+      if [ ! -e /etc/wireguard/vpn0.conf ]; then
+        exit 0
+      fi
+
+      systemctl disable --now wg-quick@vpn0 2>/dev/null || true
+      # The private key goes with it. A configuration the cell no longer names
+      # has no reason to stay on a disk.
+      rm -f /etc/wireguard/vpn0.conf
+      rm -f /etc/systemd/system/wg-quick@vpn0.service.d/solitary.conf
+      rmdir /etc/systemd/system/wg-quick@vpn0.service.d 2>/dev/null || true
+      systemctl daemon-reload
+
   # network.allow was set, so this cell reaches what it lists and nothing else.
   #
   # This runs last, after everything above has fetched what it needs, and again

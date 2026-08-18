@@ -30,6 +30,84 @@ provision:
       apt-get update
       apt-get install -y podman uidmap slirp4netns fuse-overlayfs
 
+  # network.vpn is not set, so this cell sends its traffic the way it came.
+  #
+  # A machine keeps its disk across a change to the cell that describes it, and
+  # a tunnel installed by an earlier definition would otherwise still be
+  # enabled: the interface would come up at every boot from a configuration
+  # nothing here mentions any more. So the machine is put back the way an
+  # untunnelled one starts out, rather than left carrying a tunnel the cell no
+  # longer asks for.
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # Nothing to undo on a machine that never had a tunnel, which is the
+      # ordinary case: this runs on every boot of every untunnelled cell.
+      if [ ! -e /etc/wireguard/vpn0.conf ]; then
+        exit 0
+      fi
+
+      systemctl disable --now wg-quick@vpn0 2>/dev/null || true
+      # The private key goes with it. A configuration the cell no longer names
+      # has no reason to stay on a disk.
+      rm -f /etc/wireguard/vpn0.conf
+      rm -f /etc/systemd/system/wg-quick@vpn0.service.d/solitary.conf
+      rmdir /etc/systemd/system/wg-quick@vpn0.service.d 2>/dev/null || true
+      systemctl daemon-reload
+
+  # network.allow was not set, so this cell reaches whatever the host reaches.
+  #
+  # The counterpart of the block above, and the reason it can be removed at all.
+  # A restriction is not only a rule in a definition: applying it writes a
+  # resolver configuration, a firewall and an immutable resolv.conf into the
+  # machine, and those live on the machine's disk, which survives every change
+  # to the cell short of destroying it. Taking network.allow out of cell.yaml
+  # would otherwise leave the cell enforcing an allow list nothing describes any
+  # more — reachable names that are not listed anywhere, refusals with no rule
+  # behind them.
+  #
+  # So this undoes it, on every boot, and the guest matches the definition
+  # whichever way the setting was last changed.
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # Nothing to undo on a machine that was never restricted, which is the
+      # ordinary case: this runs on every boot of every unrestricted cell.
+      if [ ! -e /etc/dnsmasq.d/solitary.conf ] && ! nft list table inet solitary >/dev/null 2>&1; then
+        exit 0
+      fi
+
+      # The firewall. The table goes first so that nothing is refused while the
+      # rest of this runs.
+      nft delete table inet solitary 2>/dev/null || true
+      if [ -e /etc/nftables.conf ] && grep -q "Written by solitary" /etc/nftables.conf; then
+        rm -f /etc/nftables.conf
+        # Left enabled it would fail at the next boot on the file just removed.
+        systemctl disable --now nftables 2>/dev/null || true
+      fi
+
+      # The resolver. Only solitary's own configuration is removed; dnsmasq is
+      # stopped because solitary is what started it.
+      rm -f /etc/dnsmasq.d/solitary.conf
+      systemctl disable --now dnsmasq 2>/dev/null || true
+
+      # And resolv.conf, handed back to the resolver the image ships with. The
+      # immutable flag is what the restriction used to keep anything in the
+      # machine from writing over it, so it has to be cleared before the file
+      # can be replaced.
+      chattr -i /etc/resolv.conf 2>/dev/null || true
+      rm -f /etc/resolv.conf
+      systemctl enable --now systemd-resolved
+      ln -sf ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+
+      # Anything holding an address it resolved through the old resolver asks
+      # again, the same way the restriction restarts them when it goes on.
+      systemctl try-restart chrony 2>/dev/null || true
+
 probes:
   - script: |
       #!/bin/bash

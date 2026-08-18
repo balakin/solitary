@@ -118,8 +118,41 @@ func Digest(rendered string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// WriteApplied records what a cell's machine was created from.
-func WriteApplied(name, rendered string) error {
+// Applied is what a cell's machine was last given.
+//
+// Definition covers everything the machine reads when it boots, which is what
+// decides whether a stopped machine has to be handed a new definition.
+// Provision is the vm.provision script alone, held separately because it is the
+// one setting a machine cannot be handed: a script that has already run has
+// already changed the disk, and a definition without it does not undo that. So
+// what it is worth saying about the two differs, and telling them apart needs
+// them recorded apart.
+type Applied struct {
+	Definition string
+	Provision  string
+}
+
+// NewApplied summarises a rendering for the record.
+func NewApplied(rendered, provision string) Applied {
+	return Applied{Definition: Digest(rendered), Provision: Digest(provision)}
+}
+
+// Recorded reports whether anything is known about the machine at all. A cell
+// that was never created has no record, and neither has one created before
+// solitary kept one.
+func (a Applied) Recorded() bool {
+	return a.Definition != ""
+}
+
+// ProvisionChanged reports whether vm.provision differs from the script the
+// machine was given. A record from a version that did not keep the script's
+// digest says nothing about it, which is not the same as saying it matches.
+func (a Applied) ProvisionChanged(provision string) bool {
+	return a.Provision != "" && a.Provision != Digest(provision)
+}
+
+// WriteApplied records what a cell's machine was given.
+func WriteApplied(name string, record Applied) error {
 	path, err := AppliedFile(name)
 	if err != nil {
 		return err
@@ -127,30 +160,49 @@ func WriteApplied(name, rendered string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(Digest(rendered)+"\n"), 0o600); err != nil {
+	content := fmt.Sprintf("definition %s\nprovision %s\n", record.Definition, record.Provision)
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
 
 	return nil
 }
 
-// ReadApplied returns the digest a cell's machine was created from, or an empty
-// string when the cell has never been created.
-func ReadApplied(name string) (string, error) {
+// ReadApplied returns what a cell's machine was given, or the zero value when
+// the cell has never been created.
+//
+// A record written before this file had fields is one bare digest of the
+// definition, and is read as one: the machine it describes is still the machine
+// it describes, and what is not in the file is simply not known.
+func ReadApplied(name string) (Applied, error) {
 	path, err := AppliedFile(name)
 	if err != nil {
-		return "", err
+		return Applied{}, err
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return "", nil
+			return Applied{}, nil
 		}
-		return "", fmt.Errorf("reading %s: %w", path, err)
+		return Applied{}, fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	return strings.TrimSpace(string(data)), nil
+	var record Applied
+	for _, line := range strings.Split(string(data), "\n") {
+		field, value, named := strings.Cut(strings.TrimSpace(line), " ")
+		switch {
+		case field == "definition":
+			record.Definition = strings.TrimSpace(value)
+		case field == "provision":
+			record.Provision = strings.TrimSpace(value)
+		case !named && field != "":
+			// The older format: the definition's digest and nothing else.
+			record.Definition = field
+		}
+	}
+
+	return record, nil
 }
 
 // RemoveApplied forgets what a cell's machine was created from.

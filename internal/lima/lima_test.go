@@ -160,9 +160,54 @@ func TestRenderLeavesAnUnrestrictedNetworkAlone(t *testing.T) {
 		t.Fatalf("Render() error = %v", err)
 	}
 
-	for _, unwanted := range []string{"nftables", "dnsmasq", "policy drop"} {
-		if strings.Contains(got, unwanted) {
-			t.Errorf("a cell with no allow list carries %q", unwanted)
+	for _, unwanted := range []struct{ rule, why string }{
+		{"policy drop", "nothing may be denied by default"},
+		{"/etc/dnsmasq.d/solitary.conf <<", "no resolver configuration may be written"},
+		{"/etc/nftables.conf <<", "no firewall configuration may be written"},
+		{"chattr +i", "resolv.conf may not be frozen"},
+	} {
+		if strings.Contains(got, unwanted.rule) {
+			t.Errorf("a cell with no allow list carries %q: %s", unwanted.rule, unwanted.why)
+		}
+	}
+}
+
+// A machine keeps its disk when the cell that describes it changes, so removing
+// a setting has to reach the guest as surely as adding one did. What the
+// restriction wrote, an unrestricted definition takes back out.
+func TestRenderReleasesAMachineThatWasRestricted(t *testing.T) {
+	got, err := Render(config.Defaults(), nil, config.Network{})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	for _, want := range []struct{ rule, why string }{
+		{"nft delete table inet solitary", "the firewall the allow list installed must go"},
+		{"rm -f /etc/dnsmasq.d/solitary.conf", "and the resolver that filled it"},
+		{"chattr -i /etc/resolv.conf", "resolv.conf was made immutable and cannot be replaced until it is not"},
+		{"systemctl enable --now systemd-resolved", "the machine must resolve again through what the image ships"},
+		{"if [ ! -e /etc/dnsmasq.d/solitary.conf ] && ! nft list table inet solitary", "a machine that was never restricted must do none of this"},
+	} {
+		if !strings.Contains(got, want.rule) {
+			t.Errorf("missing %q: %s\n--- rendered ---\n%s", want.rule, want.why, got)
+		}
+	}
+}
+
+// The same for a tunnel: a configuration nothing describes any more must not
+// keep coming up at boot, and its private key must not stay on the disk.
+func TestRenderReleasesAMachineThatWasTunnelled(t *testing.T) {
+	got, err := Render(config.Defaults(), nil, config.Network{Allow: []string{"github.com"}})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	for _, want := range []struct{ rule, why string }{
+		{"systemctl disable --now wg-quick@vpn0", "an interface the cell no longer asks for must not come up"},
+		{"rm -f /etc/wireguard/vpn0.conf", "and the key it came up from must not be left behind"},
+	} {
+		if !strings.Contains(got, want.rule) {
+			t.Errorf("missing %q: %s\n--- rendered ---\n%s", want.rule, want.why, got)
 		}
 	}
 }

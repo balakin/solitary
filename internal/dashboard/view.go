@@ -101,6 +101,14 @@ func (m model) detailPane() string {
 		field("machine", machine),
 		field("ports", ports),
 	}
+	if m.detail.ProvisionChanged {
+		// The one change stopping and starting the cell does not apply, so
+		// it is said here rather than left to the next up.
+		lines = append(lines,
+			field("provision", warnStyle.Render("changed since this machine was provisioned")),
+			field("", valueStyle.Render("d then u rebuilds it; the disk and home go with it")),
+		)
+	}
 	lines = append(lines, m.network()...)
 	lines = append(lines, m.vpn()...)
 	lines = append(lines, m.handoffLines()...)

@@ -94,6 +94,55 @@ func TestResolveGitFallsBackFieldByField(t *testing.T) {
 	}
 }
 
+// The user-wide network block is a set of defaults, not a policy that replaces
+// a cell's own. A cell that sets one field of it keeps every other field it
+// set, and a cell that sets none inherits the defaults.
+func TestResolveNetworkFallsBackFieldByField(t *testing.T) {
+	user := Network{
+		Allow:     []string{"github.com"},
+		Resolvers: []string{"9.9.9.9"},
+		VPN:       "./user.conf",
+	}
+
+	cases := []struct {
+		name string
+		cell Network
+		want Network
+	}{
+		{
+			name: "a cell that says nothing takes the defaults",
+			cell: Network{},
+			want: user,
+		},
+		{
+			name: "its own allow list replaces the user-wide one",
+			cell: Network{Allow: []string{"gitlab.com"}},
+			want: Network{Allow: []string{"gitlab.com"}, Resolvers: []string{"9.9.9.9"}, VPN: "./user.conf"},
+		},
+		{
+			// The bug this exists for: a cell that names a resolver and no
+			// allow list used to lose the resolver and take the whole
+			// user-wide block, so one cell's policy turned up in another.
+			name: "resolvers survive an empty allow list",
+			cell: Network{Resolvers: []string{"1.1.1.1"}},
+			want: Network{Allow: []string{"github.com"}, Resolvers: []string{"1.1.1.1"}, VPN: "./user.conf"},
+		},
+		{
+			name: "and so does a tunnel",
+			cell: Network{VPN: "./vpn.conf"},
+			want: Network{Allow: []string{"github.com"}, Resolvers: []string{"9.9.9.9"}, VPN: "./vpn.conf"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ResolveNetwork(tc.cell, user); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("ResolveNetwork() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNetworkSplitsDomainsFromAddresses(t *testing.T) {
 	n := Network{Allow: []string{"github.com", "10.1.2.0/24", "api.anthropic.com", "192.0.2.7"}}
 

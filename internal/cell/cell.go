@@ -145,7 +145,7 @@ func Up(name string, progress io.Writer) error {
 		if err := createMachine(instance, rendered); err != nil {
 			return err
 		}
-		if err := config.WriteApplied(name, rendered); err != nil {
+		if err := config.WriteApplied(name, config.NewApplied(rendered, c.VM.Provision)); err != nil {
 			return err
 		}
 
@@ -162,13 +162,13 @@ func Up(name string, progress io.Writer) error {
 			name, name, instance)
 
 	case inst.Status == lima.StatusRunning:
-		warnDrift(name, rendered, progress)
+		warnDrift(name, c, rendered, progress)
 
 	default:
 		// A stopped machine reads its definition again when it starts, so
 		// this is the moment a change to the vm block can take effect
 		// without destroying the disk that machine carries.
-		if err := applyDrift(name, instance, rendered, progress); err != nil {
+		if err := applyDrift(name, instance, c, rendered, progress); err != nil {
 			return err
 		}
 		if err := verifyMemory(c.VM.Memory, progress); err != nil {
@@ -565,6 +565,12 @@ type Detail struct {
 	Ports   []int
 	Network config.Network
 	Secrets []SecretState
+
+	// ProvisionChanged reports that vm.provision differs from the script the
+	// machine was given. Unlike every other setting, restarting the machine
+	// does not make it match the file: the old script has already run, and
+	// only destroying the machine discards what it did.
+	ProvisionChanged bool
 }
 
 // Describe reads a cell's definition.
@@ -584,6 +590,12 @@ func Describe(name string) (Detail, error) {
 	if c.Build != "" {
 		detail.Image = "build:" + c.Build
 	}
+
+	record, err := config.ReadApplied(name)
+	if err != nil {
+		return Detail{}, err
+	}
+	detail.ProvisionChanged = record.ProvisionChanged(c.VM.Provision)
 
 	if len(c.Secrets) > 0 {
 		path, err := config.EnvFile(name)
@@ -716,43 +728,89 @@ func verifyMemory(memory string, progress io.Writer) error {
 	return nil
 }
 
-// warnDrift reports a vm block that has changed since the machine was created.
-// Lima cannot apply those changes to an existing machine, and silently ignoring
-// them would leave the cell running settings the file no longer describes.
-func warnDrift(name, rendered string, w io.Writer) {
-	if !drifted(name, rendered) {
+// warnDrift reports settings that changed since the machine started. Lima
+// cannot apply them to a running machine, and silently ignoring them would
+// leave the cell running a definition the file no longer describes.
+func warnDrift(name string, c *config.Cell, rendered string, w io.Writer) {
+	record, err := config.ReadApplied(name)
+	if err != nil || !record.Recorded() {
 		return
 	}
-	fmt.Fprintf(w, "Warning: the vm settings for %q changed since its machine started.\n", name)
-	fmt.Fprintf(w, "         The running cell still uses the old ones. To apply the change:\n")
-	fmt.Fprintf(w, "           solitary down %s && solitary up %s\n", name, name)
+	if record.Definition != config.Digest(rendered) {
+		fmt.Fprintf(w, "Warning: the machine settings for %q changed since it started.\n", name)
+		fmt.Fprintf(w, "         vm, ports and network are read when the machine boots, so the running\n")
+		fmt.Fprintf(w, "         cell still uses the old ones. To apply the change:\n")
+		fmt.Fprintf(w, "           solitary down %s && solitary up %s\n", name, name)
+	}
+	warnProvision(name, c, record, w)
+}
+
+// warnProvision reports a vm.provision script that changed since the machine
+// was given one.
+//
+// Every other setting can be applied to a machine by restarting it. This one
+// cannot be taken back: the old script has already installed what it installs,
+// and a machine keeps its disk across every change short of being destroyed. So
+// the new script runs at the next start, on top of whatever the old one left —
+// which is worth saying, because it is the one case where doing what solitary
+// tells you is not enough to make the machine match the file.
+func warnProvision(name string, c *config.Cell, record config.Applied, w io.Writer) {
+	if !record.ProvisionChanged(c.VM.Provision) {
+		return
+	}
+
+	fmt.Fprintf(w, "Warning: vm.provision for %q changed since its machine was provisioned.\n", name)
+	fmt.Fprintf(w, "         The new script runs at the next start, but what the old one did is\n")
+	fmt.Fprintf(w, "         already on the machine's disk and nothing undoes it. For a machine\n")
+	fmt.Fprintf(w, "         built by this script alone — discarding the disk, and the cell's home\n")
+	fmt.Fprintf(w, "         with it:\n")
+	fmt.Fprintf(w, "           solitary rm %s && solitary up %s\n", name, name)
 }
 
 // applyDrift gives a stopped machine the definition the cell now describes.
 //
-// The vm block is settings a machine reads at boot, so a stopped one can be
-// handed new ones and simply start with them. Only what solitary generates is
-// replaced, and only when the cell says something different from what was last
-// applied — a machine nobody has changed is not rewritten.
-func applyDrift(name, instance, rendered string, progress io.Writer) error {
-	if !drifted(name, rendered) {
+// vm, ports and network are settings a machine reads at boot, so a stopped one
+// can be handed new ones and simply start with them. Only what solitary
+// generates is replaced, and only when there is a reason to: a machine whose
+// definition is known to match what the cell says is not rewritten.
+func applyDrift(name, instance string, c *config.Cell, rendered string, progress io.Writer) error {
+	record, err := config.ReadApplied(name)
+	if err != nil {
+		return err
+	}
+
+	// A machine with no record is written and recorded rather than assumed to
+	// match. Nothing is known about it — it was created before solitary kept
+	// the record, or the state directory was cleared — and reading that as
+	// "unchanged" is how a new memory size, cpu count or allow list silently
+	// never reaches it.
+	changed := record.Definition != config.Digest(rendered)
+	if record.Recorded() && !changed {
+		if record.Provision == "" {
+			// An older record, which kept the definition's digest and
+			// nothing else. The definition it describes is the one being
+			// rendered now, and vm.provision is part of that definition, so
+			// the script the machine was given is the script in hand: the
+			// record can be completed without touching the machine.
+			return config.WriteApplied(name, config.NewApplied(rendered, c.VM.Provision))
+		}
+
 		return nil
 	}
 
-	fmt.Fprintf(progress, "The vm settings for %q changed; applying them to its machine.\n", name)
+	if changed && record.Recorded() {
+		fmt.Fprintf(progress, "The machine settings for %q changed; applying them to its machine.\n", name)
+	}
+	// Said before the machine starts, since it is about what starting it will
+	// not do. The record is replaced below, so this is said once, when the
+	// script changes, rather than at every start afterwards.
+	warnProvision(name, c, record, progress)
+
 	if err := lima.Apply(instance, rendered); err != nil {
 		return err
 	}
 
-	return config.WriteApplied(name, rendered)
-}
-
-// drifted reports whether a cell now describes a machine different from the one
-// its definition was last applied to.
-func drifted(name, rendered string) bool {
-	applied, err := config.ReadApplied(name)
-
-	return err == nil && applied != "" && applied != config.Digest(rendered)
+	return config.WriteApplied(name, config.NewApplied(rendered, c.VM.Provision))
 }
 
 // SetSecrets asks for every secret a cell declares, keeping values that are

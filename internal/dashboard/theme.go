@@ -27,6 +27,7 @@ var (
 	helpStyle     = lipgloss.NewStyle().Foreground(dim)
 	errorStyle    = lipgloss.NewStyle().Foreground(red)
 	noticeStyle   = lipgloss.NewStyle().Foreground(green)
+	warnStyle     = lipgloss.NewStyle().Foreground(yellow)
 )
 
 // statusStyle colours a cell's state: green for one that is ready, yellow for

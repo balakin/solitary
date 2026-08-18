@@ -333,8 +333,32 @@ func ResolveGit(cell, user Git) Git {
 	return cell
 }
 
-// LoadCell reads a cell definition. The returned Cell has its vm and git blocks
-// already merged with the user-wide config and the built-in defaults.
+// ResolveNetwork merges a cell's network block with the user-wide one, field by
+// field, the way the vm block is merged.
+//
+// A cell's own allow list replaces the user-wide one rather than adding to it:
+// what a cell may reach should be readable from one place. But that is a
+// statement about the allow list alone. Taking the whole block whenever a cell
+// listed nothing would mean a cell that sets only resolvers or only a tunnel
+// silently loses them — and, worse, quietly gains whatever else the user-wide
+// file happens to say, so that one cell's policy shows up in another.
+func ResolveNetwork(cell, user Network) Network {
+	if len(cell.Allow) == 0 {
+		cell.Allow = user.Allow
+	}
+	if len(cell.Resolvers) == 0 {
+		cell.Resolvers = user.Resolvers
+	}
+	if cell.VPN == "" {
+		cell.VPN = user.VPN
+	}
+
+	return cell
+}
+
+// LoadCell reads a cell definition. The returned Cell has its vm, git and
+// network blocks already merged with the user-wide config and the built-in
+// defaults.
 func LoadCell(name string) (*Cell, error) {
 	if err := ValidateName(name); err != nil {
 		return nil, err
@@ -408,11 +432,7 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 	}
 	cell.VM = Resolve(cell.VM, user.VM, Defaults())
 	cell.Git = ResolveGit(cell.Git, user.Git)
-	// A cell's own allow list replaces the user-wide one rather than adding
-	// to it: what a cell may reach should be readable from one place.
-	if len(cell.Network.Allow) == 0 {
-		cell.Network = user.Network
-	}
+	cell.Network = ResolveNetwork(cell.Network, user.Network)
 	if err := cell.Network.validateResolvers(); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
