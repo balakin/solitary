@@ -39,6 +39,14 @@ Removing a setting is applied like adding one. A machine that was restricted or 
 
 `vm.provision` is the exception, and the reason the third row exists. The script runs in the machine and changes its disk; the disk survives every change short of `rm`. A new script runs at the next start, but nothing undoes what the old one did, so a machine built by the current script alone is a machine created again from scratch. Both `up` and the dashboard say so when the script changes.
 
+## How it works
+
+`up` renders an embedded Lima template into a machine definition, creates the machine, and starts one rootless podman container inside it. Both are driven by shelling out — `limactl` on the host, `podman` through `limactl shell` in the machine — so there is nothing to install beyond Lima.
+
+The container runs with `--network host`. The machine is the boundary, so there is no reason to put a second one between the container and the machine it lives in; ports reach the host through Lima's forwarding.
+
+A container's identity is recorded in two labels: the image as written in `cell.yaml`, and a digest of the environment it was started with. `up` compares both and replaces the container when either has moved, which is why changing a secret or an image needs no separate command.
+
 ## Authority
 
 A cell receives authority in named pieces:
