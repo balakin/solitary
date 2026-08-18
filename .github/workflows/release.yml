@@ -15,18 +15,19 @@ concurrency:
 jobs:
   # Keeps a release pull request open on main, accumulating the changelog from
   # conventional commits. Merging it is what cuts a release: the action then
-  # creates the tag and the GitHub release the job below uploads binaries to.
-  # Commits that only touch website/ are excluded in release-please-config.json,
-  # so documentation work never moves the CLI version.
+  # creates the GitHub release as a draft, which the job below fills and
+  # publishes. Commits that only touch website/ are excluded in
+  # release-please-config.json, so documentation work never moves the version.
   release-please:
     name: 📝 Release pull request
     runs-on: ubuntu-24.04
     permissions:
-      contents: write # create the tag and the release
+      contents: write # create the draft release
       pull-requests: write # open and update the release pull request
     outputs:
       released: ${{ steps.release.outputs.release_created }}
       tag: ${{ steps.release.outputs.tag_name }}
+      sha: ${{ steps.release.outputs.sha }}
     steps:
       - name: 📝 Run release-please
         id: release
@@ -35,33 +36,47 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # A tag pushed with GITHUB_TOKEN does not start a workflow, so this cannot be
-  # a separate `on: push: tags` run — it has to hang off the job that made it.
+  # Releases in this repository are immutable: publishing seals the tag and the
+  # assets, and nothing can be attached afterwards. So the archives go onto the
+  # draft release-please left behind, and publishing is the last thing that
+  # happens — the point at which GitHub creates the tag and freezes the lot.
   goreleaser:
     name: 📦 Binaries
     needs: release-please
     if: needs.release-please.outputs.released == 'true'
     runs-on: ubuntu-24.04
     permissions:
-      contents: write # upload archives to the release
+      contents: write # upload archives to the release, then publish it
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.release-please.outputs.tag }}
     steps:
-      # The tag, not the branch: GoReleaser derives the version from the commit
-      # it is standing on, and needs the full history to see the tag at all.
+      # The commit the release was cut from, not the branch head, which may have
+      # moved on since. Full history, because GoReleaser reads the tag from git.
       - name: 📥 Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.release-please.outputs.tag }}
+          ref: ${{ needs.release-please.outputs.sha }}
           fetch-depth: 0
+
+      # A draft release has no tag yet — GitHub creates it on publish — so the
+      # tag exists here only to tell GoReleaser which version it is building.
+      - name: 🏷️ Name the version being built
+        run: git tag "$TAG"
 
       - name: 🐹 Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
-      - name: 📦 Build and upload archives
+      - name: 🏗️ Build archives
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: '~> v2'
           args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: ⬆️ Attach the archives to the draft
+        run: gh release upload "$TAG" dist/*.tar.gz dist/checksums.txt --clobber
+
+      - name: 🚀 Publish the release
+        run: gh release edit "$TAG" --draft=false --latest
