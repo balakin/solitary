@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { homeOptions } from '@/lib/layout.shared';
 import { Terminal } from '@/components/terminal';
+import { Footer } from '@/components/footer';
 import { appName, homeImagePath, siteDescription, siteTagline } from '@/lib/shared';
 
 export function meta({}: Route.MetaArgs) {
@@ -417,6 +418,7 @@ export default function Home() {
           </div>
         </section>
       </main>
+      <Footer />
     </HomeLayout>
   );
 }
