@@ -59,6 +59,12 @@ nothing itself (`release.disable`), and a draft has no tag until it is published
 job tags locally and checks out the release commit by SHA. Nothing is released by pushing a tag by
 hand either: a tag pushed with `GITHUB_TOKEN` starts no workflow.
 
+Never delete a published release. Its tag name is reserved for good — GitHub refuses to reuse a
+name that belonged to an immutable release, even after the release and the tag are gone, and even
+across a deleted repository. A release that went out wrong is fixed by shipping the next version,
+not by cutting the same one again. `v0.1.0` is already spent this way, which is why the first
+release is `0.1.1`.
+
 The version lives in `.release-please-manifest.json` and nowhere else — `make build` and GoReleaser
 bake it in through `-ldflags`, so no source file names a version. `release-please-config.json`
 excludes `website/`, so a commit that only touches the docs site never proposes a CLI release; give
