@@ -53,11 +53,18 @@ per week (`gomod`, `npm` under `/website`, `github-actions`).
 `.github/workflows/release.yml` runs release-please on every push to `main`. It keeps one release
 pull request open, accumulating `CHANGELOG.md` from the Conventional Commit subjects; merging that
 pull request is what cuts a release. Releases here are immutable — publishing seals the tag and the
-assets — so release-please creates the release as a draft, a second job builds the archives with
-GoReleaser and uploads them to that draft, and publishing is the last step. GoReleaser publishes
-nothing itself (`release.disable`), and a draft has no tag until it is published, which is why that
-job tags locally and checks out the release commit by SHA. Nothing is released by pushing a tag by
-hand either: a tag pushed with `GITHUB_TOKEN` starts no workflow.
+assets — so release-please creates the release as a draft and a second job hands it to GoReleaser,
+which uploads the archives to it and undrafts it at the end. That order is GoReleaser's own: it
+always uploads to a draft, and `release.use_existing_draft` only points it at the one already there
+rather than a release of its own, matched by name against the tag. A draft has no tag until it is
+published, which is why that job checks out the release commit by SHA and tags locally. Nothing is
+released by pushing a tag by hand either: a tag pushed with `GITHUB_TOKEN` starts no workflow.
+
+Never delete a published release. Its tag name is reserved for good — GitHub refuses to reuse a
+name that belonged to an immutable release, even after the release and the tag are gone, and even
+across a deleted repository. A release that went out wrong is fixed by shipping the next version,
+not by cutting the same one again. `v0.1.0` is already spent this way, which is why the first
+release is `0.1.1`.
 
 The version lives in `.release-please-manifest.json` and nowhere else — `make build` and GoReleaser
 bake it in through `-ldflags`, so no source file names a version. `release-please-config.json`

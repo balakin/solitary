@@ -24,16 +24,19 @@ archives:
 checksum:
   name_template: checksums.txt
 
-# release-please owns the release notes and CHANGELOG.md; GoReleaser only builds
-# what goes on the release.
+# release-please owns the release notes and CHANGELOG.md, so GoReleaser writes
+# none of its own.
 changelog:
   disable: true
 
-# Publishing is left to the workflow. A published release here is immutable, so
-# nothing can be attached to it afterwards: the archives have to be uploaded
-# while the release is still a draft, and publishing is the last step.
+# Releases here are immutable, so nothing can be attached once one is published.
+# GoReleaser already works that way — it uploads to a draft and undrafts it at
+# the end — and use_existing_draft points it at the draft release-please left
+# instead of a release of its own. keep-existing leaves that draft's notes alone,
+# which is where the changelog already is.
 release:
-  disable: true
+  use_existing_draft: true
+  mode: keep-existing
 
 # A Homebrew tap is added here once the tap repository exists. Check the
 # current GoReleaser docs for the right key before adding it: the Homebrew
