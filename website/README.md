@@ -93,9 +93,17 @@ saying why, rather than by widening the config.
 ## Production build
 
 ```sh
-pnpm build
-pnpm start
+pnpm build        # prerenders every route into build/client
+pnpm start        # serves that with a node server
+
+pnpm build:pages  # the same build, rearranged into build/pages for GitHub Pages
 ```
+
+The deployed site is static: `pnpm build` prerenders every route, search included, so nothing
+runs `pnpm start` in production. `pnpm build:pages` is what CI publishes — it assembles
+`build/pages` out of `build/client` for a site served under `/solitary` rather than at a domain
+root. The root `CLAUDE.md` explains which piece does what, and why Vite's `base` is not one of
+them.
 
 The site documents the problem, architecture, security model, capabilities, configuration, and trade-offs. Its installation page covers both the released binaries and a build from source.
 

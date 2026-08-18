@@ -11,7 +11,7 @@ import type { Route } from './+types/root';
 import './app.css';
 import { isMarkdownPreferred, rewritePath } from 'fumadocs-core/negotiation';
 import NotFound from './routes/not-found';
-import { docsContentRoute, docsRoute } from '@/lib/shared';
+import { asset, docsContentRoute, docsRoute } from '@/lib/shared';
 
 // Every face is served from this origin: no third-party font request, so
 // reading the docs does not announce itself to anyone but this host. Both are
@@ -22,7 +22,7 @@ export const links: Route.LinksFunction = () => [
     rel: 'preload',
     as: 'font',
     type: 'font/woff2',
-    href: '/fonts/InterVariable.woff2',
+    href: asset('/fonts/InterVariable.woff2'),
     crossOrigin: 'anonymous',
   },
   // The terminal art on the home page cannot draw its frame without this face.
@@ -30,9 +30,12 @@ export const links: Route.LinksFunction = () => [
     rel: 'preload',
     as: 'font',
     type: 'font/woff2',
-    href: '/fonts/JetBrainsMono-Regular.woff2',
+    href: asset('/fonts/JetBrainsMono-Regular.woff2'),
     crossOrigin: 'anonymous',
   },
+  // Declared rather than left to the browser's default guess: that guess is
+  // /favicon.ico at the domain root, which is not where this site lives.
+  { rel: 'icon', href: asset('/favicon.ico'), type: 'image/x-icon' },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -48,7 +51,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* The footer is rendered by the pages that want one rather than here:
             the docs are a full-height layout, and a band below it is one more
             thing to scroll past on every page. */}
-        <RootProvider>{children}</RootProvider>
+        <RootProvider
+          search={{
+            // There is no server to answer a query, so the dialog downloads the
+            // index prerendered at this URL and searches it in the browser.
+            options: { type: 'static', api: asset('/api/search') },
+          }}
+        >
+          {children}
+        </RootProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

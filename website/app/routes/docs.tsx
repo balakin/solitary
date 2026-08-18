@@ -12,7 +12,7 @@ import {
 } from 'fumadocs-ui/layouts/docs/page';
 import { docs, getPageMarkdownUrl, source } from '@/lib/source';
 import { baseOptions } from '@/lib/layout.shared';
-import { appName, gitConfig, getPageImagePath } from '@/lib/shared';
+import { appName, asset, gitConfig, getPageImagePath } from '@/lib/shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
 import { useMDXComponents } from '@/components/mdx';
 import { PageCredits } from '@/components/footer';
@@ -25,9 +25,9 @@ export async function loader({ params }: Route.LoaderArgs) {
 
   return {
     path: page.path,
-    markdownUrl: getPageMarkdownUrl(page).url,
+    markdownUrl: asset(getPageMarkdownUrl(page).url),
     pageTree: await source.serializePageTree(source.getPageTree()),
-    imagePath: getPageImagePath(page.slugs, page.locale),
+    imagePath: asset(getPageImagePath(page.slugs, page.locale)),
   };
 }
 

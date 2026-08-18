@@ -1,19 +1,21 @@
 import type { Config } from '@react-router/dev/config';
 import { glob } from 'node:fs/promises';
 import { createGetUrl, getSlugs } from 'fumadocs-core/source';
-import { getPageContentPath, getPageImagePath } from './app/lib/shared';
+import { basename, getPageContentPath, getPageImagePath } from './app/lib/shared.ts';
 
 const getUrl = createGetUrl('/docs');
 
 export default {
   ssr: true,
+  // GitHub Pages serves this repository's site under /solitary, so every route
+  // and every asset URL is one path segment deeper than it is in development.
+  basename,
   async prerender({ getStaticPaths }) {
-    const paths: string[] = [];
-    const excluded = new Set(['/api/search']);
-
-    for (const path of getStaticPaths()) {
-      if (!excluded.has(path)) paths.push(path);
-    }
+    // Everything, /api/search included: it is the search index rather than a
+    // route, and on a static host it has to be a file on disk.
+    // GitHub Pages answers an unknown path with 404.html from the root of what
+    // it serves, so the catch-all route is prerendered once to become that file.
+    const paths: string[] = [...getStaticPaths(), '/404'];
 
     for await (const entry of glob('**/*.mdx', { cwd: 'content/docs' })) {
       const slugs = getSlugs(entry);

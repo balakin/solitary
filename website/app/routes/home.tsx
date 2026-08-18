@@ -14,7 +14,7 @@ import {
 import { homeOptions } from '@/lib/layout.shared';
 import { Terminal } from '@/components/terminal';
 import { Footer } from '@/components/footer';
-import { appName, homeImagePath, siteDescription, siteTagline } from '@/lib/shared';
+import { appName, asset, homeImagePath, siteDescription, siteTagline } from '@/lib/shared';
 
 export function meta(_args: Route.MetaArgs) {
   const title = `${appName} — ${siteTagline}`;
@@ -25,12 +25,12 @@ export function meta(_args: Route.MetaArgs) {
     { property: 'og:type', content: 'website' },
     { property: 'og:title', content: title },
     { property: 'og:description', content: siteDescription },
-    { property: 'og:image', content: homeImagePath },
+    { property: 'og:image', content: asset(homeImagePath) },
     { property: 'og:site_name', content: appName },
     { name: 'twitter:card', content: 'summary_large_image' },
     { name: 'twitter:title', content: title },
     { name: 'twitter:description', content: siteDescription },
-    { name: 'twitter:image', content: homeImagePath },
+    { name: 'twitter:image', content: asset(homeImagePath) },
   ];
 }
 

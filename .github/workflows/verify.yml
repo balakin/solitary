@@ -99,5 +99,8 @@ jobs:
       - name: 🔤 Check types
         run: pnpm types:check
 
+      # build:pages rather than build: it runs the same build and then assembles
+      # the artifact Pages is served from, so a pull request that breaks the
+      # assembly fails here rather than after it has merged.
       - name: 🏗️ Build site
-        run: pnpm build
+        run: pnpm build:pages
