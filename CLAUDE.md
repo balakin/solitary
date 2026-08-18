@@ -37,6 +37,17 @@ pnpm lint && pnpm fmt:check                 # oxlint and oxfmt; `pnpm fmt` rewri
 oxfmt owns the formatting of everything under `website/` — MDX docs included — so leave it to
 rewrite files rather than matching its output by hand.
 
+## CI
+
+`.github/workflows/verify.yml` runs on every push and pull request to `main`, as two jobs that
+mirror the commands above: the Go CLI (tidy check, `golangci-lint run`, `golangci-lint fmt --diff`,
+`make test`, `make build`) and the website (`pnpm lint`, `fmt:check`, `types:check`, `build`).
+Run the same commands locally before pushing rather than using CI to find out.
+
+Actions are pinned to a commit SHA with the tag in a trailing comment; Dependabot moves them, so
+change the SHA and the comment together. Dependency updates arrive as one grouped PR per ecosystem
+per week (`gomod`, `npm` under `/website`, `github-actions`).
+
 ## Architecture
 
 The layering runs host → machine → container, and each package owns one layer:

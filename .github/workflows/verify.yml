@@ -1,0 +1,103 @@
+name: ✅ Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {} # deny all by default; each job grants only what it needs
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  cli:
+    name: 🐹 CLI
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # Dependencies are not vendored, so a lockfile that does not describe the
+      # imports is a broken checkout rather than a style problem.
+      - name: 📦 Check go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: 🔎 Run linter
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+
+      # The action above leaves golangci-lint on PATH, so the formatter it
+      # bundles is the same binary and version the linter just ran.
+      - name: 🧹 Check formatting
+        run: golangci-lint fmt --diff ./...
+
+      - name: 🧪 Run tests
+        run: make test
+
+      - name: 🏗️ Build binary
+        run: make build
+
+  website:
+    name: 🌐 Website
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: website/.nvmrc
+          package-manager-cache: false
+
+      # pnpm is never installed by hand: `packageManager` pins the version and a
+      # hash of its tarball, and corepack fetches exactly that.
+      - name: 📦 Install package manager
+        run: |
+          corepack enable
+          corepack install
+
+      - name: 💾 Get pnpm store path
+        id: pnpm-cache
+        run: echo "path=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Cache pnpm store
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm-cache.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('website/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: 📚 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔎 Run linter
+        run: pnpm lint
+
+      - name: 🧹 Check formatting
+        run: pnpm fmt:check
+
+      - name: 🔤 Check types
+        run: pnpm types:check
+
+      - name: 🏗️ Build site
+        run: pnpm build
