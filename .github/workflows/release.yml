@@ -1,0 +1,67 @@
+name: 🚀 Release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {} # deny all by default; each job grants only what it needs
+
+# Releases are never cancelled mid-flight: a half-uploaded release is worse
+# than a queued one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Keeps a release pull request open on main, accumulating the changelog from
+  # conventional commits. Merging it is what cuts a release: the action then
+  # creates the tag and the GitHub release the job below uploads binaries to.
+  # Commits that only touch website/ are excluded in release-please-config.json,
+  # so documentation work never moves the CLI version.
+  release-please:
+    name: 📝 Release pull request
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the tag and the release
+      pull-requests: write # open and update the release pull request
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: 📝 Run release-please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # A tag pushed with GITHUB_TOKEN does not start a workflow, so this cannot be
+  # a separate `on: push: tags` run — it has to hang off the job that made it.
+  goreleaser:
+    name: 📦 Binaries
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # upload archives to the release
+    steps:
+      # The tag, not the branch: GoReleaser derives the version from the commit
+      # it is standing on, and needs the full history to see the tag at all.
+      - name: 📥 Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag }}
+          fetch-depth: 0
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: 📦 Build and upload archives
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
