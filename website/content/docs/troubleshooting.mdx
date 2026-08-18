@@ -41,14 +41,14 @@ This does not apply on macOS, where the hypervisor does not back guest memory wi
 
 Solitary reports more than running and stopped:
 
-| State | Means |
-| --- | --- |
-| `uninitialized` | The cell is defined, but no machine was ever created for it. |
-| `stopped` | The machine exists but is not running. |
-| `running` | The machine is up and the container inside it is running. |
-| `degraded` | The machine is up, but its container is not. |
-| `unreachable` | Lima considers the machine running, but nothing inside it answers. |
-| `broken` | Lima reports the machine as broken. |
+| State           | Means                                                              |
+| --------------- | ------------------------------------------------------------------ |
+| `uninitialized` | The cell is defined, but no machine was ever created for it.       |
+| `stopped`       | The machine exists but is not running.                             |
+| `running`       | The machine is up and the container inside it is running.          |
+| `degraded`      | The machine is up, but its container is not.                       |
+| `unreachable`   | Lima considers the machine running, but nothing inside it answers. |
+| `broken`        | Lima reports the machine as broken.                                |
 
 `unreachable` exists so that a hung machine fails your commands in seconds instead of blocking them. `solitary down` then `up` recovers it without touching the disk.
 

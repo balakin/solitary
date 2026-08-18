@@ -44,6 +44,6 @@ Only the **machine** has to be running, not the container: what a cell published
 Its contents are named by whatever runs in the cell, and those names become paths on your machine. Four rules, all enforced on the host:
 
 - **Solitary does the listing itself** — regular files only, one level deep. A symlink is not followed and a directory is not descended into. For a directory, create an archive inside the cell and publish the archive.
-- **A name that is not a plain file name** — `../escape`, `-rf`, an empty one — is refused *by name* rather than silently skipped, and the rest still come out.
+- **A name that is not a plain file name** — `../escape`, `-rf`, an empty one — is refused _by name_ rather than silently skipped, and the rest still come out.
 - **Nothing is written over something already there** without `--force`, and the check happens as a group, before the first file is copied.
 - **Nothing arrives executable.** Fetched files land `0644`. What a cell produces is data on the host, never a program.

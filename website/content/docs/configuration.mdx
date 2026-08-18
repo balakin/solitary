@@ -22,28 +22,28 @@ A cell's name is the name of its **directory**, never a field inside the file, s
 image: ghcr.io/you/nvim-claude:latest
 # build: ./Containerfile  # or build it instead — set one, not both
 
-command: sleep infinity   # optional; must not exit — it is the container's life
+command: sleep infinity # optional; must not exit — it is the container's life
 
-secrets:            # only these names are passed into the cell
+secrets: # only these names are passed into the cell
   - CLAUDE_API_KEY
   - GITHUB_TOKEN
 
-ports:              # omit and every listening port reaches host localhost;
-  - 8080            # set and only these do
+ports: # omit and every listening port reaches host localhost;
+  - 8080 # set and only these do
 
-network:            # omit and the cell reaches whatever the host reaches;
-  allow:            # set and it reaches these and nothing else
+network: # omit and the cell reaches whatever the host reaches;
+  allow: # set and it reaches these and nothing else
     - github.com
     - api.anthropic.com
-  resolvers:        # optional; defaults to 1.1.1.1 and 8.8.8.8
+  resolvers: # optional; defaults to 1.1.1.1 and 8.8.8.8
     - 10.0.0.53
-  vpn: ./vpn.conf   # optional; send all of it through this WireGuard tunnel
+  vpn: ./vpn.conf # optional; send all of it through this WireGuard tunnel
 
-git:                # optional; usually set once in config.yaml instead
+git: # optional; usually set once in config.yaml instead
   name: Ada Lovelace
   email: ada@example.com
 
-vm:                 # optional; falls back to config.yaml, then to built-ins
+vm: # optional; falls back to config.yaml, then to built-ins
   cpus: 4
   memory: 8GiB
 ```
@@ -96,11 +96,11 @@ ports:
 
 ### `network`
 
-| Field | Meaning |
-| --- | --- |
-| `allow` | Domains, IP addresses, and CIDR blocks the cell may open connections to. Empty means the cell reaches whatever the host reaches; set means default-deny. A domain covers its subdomains. |
-| `resolvers` | The DNS servers the cell's own resolver forwards to. Empty means `1.1.1.1` and `8.8.8.8`. The entry `host` means the resolver the machine is given by its network, which is the host's. |
-| `vpn` | A `wg-quick` configuration, as a path relative to the cell's directory. Everything the cell reaches then leaves through that tunnel. |
+| Field       | Meaning                                                                                                                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`     | Domains, IP addresses, and CIDR blocks the cell may open connections to. Empty means the cell reaches whatever the host reaches; set means default-deny. A domain covers its subdomains. |
+| `resolvers` | The DNS servers the cell's own resolver forwards to. Empty means `1.1.1.1` and `8.8.8.8`. The entry `host` means the resolver the machine is given by its network, which is the host's.  |
+| `vpn`       | A `wg-quick` configuration, as a path relative to the cell's directory. Everything the cell reaches then leaves through that tunnel.                                                     |
 
 Each entry under `resolvers` must be an IP address or the literal `host`; anything else is refused when the cell is read. See [networking](/docs/networking) and [routing a cell through a VPN](/docs/guides-vpn).
 
@@ -110,13 +110,13 @@ Each entry under `resolvers` must be an IP address or the literal `host`; anythi
 
 Every field is optional and falls back to `config.yaml`, then to the defaults built into the binary:
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `base` | `ubuntu-lts` | The Lima image template. |
-| `cpus` | `2` | |
-| `memory` | `4GiB` | On Linux this must fit `/dev/shm`; see [troubleshooting](/docs/troubleshooting). |
-| `disk` | `20GiB` | |
-| `provision` | — | A shell script run once, as root, after the built-in podman setup. A value here **replaces** the user-wide one rather than appending to it. |
+| Field       | Default      | Meaning                                                                                                                                     |
+| ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `base`      | `ubuntu-lts` | The Lima image template.                                                                                                                    |
+| `cpus`      | `2`          |                                                                                                                                             |
+| `memory`    | `4GiB`       | On Linux this must fit `/dev/shm`; see [troubleshooting](/docs/troubleshooting).                                                            |
+| `disk`      | `20GiB`      |                                                                                                                                             |
+| `provision` | —            | A shell script run once, as root, after the built-in podman setup. A value here **replaces** the user-wide one rather than appending to it. |
 
 ```yaml
 vm:

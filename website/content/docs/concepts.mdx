@@ -27,11 +27,11 @@ The cell's home directory lives on the VM disk. It survives a stopped machine an
 
 A cell is edited by editing `cell.yaml` and running `up` again. What that costs depends on which of the three layers the setting belongs to:
 
-| Layer | Settings | Applied by |
-| --- | --- | --- |
-| Container | `image`, `build`, `command`, `secrets`, `git` | `up` — the container is replaced |
-| Machine | `vm`, `ports`, `network` | The next boot: `down` then `up` |
-| Disk | what `vm.provision` did, and everything the cell has done since | `rm` then `up` — the disk goes with it |
+| Layer     | Settings                                                        | Applied by                             |
+| --------- | --------------------------------------------------------------- | -------------------------------------- |
+| Container | `image`, `build`, `command`, `secrets`, `git`                   | `up` — the container is replaced       |
+| Machine   | `vm`, `ports`, `network`                                        | The next boot: `down` then `up`        |
+| Disk      | what `vm.provision` did, and everything the cell has done since | `rm` then `up` — the disk goes with it |
 
 `up` says which one it is: it replaces a container without being asked, warns when a running machine is holding settings that changed, and applies them itself when the machine is stopped.
 

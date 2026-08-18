@@ -16,7 +16,7 @@ import { Terminal } from '@/components/terminal';
 import { Footer } from '@/components/footer';
 import { appName, homeImagePath, siteDescription, siteTagline } from '@/lib/shared';
 
-export function meta({}: Route.MetaArgs) {
+export function meta(_args: Route.MetaArgs) {
   const title = `${appName} — ${siteTagline}`;
 
   return [
@@ -132,19 +132,19 @@ export default function Home() {
     <HomeLayout {...homeOptions()}>
       <main>
         {/* Hero */}
-        <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pb-24 pt-24 text-center md:pt-36">
+        <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pt-24 pb-24 text-center md:pt-36">
           <p className="mb-6 rounded-full border border-fd-border bg-fd-card px-4 py-1.5 text-sm text-fd-muted-foreground">
             Pre-alpha · macOS and Linux
           </p>
-          <h1 className="max-w-4xl text-balance text-5xl font-semibold tracking-tight md:text-7xl">
+          <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-balance md:text-7xl">
             Let coding agents run free.
             <br />
             <span className="text-fd-primary">Keep your machine out of reach.</span>
           </h1>
-          <p className="mt-8 max-w-2xl text-balance text-lg leading-8 text-fd-muted-foreground md:text-xl">
-            Solitary runs coding agents in hypervisor-isolated cells: disposable virtual
-            machines with no host mounts, narrowly scoped secrets, controlled network access,
-            and a deliberate way to move work in and out.
+          <p className="mt-8 max-w-2xl text-lg leading-8 text-balance text-fd-muted-foreground md:text-xl">
+            Solitary runs coding agents in hypervisor-isolated cells: disposable virtual machines
+            with no host mounts, narrowly scoped secrets, controlled network access, and a
+            deliberate way to move work in and out.
           </p>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
             <Link
@@ -168,7 +168,7 @@ export default function Home() {
         <section className="border-y border-fd-border bg-fd-card/50">
           <div className="mx-auto grid max-w-6xl gap-12 px-6 py-24 md:grid-cols-[1fr_1.2fr] md:items-start">
             <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-fd-primary">
+              <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
                 The problem
               </p>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
@@ -177,19 +177,18 @@ export default function Home() {
             </div>
             <div className="space-y-5 leading-8 text-fd-muted-foreground">
               <p>
-                Most tools that sandbox a coding agent hand it a container and mount your
-                project directory into it. An agent that can write to that directory can write
-                to{' '}
+                Most tools that sandbox a coding agent hand it a container and mount your project
+                directory into it. An agent that can write to that directory can write to{' '}
                 <code className="text-fd-foreground">.git/hooks/pre-commit</code>, a{' '}
                 <code className="text-fd-foreground">package.json</code> script, a{' '}
                 <code className="text-fd-foreground">Makefile</code>, an{' '}
                 <code className="text-fd-foreground">.envrc</code>, a{' '}
-                <code className="text-fd-foreground">.vscode/tasks.json</code>, or a lint
-                plugin resolved from the local tree.
+                <code className="text-fd-foreground">.vscode/tasks.json</code>, or a lint plugin
+                resolved from the local tree.
               </p>
               <p className="text-fd-foreground">
-                Then you run <code>npm test</code> or <code>git commit</code> on your machine,
-                and the payload runs as you. No escape was necessary. You executed it yourself.
+                Then you run <code>npm test</code> or <code>git commit</code> on your machine, and
+                the payload runs as you. No escape was necessary. You executed it yourself.
               </p>
               <Link
                 className="inline-block font-medium text-fd-primary hover:underline"
@@ -204,7 +203,7 @@ export default function Home() {
         {/* The model */}
         <section className="mx-auto max-w-6xl px-6 py-24">
           <div className="max-w-2xl">
-            <p className="text-sm font-medium uppercase tracking-widest text-fd-primary">
+            <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
               The model
             </p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
@@ -227,7 +226,7 @@ export default function Home() {
               >
                 <h3 className="font-semibold">{layer.name}</h3>
                 {layer.boundary && (
-                  <p className="mt-1 text-xs font-medium uppercase tracking-widest text-fd-primary">
+                  <p className="mt-1 text-xs font-medium tracking-widest text-fd-primary uppercase">
                     The boundary
                   </p>
                 )}
@@ -236,8 +235,8 @@ export default function Home() {
             ))}
           </ol>
           <p className="mt-8 leading-8 text-fd-muted-foreground">
-            Nothing is mounted from the host, ever. Clone, build, lint, test and review inside
-            the cell.{' '}
+            Nothing is mounted from the host, ever. Clone, build, lint, test and review inside the
+            cell.{' '}
             <Link className="font-medium text-fd-primary hover:underline" to="/docs/concepts">
               Core concepts →
             </Link>
@@ -251,17 +250,14 @@ export default function Home() {
           <div className="mx-auto max-w-7xl px-6 py-24">
             <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
               <div className="max-w-2xl">
-                <p className="text-sm font-medium uppercase tracking-widest text-fd-primary">
+                <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
                   See it running
                 </p>
                 <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
                   Every cell, and what its network is doing.
                 </h2>
               </div>
-              <Link
-                className="font-medium text-fd-primary hover:underline"
-                to="/docs/dashboard"
-              >
+              <Link className="font-medium text-fd-primary hover:underline" to="/docs/dashboard">
                 The dashboard →
               </Link>
             </div>
@@ -285,10 +281,9 @@ export default function Home() {
               </Terminal>
             </div>
             <p className="mt-8 max-w-3xl leading-8 text-fd-muted-foreground">
-              The traffic view reads the machine's own log, so a cell cannot see — let alone
-              edit — what is recorded about it. It is also the fastest way to find what an
-              allow list is missing: a <code className="text-fd-foreground">refused</code> line
-              names it.
+              The traffic view reads the machine's own log, so a cell cannot see — let alone edit —
+              what is recorded about it. It is also the fastest way to find what an allow list is
+              missing: a <code className="text-fd-foreground">refused</code> line names it.
             </p>
           </div>
         </section>
@@ -296,7 +291,7 @@ export default function Home() {
         {/* What you control */}
         <section className="mx-auto max-w-6xl px-6 py-24">
           <div className="max-w-2xl">
-            <p className="text-sm font-medium uppercase tracking-widest text-fd-primary">
+            <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
               What you control
             </p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
@@ -311,9 +306,7 @@ export default function Home() {
                 className="group rounded-2xl border border-fd-border bg-fd-card p-6 transition-colors hover:border-fd-primary"
               >
                 <control.icon className="size-5 text-fd-primary" aria-hidden />
-                <h3 className="mt-4 font-semibold group-hover:text-fd-primary">
-                  {control.title}
-                </h3>
+                <h3 className="mt-4 font-semibold group-hover:text-fd-primary">{control.title}</h3>
                 <p className="mt-3 text-sm leading-7 text-fd-muted-foreground">{control.text}</p>
               </Link>
             ))}
@@ -324,16 +317,16 @@ export default function Home() {
         <section className="border-y border-fd-border bg-fd-card/50">
           <div className="mx-auto grid max-w-6xl gap-12 px-6 py-24 md:grid-cols-[1fr_1.1fr] md:items-center">
             <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-fd-primary">
+              <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
                 A cell in practice
               </p>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
                 Define it once. Share it. Rebuild it clean.
               </h2>
               <p className="mt-5 leading-8 text-fd-muted-foreground">
-                The definition says what a cell needs, not the values it receives. Publish it
-                and whoever copies it supplies their own credentials and their own tunnel — so
-                an environment can be reviewed in a pull request before anyone runs it.
+                The definition says what a cell needs, not the values it receives. Publish it and
+                whoever copies it supplies their own credentials and their own tunnel — so an
+                environment can be reviewed in a pull request before anyone runs it.
               </p>
               <Link
                 className="mt-6 inline-block font-medium text-fd-primary hover:underline"
@@ -350,7 +343,7 @@ export default function Home() {
         <section className="mx-auto max-w-6xl px-6 py-24">
           <div className="grid gap-12 md:grid-cols-[1fr_1.2fr] md:items-start">
             <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-fd-muted-foreground">
+              <p className="text-sm font-medium tracking-widest text-fd-muted-foreground uppercase">
                 Honest limits
               </p>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
@@ -359,14 +352,14 @@ export default function Home() {
             </div>
             <div className="space-y-5 leading-8 text-fd-muted-foreground">
               <p>
-                Isolation stops a compromise of your machine. It does not stop an agent
-                misusing the authority you granted it: it can still push to any repository the
-                token you whitelisted can reach, and reach anything you allowed. A cell with no
-                allow list reaches the whole internet. The image you run is trusted code.
+                Isolation stops a compromise of your machine. It does not stop an agent misusing the
+                authority you granted it: it can still push to any repository the token you
+                whitelisted can reach, and reach anything you allowed. A cell with no allow list
+                reaches the whole internet. The image you run is trusted code.
               </p>
               <p>
-                A secret passed to a cell lives inside that cell. Give one only the credentials
-                it needs, and treat a cell's output as data rather than as something to run.
+                A secret passed to a cell lives inside that cell. Give one only the credentials it
+                needs, and treat a cell's output as data rather than as something to run.
               </p>
               <Link
                 className="inline-block font-medium text-fd-primary hover:underline"

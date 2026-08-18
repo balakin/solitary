@@ -11,7 +11,11 @@
     "build": "react-router build",
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
-    "types:check": "react-router typegen && tsc --noEmit"
+    "types:check": "react-router typegen && tsc --noEmit",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check"
   },
   "dependencies": {
     "@react-router/node": "^8.3.0",
@@ -34,6 +38,8 @@
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "oxfmt": "^0.63.0",
+    "oxlint": "^1.78.0",
     "react-router-devtools": "^6.2.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",

@@ -9,10 +9,10 @@ export default {
   ssr: true,
   async prerender({ getStaticPaths }) {
     const paths: string[] = [];
-    const excluded: string[] = ['/api/search'];
+    const excluded = new Set(['/api/search']);
 
     for (const path of getStaticPaths()) {
-      if (!excluded.includes(path)) paths.push(path);
+      if (!excluded.has(path)) paths.push(path);
     }
 
     for await (const entry of glob('**/*.mdx', { cwd: 'content/docs' })) {
