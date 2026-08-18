@@ -4,7 +4,7 @@ The documentation site for [solitary](https://github.com/dm-balakin/solitary), b
 
 ## Requirements
 
-- Node.js 24 (`>=24 <25`, pinned for CI in `.nvmrc`)
+- Node.js 24 (`>=24 <25`; `.nvmrc` pins the exact release, 24.19.0, for CI and `nvm use`)
 - Corepack
 
 pnpm is not installed by hand. `packageManager` pins the exact version **and a
