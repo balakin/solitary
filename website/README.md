@@ -18,10 +18,10 @@ Every face is served from this origin. There is no request to Google Fonts or an
 third party, so reading the docs does not announce itself to anyone but the host serving
 them. Both families are OFL 1.1, with their licences beside the files in `public/fonts/`.
 
-| Family | Files | Used for |
-| --- | --- | --- |
-| Inter v4.1 (variable, subset) | `InterVariable.woff2`, `InterVariable-Italic.woff2` | body text (`--font-sans`) |
-| JetBrains Mono v2.304 | `JetBrainsMono-Regular.woff2`, `JetBrainsMono-Bold.woff2` | code and terminal art (`--font-mono`) |
+| Family                        | Files                                                     | Used for                              |
+| ----------------------------- | --------------------------------------------------------- | ------------------------------------- |
+| Inter v4.1 (variable, subset) | `InterVariable.woff2`, `InterVariable-Italic.woff2`       | body text (`--font-sans`)             |
+| JetBrains Mono v2.304         | `JetBrainsMono-Regular.woff2`, `JetBrainsMono-Bold.woff2` | code and terminal art (`--font-mono`) |
 
 Inter is shipped as the variable face, so `wght` 100–900 and `opsz` 14–32 both work; the
 `html` rule in `app/app.css` leaves `font-optical-sizing` on.
@@ -65,6 +65,30 @@ corepack enable pnpm
 pnpm install
 pnpm dev
 ```
+
+## Linting and formatting
+
+[oxlint](https://oxc.rs/docs/guide/usage/linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter)
+do both jobs, so there is no ESLint or Prettier here and nothing to keep in step between them.
+
+```sh
+pnpm lint        # oxlint
+pnpm lint:fix    # apply the fixes it is sure about
+pnpm fmt         # rewrite files in place
+pnpm fmt:check   # fail instead of rewriting, for CI
+pnpm types:check # react-router typegen && tsc --noEmit
+```
+
+`oxfmt` formats the TypeScript under `app/` and the Markdown and MDX under `content/`, including
+the JSX inside it. It sorts Tailwind class lists the way `prettier-plugin-tailwindcss` does, reading
+the theme from `app/app.css`, so class order is decided rather than argued about. `proseWrap` is
+left at `preserve`: prose keeps whatever line breaks it was written with.
+
+`oxlint` runs the `correctness`, `suspicious` and `perf` categories as errors. Two rules are off in
+`.oxlintrc.json`, both because of how this project is built rather than as taste: `react-in-jsx-scope`
+(the automatic JSX runtime needs no `React` import) and `no-unassigned-import` (`app/app.css` is
+imported for its side effect). Suppress anything else at the line that needs it, with a comment
+saying why, rather than by widening the config.
 
 ## Production build
 

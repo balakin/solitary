@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "sortPackageJson": false,
+  "sortTailwindcss": {
+    "stylesheet": "./app/app.css",
+    "functions": ["cn"]
+  },
+  "ignorePatterns": ["build/", ".react-router/", ".source/", "public/"]
+}

@@ -4,7 +4,7 @@ import { baseOptions } from '@/lib/layout.shared';
 import { DefaultNotFound } from 'fumadocs-ui/layouts/home/not-found';
 import { Footer } from '@/components/footer';
 
-export function meta({}: Route.MetaArgs) {
+export function meta(_args: Route.MetaArgs) {
   return [{ title: 'Not Found' }];
 }
 

@@ -20,22 +20,22 @@ description: Every cell and its state in one live view.
  ↑↓ move · ⏎ shell · u up · s stop · e secrets · n network · t traffic · d rm · q quit
 ```
 
-It does nothing the commands cannot, and the slow ones it runs *as* those commands: pressing `u` runs `solitary up --detach`, so a build prints what a build prints and a cell missing a secret asks for it the way it always does. The dashboard steps out of the way and comes back rather than owning a second, worse version of each.
+It does nothing the commands cannot, and the slow ones it runs _as_ those commands: pressing `u` runs `solitary up --detach`, so a build prints what a build prints and a cell missing a secret asks for it the way it always does. The dashboard steps out of the way and comes back rather than owning a second, worse version of each.
 
 ## Keys
 
-| Key | Action |
-| --- | --- |
-| `↑` `↓` / `k` `j` | Move between cells |
-| `⏎` | Shell into the selected cell |
-| `u` | Bring it up (`solitary up --detach`) |
-| `s` | Stop it |
-| `d` | Destroy its machine, after a confirmation |
-| `e` | Manage its secrets |
-| `n` | Show the whole allow list |
-| `t` | Follow its network traffic |
-| `r` | Refresh |
-| `q` | Quit |
+| Key               | Action                                    |
+| ----------------- | ----------------------------------------- |
+| `↑` `↓` / `k` `j` | Move between cells                        |
+| `⏎`               | Shell into the selected cell              |
+| `u`               | Bring it up (`solitary up --detach`)      |
+| `s`               | Stop it                                   |
+| `d`               | Destroy its machine, after a confirmation |
+| `e`               | Manage its secrets                        |
+| `n`               | Show the whole allow list                 |
+| `t`               | Follow its network traffic                |
+| `r`               | Refresh                                   |
+| `q`               | Quit                                      |
 
 ## The provision row
 
@@ -45,13 +45,13 @@ A cell whose `vm.provision` changed since its machine was provisioned says so in
 
 A cell with `network.vpn` set reports the tunnel in its detail view, refreshed as the view is open:
 
-| Shown | Means |
-| --- | --- |
-| `vpn none` | No tunnel configured. |
-| `vpn configured` | The cell is not running, so there is nothing to ask. |
-| `vpn down — this cell reaches nothing` | The tunnel is not up, and the kill switch is therefore dropping everything. |
-| `vpn up, no recent handshake` | Up but silent. From inside the cell this is indistinguishable from a broken network, which is why it is said here. |
-| `vpn up · handshake 12s ago` | Working, with the peer it is actually talking to and the bytes moved in each direction. |
+| Shown                                  | Means                                                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `vpn none`                             | No tunnel configured.                                                                                              |
+| `vpn configured`                       | The cell is not running, so there is nothing to ask.                                                               |
+| `vpn down — this cell reaches nothing` | The tunnel is not up, and the kill switch is therefore dropping everything.                                        |
+| `vpn up, no recent handshake`          | Up but silent. From inside the cell this is indistinguishable from a broken network, which is why it is said here. |
+| `vpn up · handshake 12s ago`           | Working, with the peer it is actually talking to and the bytes moved in each direction.                            |
 
 The peer address is read live rather than taken from the configuration: a provider that balances one hostname across servers moves it between handshakes.
 
@@ -70,15 +70,15 @@ The peer address is read live rather than taken from the configuration: a provid
  ↑↓ scroll · G live · / filter · b refused only · c clear · esc back
 ```
 
-| Key | Action |
-| --- | --- |
-| `↑` `↓` / `k` `j` | Scroll |
-| `pgup` `pgdown` / `ctrl+b` `ctrl+f` / `space` | Page |
-| `g` / `G` | Oldest / back to live |
-| `/` | Filter as you type; `⏎` keeps it, `esc` clears it |
-| `b` | Refused connections only |
-| `c` | Clear what is shown |
-| `esc` | Back to the cell list |
+| Key                                           | Action                                            |
+| --------------------------------------------- | ------------------------------------------------- |
+| `↑` `↓` / `k` `j`                             | Scroll                                            |
+| `pgup` `pgdown` / `ctrl+b` `ctrl+f` / `space` | Page                                              |
+| `g` / `G`                                     | Oldest / back to live                             |
+| `/`                                           | Filter as you type; `⏎` keeps it, `esc` clears it |
+| `b`                                           | Refused connections only                          |
+| `c`                                           | Clear what is shown                               |
+| `esc`                                         | Back to the cell list                             |
 
 It reads the machine's log, where both halves of the allow list record what they did — so a cell cannot see, let alone edit, what is recorded about it. Repeats fold into a count, since one lookup answers with every address a name has.
 

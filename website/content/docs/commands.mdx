@@ -26,8 +26,8 @@ It is idempotent: it creates the cell's machine if absent, boots it if stopped, 
 
 `vm`, `ports` and `network` are read when the machine boots. `up` applies them to a stopped machine itself, and warns rather than pretending when the cell is already running — `down` then `up` applies them without touching the disk. The one change no restart applies is `vm.provision`: the old script has already run, and only `rm` then `up` gets a machine built by the current one. `up` says so when it happens. See [changing a cell](/docs/concepts#changing-a-cell).
 
-| Flag | Meaning |
-| --- | --- |
+| Flag       | Meaning                                   |
+| ---------- | ----------------------------------------- |
 | `--detach` | Start the cell without attaching a shell. |
 
 `up` takes a cell that is already defined. `init` scaffolds one; [`clone`](/docs/sharing) takes one from a repository.
@@ -49,12 +49,12 @@ solitary clone owner/repo               # a catalogue, unnamed: lists it
 solitary clone ../my-cells#claude       # any git URL or local path, #cell inside it
 ```
 
-| Flag | Meaning |
-| --- | --- |
-| `--as <name>` | Install under a different name. |
-| `--force` | Replace an existing definition, keeping its `.env`. |
-| `--yes` | Install without asking. |
-| `--list` | Show what the definition asks for without installing it. |
+| Flag          | Meaning                                                  |
+| ------------- | -------------------------------------------------------- |
+| `--as <name>` | Install under a different name.                          |
+| `--force`     | Replace an existing definition, keeping its `.env`.      |
+| `--yes`       | Install without asking.                                  |
+| `--list`      | Show what the definition asks for without installing it. |
 
 See [sharing cells](/docs/sharing) for what is copied, what is refused, and how updating one works.
 

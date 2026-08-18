@@ -39,8 +39,8 @@ That is the wrong answer on a network whose names only its own resolver knows �
 ```yaml
 network:
   resolvers:
-    - host          # the resolver this machine is given, which is the host's
-    - 10.0.0.53     # or name them outright
+    - host # the resolver this machine is given, which is the host's
+    - 10.0.0.53 # or name them outright
 ```
 
 `host` is discovered at boot from the machine's DHCP lease, so it follows the network you are on. It is the one hole in VM→host isolation and a narrow one: the cell's own resolver, port 53, and nothing else. A process inside the container still cannot reach any resolver directly — only ask the one in front of it, which answers for the allowed names only.

@@ -35,11 +35,11 @@ export function Terminal({ command, label, children, className }: TerminalProps)
          * meet across lines while the line box stays inside the glyphs' own
          * extent. A roomier line-height breaks the frame into dashes.
          */}
-        <pre
-          role="img"
-          aria-label={label}
-          className="w-fit font-mono text-[0.8rem] leading-[1.2]"
-        >
+        {/* The art is a picture made of text, so it is one image to a screen
+            reader rather than a wall of box-drawing characters — an <img> tag
+            cannot hold the text itself. */}
+        {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role */}
+        <pre role="img" aria-label={label} className="w-fit font-mono text-[0.8rem] leading-[1.2]">
           {children}
         </pre>
       </div>
