@@ -6,6 +6,10 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
+    // The Vite and react-router configs import app/lib/shared for the basename.
+    // Vite's native config loader resolves no extensions, so those imports name
+    // the file exactly; nothing is emitted from here, so tsc can allow it.
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "rootDirs": [".", "./.react-router/types"],
     "paths": {

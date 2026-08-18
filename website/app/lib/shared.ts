@@ -1,4 +1,15 @@
 export const appName = 'Solitary';
+
+// GitHub Pages serves this repository under /solitary rather than at the root of
+// a domain. It is the react-router basename and Vite's base, so routes and
+// bundled assets carry it on their own; anything under public/ is copied rather
+// than resolved, so those URLs are prefixed by hand with `asset` below.
+export const basename = '/solitary';
+
+/** The public URL of a file served from `public/`. */
+export function asset(path: string) {
+  return `${basename}${path}`;
+}
 export const docsRoute = '/docs';
 export const docsImageRoute = '/og/docs';
 export const docsContentRoute = '/llms.mdx/docs';

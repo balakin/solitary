@@ -48,6 +48,36 @@ Actions are pinned to a commit SHA with the tag in a trailing comment; Dependabo
 change the SHA and the comment together. Dependency updates arrive as one grouped PR per ecosystem
 per week (`gomod`, `npm` under `/website`, `github-actions`).
 
+## Deploying the site
+
+`.github/workflows/pages.yml` publishes `website/` to GitHub Pages on every push to `main` that
+touches it. The site tracks `main` rather than the last release: release-please already keeps
+`website/` out of the CLI version, so the two ship independently and a documentation fix never
+waits for a release. Nothing in the docs names a version — the install page points at
+`releases/latest` — so the only skew the site can carry is prose describing behaviour that is
+written but not yet released.
+
+Pages serves a project site under `/solitary`, and reaching that prefix takes three pieces that
+have to agree, all of them named from `basename` in `website/app/lib/shared.ts`:
+
+- `basename` in `react-router.config.ts`, which prefixes routes and nests every prerendered page
+  under `build/client/solitary/`;
+- `experimental.renderBuiltUrl` in `vite.config.ts`, which prefixes the URLs of bundled assets.
+  Vite's `base` would be the obvious way to do that, and it cannot be used: it also prefixes the
+  URLs react-router asks itself for while prerendering, so every resource route 404s and the
+  prerender fails — silently, when `basename` is set too;
+- `website/scripts/pages-artifact.mjs` (`pnpm build:pages`), which assembles `build/pages` from
+  that output: the pages move up out of the basename directory, the assets stay where they are,
+  the catch-all route becomes `404.html`, and the script tags react-router writes from its own
+  build manifest — the one thing `renderBuiltUrl` does not reach — are rewritten to the prefix.
+
+Anything under `public/` is copied rather than resolved, so its URLs carry the prefix by hand:
+`asset()` in TypeScript, and a literal in the `@font-face` rules in `app/app.css`. Serving the site
+from a domain root instead would remove all of this.
+
+Search has no server behind it. `app/routes/search.ts` prerenders the whole index to `/api/search`
+and the dialog downloads it and searches in the browser.
+
 ## Releases
 
 `.github/workflows/release.yml` runs release-please on every push to `main`. It keeps one release

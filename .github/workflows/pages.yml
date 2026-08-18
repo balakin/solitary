@@ -1,0 +1,89 @@
+name: 🌐 Deploy site
+
+# The docs site ships on its own schedule: it describes main, not the last
+# release, and a typo fix has no reason to wait for one. release-please already
+# excludes website/ from the CLI version, so nothing here can cut a release
+# either.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions: {} # deny all by default; each job grants only what it needs
+
+# One deployment at a time, and never cancelled: Pages replaces the whole site
+# at once, so a half-uploaded artifact is the live site.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 🏗️ Build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: website/.nvmrc
+          package-manager-cache: false
+
+      # pnpm is never installed by hand: `packageManager` pins the version and a
+      # hash of its tarball, and corepack fetches exactly that.
+      - name: 📦 Install package manager
+        run: |
+          corepack enable
+          corepack install
+
+      - name: 💾 Get pnpm store path
+        id: pnpm-cache
+        run: echo "path=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Cache pnpm store
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm-cache.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('website/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: 📚 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds the site and rearranges it into what Pages serves under /solitary.
+      - name: 🏗️ Build site
+        run: pnpm build:pages
+
+      - name: 📤 Upload artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/build/pages
+
+  deploy:
+    name: 🚀 Deploy
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write # publish the artifact
+      id-token: write # the deployment is authenticated by OIDC, not a token
+    # GitHub's own environment rather than one named for the site: it is created
+    # already restricted to the Pages source branch, where a name of our own
+    # would start with no protection rules at all.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

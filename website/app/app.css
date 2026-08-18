@@ -15,9 +15,13 @@
  * font-display: swap, because prose in a fallback face is better than no prose,
  * and the metrics are close enough that the swap is not jarring.
  */
+/* The /solitary prefix is `basename` from app/lib/shared.ts, written out by hand
+   because CSS cannot import it. Change it in both places or the faces 404.
+   Vite reports these as unresolved at build time, which is what a file under
+   public/ is: it is copied rather than bundled, and the URL is already final. */
 @font-face {
   font-family: 'InterVariable';
-  src: url('/fonts/InterVariable.woff2') format('woff2');
+  src: url('/solitary/fonts/InterVariable.woff2') format('woff2');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -25,7 +29,7 @@
 
 @font-face {
   font-family: 'InterVariable';
-  src: url('/fonts/InterVariable-Italic.woff2') format('woff2');
+  src: url('/solitary/fonts/InterVariable-Italic.woff2') format('woff2');
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -50,7 +54,7 @@
  */
 @font-face {
   font-family: 'JetBrains Mono';
-  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  src: url('/solitary/fonts/JetBrainsMono-Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: block;
@@ -58,7 +62,7 @@
 
 @font-face {
   font-family: 'JetBrains Mono';
-  src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2');
+  src: url('/solitary/fonts/JetBrainsMono-Bold.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
   font-display: block;
