@@ -24,13 +24,13 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# release-please owns the release notes and CHANGELOG.md; GoReleaser only adds
+# the archives to the release it already created.
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
+  disable: true
+
+release:
+  mode: append
 
 # A Homebrew tap is added here once the tap repository exists. Check the
 # current GoReleaser docs for the right key before adding it: the Homebrew

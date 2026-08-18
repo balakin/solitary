@@ -2,9 +2,9 @@
 
 **Hypervisor-isolated cells for running coding agents off the leash.**
 
-> ⚠️ Pre-alpha. Cells build, run, persist, take secrets and can be held to an
-> egress allow list — read [the limitations](website/content/docs/limitations.mdx)
-> before trusting one with credentials.
+> Early. The `0.x` line can still change the shape of a cell's configuration —
+> read [the limitations](website/content/docs/limitations.mdx) before trusting a
+> cell with credentials.
 
 ## The problem
 
@@ -69,7 +69,13 @@ built from `website/`. Start with the [quickstart](website/content/docs/quicksta
 | [Limitations](website/content/docs/limitations.mdx) | What this does not protect against |
 | [Troubleshooting](website/content/docs/troubleshooting.mdx) | The failure modes a cell actually has |
 
-## Requirements
+## Install
+
+Binaries for macOS and Linux are attached to every
+[release](https://github.com/dm-balakin/solitary/releases/latest); see the
+[installation guide](website/content/docs/installation.mdx) for the rest.
+
+Requirements:
 
 - [Lima](https://lima-vm.io) 2.0 or newer
 - macOS or Linux

@@ -48,6 +48,20 @@ Actions are pinned to a commit SHA with the tag in a trailing comment; Dependabo
 change the SHA and the comment together. Dependency updates arrive as one grouped PR per ecosystem
 per week (`gomod`, `npm` under `/website`, `github-actions`).
 
+## Releases
+
+`.github/workflows/release.yml` runs release-please on every push to `main`. It keeps one release
+pull request open, accumulating `CHANGELOG.md` from the Conventional Commit subjects; merging that
+pull request is what cuts a release — it tags, creates the GitHub release, and a second job runs
+GoReleaser to attach the archives. Nothing is released by pushing a tag by hand: a tag pushed with
+`GITHUB_TOKEN` starts no workflow.
+
+The version lives in `.release-please-manifest.json` and nowhere else — `make build` and GoReleaser
+bake it in through `-ldflags`, so no source file names a version. `release-please-config.json`
+excludes `website/`, so a commit that only touches the docs site never proposes a CLI release; give
+site-only work a `website` scope so that stays true. Deliberate overrides go through `release-as` in
+that config, and it must be removed again once the release it forced has shipped.
+
 ## Architecture
 
 The layering runs host → machine → container, and each package owns one layer:
