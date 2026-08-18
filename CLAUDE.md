@@ -53,11 +53,12 @@ per week (`gomod`, `npm` under `/website`, `github-actions`).
 `.github/workflows/release.yml` runs release-please on every push to `main`. It keeps one release
 pull request open, accumulating `CHANGELOG.md` from the Conventional Commit subjects; merging that
 pull request is what cuts a release. Releases here are immutable — publishing seals the tag and the
-assets — so release-please creates the release as a draft, a second job builds the archives with
-GoReleaser and uploads them to that draft, and publishing is the last step. GoReleaser publishes
-nothing itself (`release.disable`), and a draft has no tag until it is published, which is why that
-job tags locally and checks out the release commit by SHA. Nothing is released by pushing a tag by
-hand either: a tag pushed with `GITHUB_TOKEN` starts no workflow.
+assets — so release-please creates the release as a draft and a second job hands it to GoReleaser,
+which uploads the archives to it and undrafts it at the end. That order is GoReleaser's own: it
+always uploads to a draft, and `release.use_existing_draft` only points it at the one already there
+rather than a release of its own, matched by name against the tag. A draft has no tag until it is
+published, which is why that job checks out the release commit by SHA and tags locally. Nothing is
+released by pushing a tag by hand either: a tag pushed with `GITHUB_TOKEN` starts no workflow.
 
 Never delete a published release. Its tag name is reserved for good — GitHub refuses to reuse a
 name that belonged to an immutable release, even after the release and the tag are gone, and even

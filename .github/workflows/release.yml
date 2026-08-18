@@ -36,19 +36,17 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Releases in this repository are immutable: publishing seals the tag and the
-  # assets, and nothing can be attached afterwards. So the archives go onto the
-  # draft release-please left behind, and publishing is the last thing that
-  # happens — the point at which GitHub creates the tag and freezes the lot.
+  # Builds the archives and finishes the release release-please drafted: the
+  # uploads land on the draft, and undrafting it is the last thing that happens
+  # — the point at which GitHub creates the tag and freezes the lot.
   goreleaser:
     name: 📦 Binaries
     needs: release-please
     if: needs.release-please.outputs.released == 'true'
     runs-on: ubuntu-24.04
     permissions:
-      contents: write # upload archives to the release, then publish it
+      contents: write # fill the draft release and publish it
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ needs.release-please.outputs.tag }}
     steps:
       # The commit the release was cut from, not the branch head, which may have
@@ -69,14 +67,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: 🏗️ Build archives
+      - name: 🚀 Build, attach and publish
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: '~> v2'
           args: release --clean
-
-      - name: ⬆️ Attach the archives to the draft
-        run: gh release upload "$TAG" dist/*.tar.gz dist/checksums.txt --clobber
-
-      - name: 🚀 Publish the release
-        run: gh release edit "$TAG" --draft=false --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
