@@ -27,6 +27,8 @@ solitary down my-cell
 solitary up my-cell
 ```
 
+Deleting it takes effect the same way. The resolver, the firewall and the frozen `resolv.conf` are removed from the machine as part of starting it, so a cell that was restricted does not keep enforcing an old list off its disk. Removing `network.vpn` likewise disables the interface and deletes the configuration from the machine, private key included.
+
 ## DNS
 
 By default the cell's resolver forwards to `1.1.1.1` and `8.8.8.8`. They are public on purpose: a restricted cell cannot reach the host, and a resolver on the host's network would see every name the cell looks up.

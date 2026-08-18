@@ -37,6 +37,10 @@ It does nothing the commands cannot, and the slow ones it runs *as* those comman
 | `r` | Refresh |
 | `q` | Quit |
 
+## The provision row
+
+A cell whose `vm.provision` changed since its machine was provisioned says so in its detail view. It is the one setting stopping and starting the cell does not apply: the old script has already run, and only `d` then `u` — destroying the machine and its disk — gets one built by the current script alone. Every other change to `vm`, `ports` or `network` is applied by a restart, so the dashboard leaves those to `up`.
+
 ## The VPN row
 
 A cell with `network.vpn` set reports the tunnel in its detail view, refreshed as the view is open:

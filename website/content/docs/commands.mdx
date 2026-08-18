@@ -22,7 +22,9 @@ solitary dashboard              manage cells in a live view
 
 ## `up` is the only command that changes state
 
-It is idempotent: it creates the cell's machine if absent, boots it if stopped, and attaches if it is already running. It also replaces the container when the image or the secrets changed, so editing `cell.yaml` and running `up` again is all a change ever takes.
+It is idempotent: it creates the cell's machine if absent, boots it if stopped, and attaches if it is already running. It also replaces the container when the image or the secrets changed, so editing `cell.yaml` and running `up` again is what a change takes.
+
+`vm`, `ports` and `network` are read when the machine boots. `up` applies them to a stopped machine itself, and warns rather than pretending when the cell is already running — `down` then `up` applies them without touching the disk. The one change no restart applies is `vm.provision`: the old script has already run, and only `rm` then `up` gets a machine built by the current one. `up` says so when it happens. See [changing a cell](/docs/concepts#changing-a-cell).
 
 | Flag | Meaning |
 | --- | --- |

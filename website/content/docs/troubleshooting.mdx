@@ -63,17 +63,35 @@ Two things a WireGuard configuration must not have, both refused when the cell i
 
 If the tunnel is configured and down, the cell reaches nothing at all — that is the kill switch working, not a separate fault. The dashboard's VPN row says so directly. See [routing a cell through a VPN](/docs/guides-vpn).
 
-## A change to `vm` that did not take
+## A change to `vm`, `ports` or `network` that did not take
 
-Lima cannot apply machine settings to a running machine, so `up` warns rather than silently ignoring them:
+Those three are read when the machine boots, and Lima cannot apply them to a running one, so `up` warns rather than silently ignoring them:
 
 ```text
-Warning: the vm settings for "claude" changed since its machine started.
-         The running cell still uses the old ones. To apply the change:
+Warning: the machine settings for "claude" changed since it started.
+         vm, ports and network are read when the machine boots, so the running
+         cell still uses the old ones. To apply the change:
            solitary down claude && solitary up claude
 ```
 
 Stopping and starting applies them. The disk, the cell's home, and the secrets are untouched.
+
+Removing a setting applies the same way, and applies fully: a machine that was restricted or tunnelled has its resolver, firewall and tunnel taken back out at the next boot, so what the guest enforces is what `cell.yaml` says.
+
+## A change to `vm.provision`
+
+The one setting a restart cannot apply, because the old script has already run:
+
+```text
+Warning: vm.provision for "claude" changed since its machine was provisioned.
+         The new script runs at the next start, but what the old one did is
+         already on the machine's disk and nothing undoes it. For a machine
+         built by this script alone — discarding the disk, and the cell's home
+         with it:
+           solitary rm claude && solitary up claude
+```
+
+The dashboard reports the same thing in the cell's detail view. Editing the script is usually fine — the new one runs on top, and adding a package is not undone by anything. Removing or replacing what an earlier script did is what needs the rebuild. See [changing a cell](/docs/concepts#changing-a-cell).
 
 ## Work that disappeared
 

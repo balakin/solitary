@@ -55,3 +55,7 @@ The dashboard's traffic view shows lookups, resolved addresses, and refused conn
 solitary down my-cell
 solitary up my-cell
 ```
+
+## Remove the policy
+
+Deleting `network.allow` makes the cell unrestricted again from the next boot: the resolver, the firewall and the frozen `resolv.conf` are removed from the machine as part of starting it. The same goes for `network.vpn` — the interface is disabled and the configuration deleted from the machine, private key included. Until the machine restarts, a running cell keeps enforcing what it came up with, and `up` says so.

@@ -128,6 +128,8 @@ vm:
 
 The `vm` block describes settings a machine reads at boot. Change it while a cell is running and `up` warns that the running cell still uses the old ones; `down` then `up` applies them without touching the disk.
 
+`provision` is the exception. The new script runs at the next start, but what the old one did is already on the machine's disk, and nothing undoes it — a package it installed stays installed. `up` warns when the script changed, and the dashboard says so in the cell's detail view; only `rm` then `up` gets a machine built by the current script alone, and that discards the disk and the cell's home with it. See [changing a cell](/docs/concepts#changing-a-cell) for which settings land in which layer.
+
 ### `git`
 
 ```yaml

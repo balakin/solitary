@@ -23,6 +23,22 @@ The host is the operator and the display. It starts machines, forwards selected 
 
 The cell's home directory lives on the VM disk. It survives a stopped machine and a replaced container. `rm` destroys the VM and its disk; the cell definition and host-held secrets remain available for a fresh `up`.
 
+## Changing a cell
+
+A cell is edited by editing `cell.yaml` and running `up` again. What that costs depends on which of the three layers the setting belongs to:
+
+| Layer | Settings | Applied by |
+| --- | --- | --- |
+| Container | `image`, `build`, `command`, `secrets`, `git` | `up` — the container is replaced |
+| Machine | `vm`, `ports`, `network` | The next boot: `down` then `up` |
+| Disk | what `vm.provision` did, and everything the cell has done since | `rm` then `up` — the disk goes with it |
+
+`up` says which one it is: it replaces a container without being asked, warns when a running machine is holding settings that changed, and applies them itself when the machine is stopped.
+
+Removing a setting is applied like adding one. A machine that was restricted or tunnelled has its resolver, firewall and tunnel taken back out at the next boot, so the guest matches the definition in both directions — the machine is not left enforcing an allow list nothing describes any more.
+
+`vm.provision` is the exception, and the reason the third row exists. The script runs in the machine and changes its disk; the disk survives every change short of `rm`. A new script runs at the next start, but nothing undoes what the old one did, so a machine built by the current script alone is a machine created again from scratch. Both `up` and the dashboard say so when the script changes.
+
 ## Authority
 
 A cell receives authority in named pieces:
