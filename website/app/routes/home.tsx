@@ -87,9 +87,10 @@ network:            # and it reaches nothing else
     - registry.npmjs.org
   vpn: ./vpn.conf   # optional: all of it, through this tunnel`;
 
-const install = `git clone https://github.com/dm-balakin/solitary
-cd solitary
-go mod tidy && make build`;
+const install = `curl -fsSL -o solitary.tar.gz \\
+  https://github.com/dm-balakin/solitary/releases/latest/download/solitary_darwin_arm64.tar.gz
+tar -xzf solitary.tar.gz solitary
+install -m 755 solitary /usr/local/bin/solitary`;
 
 const dashboard = `╭─────────────────────╮╭──────────────────────────────────╮
 │ cells               ││ claude                           │
@@ -134,7 +135,7 @@ export default function Home() {
         {/* Hero */}
         <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pt-24 pb-24 text-center md:pt-36">
           <p className="mb-6 rounded-full border border-fd-border bg-fd-card px-4 py-1.5 text-sm text-fd-muted-foreground">
-            Pre-alpha · macOS and Linux
+            Early · macOS and Linux
           </p>
           <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-balance md:text-7xl">
             Let coding agents run free.
@@ -376,10 +377,11 @@ export default function Home() {
           <div className="mx-auto grid max-w-6xl gap-12 px-6 py-24 md:grid-cols-[1fr_1.1fr] md:items-center">
             <div>
               <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-                Build it and take a cell for a walk.
+                Install it and take a cell for a walk.
               </h2>
               <p className="mt-5 leading-8 text-fd-muted-foreground">
-                Solitary is pre-alpha, so there are no released binaries yet. It needs{' '}
+                Every release ships a binary for macOS and Linux, and the source builds in one
+                command. It needs{' '}
                 <a
                   className="text-fd-primary hover:underline"
                   href="https://lima-vm.io"
@@ -388,9 +390,9 @@ export default function Home() {
                 >
                   Lima
                 </a>{' '}
-                2.0 or newer and Go. Creating the first cell takes a couple of minutes while it
-                downloads a cloud image and installs podman; everything after that is
-                container-speed.
+                2.0 or newer, and Go only if you build it yourself. Creating the first cell takes a
+                couple of minutes while it downloads a cloud image and installs podman; everything
+                after that is container-speed.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link

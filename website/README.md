@@ -97,6 +97,6 @@ pnpm build
 pnpm start
 ```
 
-The site documents the problem, architecture, security model, capabilities, configuration, and trade-offs. Solitary itself is pre-alpha and has no released binaries, so its installation page documents a build from source.
+The site documents the problem, architecture, security model, capabilities, configuration, and trade-offs. Its installation page covers both the released binaries and a build from source.
 
 Documentation claims are written from the Go source in the parent repository rather than from intent. When changing `internal/config`, `internal/cli`, or `internal/dashboard`, check `content/docs/configuration.mdx`, `commands.mdx`, and `dashboard.mdx` against it.

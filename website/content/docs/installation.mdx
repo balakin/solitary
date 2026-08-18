@@ -1,17 +1,35 @@
 ---
 title: Installation
-description: Requirements and building solitary from source.
+description: Requirements, a released binary, and building solitary from source.
 ---
 
-Solitary is **pre-alpha**. There are no released binaries yet, so the way in is a build from source. Interfaces and configuration shape can still change; read [the limitations](/docs/limitations) before trusting it with credentials.
+Solitary is on its `0.x` line: the configuration shape can still change between releases. Read [the limitations](/docs/limitations) before trusting a cell with credentials.
 
 ## Requirements
 
 - **macOS or Linux**
 - **[Lima](https://lima-vm.io) 2.0 or newer** — solitary drives `limactl` on the host and `podman` through it in the machine, so there is nothing else to install
-- **Go** to build the binary
+- **Go**, only if you build from source
 
-## Build it
+## Download a release
+
+Every release carries a `tar.gz` per platform and a `checksums.txt`. Pick the archive for your machine — `darwin` or `linux`, `arm64` for Apple silicon, `amd64` otherwise:
+
+```sh
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+
+curl -fsSL -o solitary.tar.gz \
+  "https://github.com/dm-balakin/solitary/releases/latest/download/solitary_${OS}_${ARCH}.tar.gz"
+tar -xzf solitary.tar.gz solitary
+install -m 755 solitary /usr/local/bin/solitary
+```
+
+`solitary --version` prints the version that was baked in at build time. The [release page](https://github.com/dm-balakin/solitary/releases/latest) lists every archive and the changelog for the version.
+
+On macOS the binary is unsigned, so Gatekeeper quarantines a download from the browser; fetching it with `curl` as above avoids that.
+
+## Build from source
 
 ```sh
 git clone https://github.com/dm-balakin/solitary
