@@ -1,0 +1,55 @@
+version: 2
+updates:
+  # The Go CLI. One PR a week for everything that moved, since these are all
+  # libraries the same binary links.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 2
+    groups:
+      go-dependencies:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+        patterns:
+          - '*'
+      go-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+        patterns:
+          - '*'
+
+  # The docs site.
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 2
+    groups:
+      website-dependencies:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+        patterns:
+          - '*'
+      website-security:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
+        patterns:
+          - '*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 2
