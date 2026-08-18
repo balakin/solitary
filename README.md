@@ -72,7 +72,7 @@ built from `website/`. Start with the [quickstart](website/content/docs/quicksta
 ## Install
 
 Binaries for macOS and Linux are attached to every
-[release](https://github.com/dm-balakin/solitary/releases/latest); see the
+[release](https://github.com/balakin/solitary/releases/latest); see the
 [installation guide](website/content/docs/installation.mdx) for the rest.
 
 Requirements:

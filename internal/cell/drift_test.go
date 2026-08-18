@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/config"
 )
 
 // isolate points the state directory at a temporary one, so a test never reads

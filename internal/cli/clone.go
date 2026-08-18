@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dm-balakin/solitary/internal/clone"
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/clone"
+	"github.com/balakin/solitary/internal/config"
 )
 
 func newCloneCmd() *cobra.Command {

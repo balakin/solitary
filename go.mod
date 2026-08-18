@@ -1,4 +1,4 @@
-module github.com/dm-balakin/solitary
+module github.com/balakin/solitary
 
 go 1.25.0
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dm-balakin/solitary/internal/config"
-	"github.com/dm-balakin/solitary/internal/lima"
+	"github.com/balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/lima"
 )
 
 // ErrNoTunnel is returned for a cell that does not send its traffic through

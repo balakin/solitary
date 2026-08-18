@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/dm-balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/cell"
 )
 
 func (m model) View() string {

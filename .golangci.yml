@@ -28,4 +28,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/dm-balakin/solitary
+        - github.com/balakin/solitary

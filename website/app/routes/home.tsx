@@ -88,7 +88,7 @@ network:            # and it reaches nothing else
   vpn: ./vpn.conf   # optional: all of it, through this tunnel`;
 
 const install = `curl -fsSL -o solitary.tar.gz \\
-  https://github.com/dm-balakin/solitary/releases/latest/download/solitary_darwin_arm64.tar.gz
+  https://github.com/balakin/solitary/releases/latest/download/solitary_darwin_arm64.tar.gz
 tar -xzf solitary.tar.gz solitary
 install -m 755 solitary /usr/local/bin/solitary`;
 
@@ -156,7 +156,7 @@ export default function Home() {
             </Link>
             <a
               className="rounded-full border border-fd-border px-6 py-3 font-medium transition-colors hover:bg-fd-accent"
-              href="https://github.com/dm-balakin/solitary"
+              href="https://github.com/balakin/solitary"
               target="_blank"
               rel="noreferrer"
             >

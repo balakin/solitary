@@ -11,30 +11,30 @@ func TestParse(t *testing.T) {
 		name    string
 	}{
 		{
-			arg:     "dm-balakin/nvim-cell",
-			url:     "https://github.com/dm-balakin/nvim-cell.git",
-			display: "github.com/dm-balakin/nvim-cell",
+			arg:     "balakin/nvim-cell",
+			url:     "https://github.com/balakin/nvim-cell.git",
+			display: "github.com/balakin/nvim-cell",
 			name:    "nvim-cell",
 		},
 		{
-			arg:     "dm-balakin/cells/claude",
-			url:     "https://github.com/dm-balakin/cells.git",
+			arg:     "balakin/cells/claude",
+			url:     "https://github.com/balakin/cells.git",
 			path:    "claude",
-			display: "github.com/dm-balakin/cells",
+			display: "github.com/balakin/cells",
 			name:    "claude",
 		},
 		{
-			arg:     "dm-balakin/cells#claude",
-			url:     "https://github.com/dm-balakin/cells.git",
+			arg:     "balakin/cells#claude",
+			url:     "https://github.com/balakin/cells.git",
 			path:    "claude",
-			display: "github.com/dm-balakin/cells",
+			display: "github.com/balakin/cells",
 			name:    "claude",
 		},
 		{
-			arg:     "dm-balakin/cells/agents/claude",
-			url:     "https://github.com/dm-balakin/cells.git",
+			arg:     "balakin/cells/agents/claude",
+			url:     "https://github.com/balakin/cells.git",
 			path:    "agents/claude",
-			display: "github.com/dm-balakin/cells",
+			display: "github.com/balakin/cells",
 			name:    "claude",
 		},
 		{

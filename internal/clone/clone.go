@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/config"
 )
 
 // cellFile is the one file that makes a directory a cell.

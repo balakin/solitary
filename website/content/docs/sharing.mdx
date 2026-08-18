@@ -10,9 +10,9 @@ A cell definition is a `cell.yaml` and, usually, a `Containerfile` beside it. Ne
 ## Taking one
 
 ```sh
-solitary clone dm-balakin/nvim-cell        # a repository that is one cell
-solitary clone dm-balakin/cells/claude     # one cell out of a catalogue
-solitary clone dm-balakin/cells            # a catalogue, unnamed: lists what is in it
+solitary clone balakin/nvim-cell        # a repository that is one cell
+solitary clone balakin/cells/claude     # one cell out of a catalogue
+solitary clone balakin/cells            # a catalogue, unnamed: lists what is in it
 ```
 
 `owner/repo` is GitHub shorthand. Anything else is passed to git as it stands — a full URL, an SSH remote, or a path on this machine — and the cell inside it is named with a `#fragment`:
@@ -30,12 +30,12 @@ Fetching is `git clone`, so your existing credentials, SSH agent and rewriting r
 A `cell.yaml` at the repository's root means the repository **is** one cell, the shape a dotfiles repository has; it installs under the repository's own name. No root `cell.yaml` means the directories inside it are the cells, and naming one is how you pick:
 
 ```text
-$ solitary clone dm-balakin/cells
-github.com/dm-balakin/cells holds 3 cells:
+$ solitary clone balakin/cells
+github.com/balakin/cells holds 3 cells:
   claude
   go
   rust
-Take one with: solitary clone github.com/dm-balakin/cells#claude
+Take one with: solitary clone github.com/balakin/cells#claude
 ```
 
 ## You see what it asks for first
@@ -43,7 +43,7 @@ Take one with: solitary clone github.com/dm-balakin/cells#claude
 A cell names the secrets it wants, and running it hands them to an image someone else chose. So the definition is shown and the install is asked for:
 
 ```text
-Cell "claude" from github.com/dm-balakin/cells
+Cell "claude" from github.com/balakin/cells
   image    build:./Containerfile
   machine  4 cpus · 8GiB · 40GiB
   secrets  CLAUDE_API_KEY, GITHUB_TOKEN
@@ -61,7 +61,7 @@ Nothing has started either way — `up` does that, afterwards. `--yes` skips the
 Install under your own name with `--as`:
 
 ```sh
-solitary clone dm-balakin/cells/claude --as work
+solitary clone balakin/cells/claude --as work
 ```
 
 ## What is refused
@@ -80,7 +80,7 @@ The definition is then parsed before it becomes a cell, so a broken one is refus
 Clone the same source again with `--force`:
 
 ```sh
-solitary clone dm-balakin/cells/claude --force
+solitary clone balakin/cells/claude --force
 ```
 
 That replaces the files the repository provides and leaves everything else in the cell's directory alone — your `.env`, your `vpn.conf`, anything you added. So an update keeps you authenticated, and `solitary up claude` afterwards is the whole of applying it.

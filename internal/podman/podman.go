@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/dm-balakin/solitary/internal/lima"
+	"github.com/balakin/solitary/internal/lima"
 )
 
 // Container is the name of the single container each cell runs.

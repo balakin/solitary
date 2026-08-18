@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/config"
 )
 
 // writeCell lays out a cell definition and its secrets in a temporary home.
