@@ -9,8 +9,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/dm-balakin/solitary/internal/cell"
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/config"
 )
 
 // press sends one key, the way a person would.

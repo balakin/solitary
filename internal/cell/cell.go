@@ -12,11 +12,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dm-balakin/solitary/internal/config"
-	"github.com/dm-balakin/solitary/internal/host"
-	"github.com/dm-balakin/solitary/internal/lima"
-	"github.com/dm-balakin/solitary/internal/podman"
-	"github.com/dm-balakin/solitary/internal/secrets"
+	"github.com/balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/host"
+	"github.com/balakin/solitary/internal/lima"
+	"github.com/balakin/solitary/internal/podman"
+	"github.com/balakin/solitary/internal/secrets"
 )
 
 // Status is what a cell is currently doing.

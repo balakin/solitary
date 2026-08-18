@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/config"
 )
 
 //go:embed templates/cell.yaml.tmpl

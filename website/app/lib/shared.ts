@@ -14,7 +14,7 @@ export const homeImagePath = '/og/home/image.webp';
 
 // fill this with your actual GitHub info, for example:
 export const gitConfig = {
-  user: 'dm-balakin',
+  user: 'balakin',
   repo: 'solitary',
   branch: 'main',
 };

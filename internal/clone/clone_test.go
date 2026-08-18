@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/config"
 )
 
 // definition is the smallest thing that is a cell.

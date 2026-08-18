@@ -3,7 +3,7 @@ package dashboard
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/dm-balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/cell"
 )
 
 // The palette is Catppuccin Mocha, the same one a cell's own tools are themed

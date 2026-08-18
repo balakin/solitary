@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dm-balakin/solitary/internal/lima"
+	"github.com/balakin/solitary/internal/lima"
 )
 
 // buildLabel records a digest of the build context an image was built from, so

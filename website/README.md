@@ -1,6 +1,6 @@
 # Solitary website
 
-The documentation site for [solitary](https://github.com/dm-balakin/solitary), built with Fumadocs, Vite, React Router, and pnpm.
+The documentation site for [solitary](https://github.com/balakin/solitary), built with Fumadocs, Vite, React Router, and pnpm.
 
 ## Requirements
 

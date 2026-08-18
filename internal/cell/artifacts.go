@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dm-balakin/solitary/internal/config"
-	"github.com/dm-balakin/solitary/internal/lima"
-	"github.com/dm-balakin/solitary/internal/podman"
+	"github.com/balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/lima"
+	"github.com/balakin/solitary/internal/podman"
 )
 
 // artifactScript is the tool a cell publishes with. It is embedded rather than

@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/dm-balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/cell"
 )
 
 // trafficKept is how much of a cell's traffic is held. A busy cell resolves

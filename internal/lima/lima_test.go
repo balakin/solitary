@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/config"
 )
 
 var update = os.Getenv("UPDATE_GOLDEN") != ""

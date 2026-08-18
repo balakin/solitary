@@ -15,7 +15,7 @@ go mod tidy                     # dependencies are not vendored; run this first 
 make build                      # -> ./solitary, with version baked in via -ldflags
 make test                       # go test ./...
 make lint                       # golangci-lint run ./...
-make fmt                        # golangci-lint fmt (gofumpt + goimports, local prefix github.com/dm-balakin/solitary)
+make fmt                        # golangci-lint fmt (gofumpt + goimports, local prefix github.com/balakin/solitary)
 
 go test ./internal/cell/                        # one package
 go test ./internal/lima/ -run TestRender        # one test

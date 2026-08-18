@@ -14,7 +14,7 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X github.com/dm-balakin/solitary/internal/cli.version={{ .Version }}
+      - -s -w -X github.com/balakin/solitary/internal/cli.version={{ .Version }}
 
 archives:
   - formats: [tar.gz]

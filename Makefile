@@ -1,6 +1,6 @@
 BINARY := solitary
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X github.com/dm-balakin/solitary/internal/cli.version=$(VERSION)
+LDFLAGS := -s -w -X github.com/balakin/solitary/internal/cli.version=$(VERSION)
 
 .PHONY: build
 build:

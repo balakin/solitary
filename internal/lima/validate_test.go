@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dm-balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/config"
 )
 
 // TestRenderedDefinitionsPassLimactlValidate checks the rendered YAML against

@@ -17,9 +17,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/dm-balakin/solitary/internal/cell"
-	"github.com/dm-balakin/solitary/internal/config"
-	"github.com/dm-balakin/solitary/internal/secrets"
+	"github.com/balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/secrets"
 )
 
 // refreshEvery is how often the list of cells is re-read. A cell can stop, wedge

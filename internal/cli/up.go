@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dm-balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/cell"
 )
 
 func newUpCmd() *cobra.Command {

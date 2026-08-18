@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/dm-balakin/solitary/internal/dashboard"
+	"github.com/balakin/solitary/internal/dashboard"
 )
 
 func newDashboardCmd() *cobra.Command {
