@@ -18,6 +18,7 @@ solitary fetch <name> [files]   collect what a cell published
 solitary send <name> <file...>  put files into a cell's inbox
 solitary secrets <name>         set the values a cell is allowed to see
 solitary dashboard              manage cells in a live view
+solitary update                 replace the binary with the latest release
 ```
 
 ## `up` is the only command that changes state
@@ -31,6 +32,12 @@ It is idempotent: it creates the cell's machine if absent, boots it if stopped, 
 | `--detach` | Start the cell without attaching a shell. |
 
 `up` takes a cell that is already defined. `init` scaffolds one; [`clone`](/docs/sharing) takes one from a repository.
+
+## `update` keeps the binary current
+
+`solitary update` downloads the newest release, checks it against the published checksum and replaces the running binary. `--check` reports whether a newer release exists and installs nothing. An install a package manager owns is left to it: `update` says which command to use instead of overwriting the file behind Homebrew's back.
+
+Every other command mentions a newer release at most once a day, and only to a terminal. See [staying current](/docs/installation#staying-current) for turning that off.
 
 ## Lifecycle
 
