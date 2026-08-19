@@ -5,13 +5,11 @@
 
 ### Features
 
-* add solitary doctor for host-level checks ([fec3e14](https://github.com/balakin/solitary/commit/fec3e14858a3dde8ca889c128c98204849b8bd63))
 * add solitary doctor for host-level checks ([6fbfb15](https://github.com/balakin/solitary/commit/6fbfb15e322dd95d713b9708464c742ec24e4ac7))
 
 
 ### Bug Fixes
 
-* write the Homebrew formula to Formula/ ([a299094](https://github.com/balakin/solitary/commit/a29909441506fb817ce4903890260d7a88235d7c))
 * write the Homebrew formula to Formula/ ([cd6b472](https://github.com/balakin/solitary/commit/cd6b4723c74a279ecf4ef7b8824496385b859769))
 
 ## [0.2.0](https://github.com/balakin/solitary/compare/v0.1.1...v0.2.0) (2026-08-19)
