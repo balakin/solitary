@@ -87,7 +87,18 @@ and the dialog downloads it and searches in the browser.
 pull request open, accumulating `CHANGELOG.md` from the Conventional Commit subjects; merging that
 pull request is what cuts a release. Releases here are immutable — publishing seals the tag and the
 assets — so release-please creates the release as a draft and a second job hands it to GoReleaser,
-which uploads the archives to it and undrafts it at the end. That order is GoReleaser's own: it
+which uploads the archives to it and undrafts it at the end.
+
+Immutability is also why release-please runs as two jobs rather than one. The action's two phases —
+cut the release for a merged release pull request, then write the next release pull request — ship
+as a single invocation, and that arrangement cannot survive a draft: the second phase asks GitHub
+what the latest release is, and the release the first phase just cut is still an unpublished draft
+with no tag behind it, so it finds nothing and writes the next pull request as though the repository
+had never released anything, listing its entire history. Splitting them with
+`skip-github-pull-request` and `skip-github-release` puts the publish in between, so the second
+phase asks the question once the answer exists. It has to run on every push, not only on a release,
+which is what the `always()` in its condition is for: GoReleaser is skipped whenever nothing was
+released, and a skipped dependency would otherwise skip the pull request job with it. That order is GoReleaser's own: it
 always uploads to a draft, and `release.use_existing_draft` only points it at the one already there
 rather than a release of its own, matched by name against the tag. A draft has no tag until it is
 published, which is why that job checks out the release commit by SHA and tags locally. Nothing is
@@ -109,12 +120,11 @@ So site-only work has to be committed on its own; the moment the same commit als
 or `.github/workflows/pages.yml` it becomes a release trigger, and prose about the site belongs in
 its own `docs:` commit anyway.
 
-`last-release-sha` in that config is the floor release-please searches back to. It exists because
-commits that should have been excluded were not, and once they are in history nothing else can take
-them out of the next release; move it to the release commit only to disown that kind of mistake.
 Deliberate version overrides go through `release-as`, and it must be removed again once the release
 it forced has shipped — left in place it proposes the same version forever, and that version is
-already spent.
+already spent. `last-release-sha` is the floor the commit search stops at, for disowning commits
+that should have been excluded and were not; note that it and `bootstrap-sha` are root-level options
+and are ignored inside `packages`, where `release-as` and `exclude-paths` belong.
 
 ## Distribution
 
