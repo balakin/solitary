@@ -101,9 +101,20 @@ release is `0.1.1`.
 
 The version lives in `.release-please-manifest.json` and nowhere else — `make build` and GoReleaser
 bake it in through `-ldflags`, so no source file names a version. `release-please-config.json`
-excludes `website/`, so a commit that only touches the docs site never proposes a CLI release; give
-site-only work a `website` scope so that stays true. Deliberate overrides go through `release-as` in
-that config, and it must be removed again once the release it forced has shipped.
+excludes `website/`, so a commit that only touches the docs site never proposes a CLI release. That
+exclusion is by path and nothing else: a commit is dropped only when *every* file it touches sits
+under `website/`. A `website` scope on the subject buys nothing, and neither does a hidden
+changelog type — `docs` and `chore` are kept out of the changelog but still count towards a bump.
+So site-only work has to be committed on its own; the moment the same commit also edits `CLAUDE.md`
+or `.github/workflows/pages.yml` it becomes a release trigger, and prose about the site belongs in
+its own `docs:` commit anyway.
+
+`last-release-sha` in that config is the floor release-please searches back to. It exists because
+commits that should have been excluded were not, and once they are in history nothing else can take
+them out of the next release; move it to the release commit only to disown that kind of mistake.
+Deliberate version overrides go through `release-as`, and it must be removed again once the release
+it forced has shipped — left in place it proposes the same version forever, and that version is
+already spent.
 
 ## Distribution
 
@@ -122,8 +133,12 @@ Three ways in, all fed by the same release archives:
   needs neither — and covers Linuxbrew, where `lima` has bottles too. `brews` warns for the rest of
   v2 and `goreleaser check` exits non-zero on it; when v3 drops it, generate the formula in the
   release workflow rather than giving up Linux. The push is a write to another repository, which
-  `GITHUB_TOKEN` cannot do — it needs `HOMEBREW_TAP_TOKEN`, a PAT with contents write on the tap and
-  nothing else.
+  `GITHUB_TOKEN` cannot do — it needs `HOMEBREW_TAP_TOKEN`, a fine-grained token with contents write
+  on the tap and nothing else. It is an environment secret on `homebrew-tap`, not a repository
+  secret: a repository secret is readable by any job in any workflow on any branch that names it,
+  where an environment secret reaches only the job declaring that environment, and only from the
+  branches its policy allows — `main`. The environment carries no reviewers, so it gates nothing;
+  it is there to scope the secret.
 - `solitary update` (`internal/update`), which does what the install script does to the binary it is
   running: resolve the latest tag, download, verify, rename over itself. Every other command asks
   github once a day and mentions a newer release at most three times, only to a terminal, recorded
