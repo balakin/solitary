@@ -55,6 +55,13 @@ release:
 # is scoped to this repository and cannot push to another.
 brews:
   - name: solitary
+    # Homebrew reads Formula/ and nothing else once that directory exists: a
+    # tap's formula directory is the first of Formula, HomebrewFormula and the
+    # repository root that is present, and only that one is searched. GoReleaser
+    # defaults this to the root — unlike homebrew_casks, which defaults to
+    # Casks — so leaving it unset writes a formula Homebrew never reads, and
+    # the tap keeps serving whatever was last written to Formula/.
+    directory: Formula
     repository:
       owner: balakin
       name: homebrew-solitary
