@@ -13,36 +13,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Keeps a release pull request open on main, accumulating the changelog from
-  # conventional commits. Merging it is what cuts a release: the action then
-  # creates the GitHub release as a draft, which the job below fills and
-  # publishes. Commits that only touch website/ are excluded in
-  # release-please-config.json, so documentation work never moves the version.
-  release-please:
-    name: 📝 Release pull request
+  # Phase one of release-please, on its own: cut the release for a release pull
+  # request that has just been merged, and nothing else. It creates the release
+  # as a draft, which the job below fills and publishes.
+  #
+  # The pull request phase is deliberately not run here. Both phases in one
+  # invocation is the arrangement release-please ships with, and it cannot work
+  # against an immutable release: the pull request phase asks GitHub what the
+  # latest release is, and at that moment the release just cut is still the
+  # draft GoReleaser has yet to publish — untagged, and so invisible. Finding
+  # no release at all, it writes the next pull request as if nothing had ever
+  # been released, listing the entire history of the repository.
+  release:
+    name: 🏷️ Release
     runs-on: ubuntu-24.04
     permissions:
       contents: write # create the draft release
-      pull-requests: write # open and update the release pull request
+      pull-requests: write # label the release pull request it just consumed
     outputs:
       released: ${{ steps.release.outputs.release_created }}
       tag: ${{ steps.release.outputs.tag_name }}
       sha: ${{ steps.release.outputs.sha }}
     steps:
-      - name: 📝 Run release-please
+      - name: 🏷️ Cut the release
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
 
   # Builds the archives and finishes the release release-please drafted: the
   # uploads land on the draft, and undrafting it is the last thing that happens
   # — the point at which GitHub creates the tag and freezes the lot.
   goreleaser:
     name: 📦 Binaries
-    needs: release-please
-    if: needs.release-please.outputs.released == 'true'
+    needs: release
+    if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write # fill the draft release and publish it
@@ -52,14 +59,14 @@ jobs:
     # repository secret would be readable by any workflow on any branch.
     environment: homebrew-tap
     env:
-      TAG: ${{ needs.release-please.outputs.tag }}
+      TAG: ${{ needs.release.outputs.tag }}
     steps:
       # The commit the release was cut from, not the branch head, which may have
       # moved on since. Full history, because GoReleaser reads the tag from git.
       - name: 📥 Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.release-please.outputs.sha }}
+          ref: ${{ needs.release.outputs.sha }}
           fetch-depth: 0
 
       # A draft release has no tag yet — GitHub creates it on publish — so the
@@ -85,3 +92,30 @@ jobs:
           # balakin/homebrew-solitary and nothing else, held by the
           # homebrew-tap environment above.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  # Phase two, once the release above is a published one with a tag behind it:
+  # keep a release pull request open on main, accumulating the changelog from
+  # conventional commits. Merging it is what cuts the next release. Commits
+  # that only touch website/ are excluded in release-please-config.json, so
+  # documentation work never moves the version.
+  #
+  # It runs on every push, which is the point — on an ordinary commit the two
+  # jobs above do nothing and this one updates the pending pull request, and on
+  # a release merge it waits for the publish before asking what was released.
+  release-pull-request:
+    name: 📝 Release pull request
+    needs: [release, goreleaser]
+    # goreleaser is skipped on any push that released nothing, and a skipped
+    # dependency would otherwise skip this job with it.
+    if: ${{ always() && needs.release.result == 'success' && (needs.goreleaser.result == 'success' || needs.goreleaser.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # push the release branch
+      pull-requests: write # open and update the release pull request
+    steps:
+      - name: 📝 Update the release pull request
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-release: true
