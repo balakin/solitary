@@ -18,6 +18,7 @@ solitary fetch <name> [files]   collect what a cell published
 solitary send <name> <file...>  put files into a cell's inbox
 solitary secrets <name>         set the values a cell is allowed to see
 solitary dashboard              manage cells in a live view
+solitary doctor                 check that this host can run cells
 solitary update                 replace the binary with the latest release
 ```
 
@@ -32,6 +33,19 @@ It is idempotent: it creates the cell's machine if absent, boots it if stopped, 
 | `--detach` | Start the cell without attaching a shell. |
 
 `up` takes a cell that is already defined. `init` scaffolds one; [`clone`](/docs/sharing) takes one from a repository.
+
+## `doctor` checks the host
+
+`solitary doctor` asks the questions a cell would otherwise answer for you halfway through an `up`, or not at all:
+
+- **`limactl`** — on `PATH`, and new enough. Solitary is written against [Lima 2.0](/docs/installation).
+- **`hypervisor`** — whether this machine can run a guest at all. On Linux that is whether `/dev/kvm` exists _and this user can open it_; the group that owns it is the usual reason a create fails minutes in. On macOS it is `kern.hv_support`.
+- **`memory`** — what `/dev/shm` holds against what the defined cells ask for. `up` already refuses a single machine larger than the filesystem behind it, but it only ever sees one cell; whether they all fit at once is a question only doctor asks, and it is a warning rather than an error. See [a machine has to fit the host](/docs/troubleshooting#a-machine-has-to-fit-the-host).
+- **`disk`** — free space where Lima keeps machines. A disk is allocated sparsely, so what cells declare cannot be summed and the space left to grow into is the only number worth watching.
+- **`config`** — that `config.yaml` parses, and that the state directory can be written. Nothing fails outright without the latter, but drift goes undetected, so a change to `vm`, `ports` or `network` is never reported as needing a restart.
+- **`proxy`** — a host proxy the cells will not inherit, which they deliberately do not: a proxy configuration names internal hosts and carries credentials. It is worth saying because of how it fails — a cell behind an unset proxy reaches nothing, which looks exactly like an incomplete allow list.
+
+It changes nothing, and every check that is not `ok` names what to do about it. It exits non-zero when one failed outright, so it can stand at the top of a script; warnings alone exit zero.
 
 ## `update` keeps the binary current
 

@@ -3,6 +3,8 @@ title: Troubleshooting
 description: The failure modes a cell actually has.
 ---
 
+`solitary doctor` answers the host-level half of this page — Lima, the hypervisor, memory, disk, the config tree and a proxy the cells will not inherit — without starting anything. Start there when a cell will not come up at all, rather than when a cell that runs is behaving oddly. See [`doctor` checks the host](/docs/commands#doctor-checks-the-host).
+
 ## A restricted cell cannot build or clone
 
 An allow list has to be complete. A restricted cell cannot pull its own image unless the registry is listed, and a build cannot install packages unless its package sources are. What you see is a name that does not resolve:

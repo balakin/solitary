@@ -11,6 +11,8 @@ Solitary is on its `0.x` line: the configuration shape can still change between 
 - **[Lima](https://lima-vm.io) 2.0 or newer** — solitary drives `limactl` on the host and `podman` through it in the machine, so there is nothing else to install
 - **Go**, only if you build from source
 
+A host also has to be able to run a guest at all, which is not something an install can check. `solitary doctor` does, once solitary is on your PATH: Lima and its version, the hypervisor, memory, disk and the config tree. See [`doctor` checks the host](/docs/commands#doctor-checks-the-host).
+
 ## Install
 
 The install script downloads the release archive for your platform, checks it against the published checksum and puts the binary on your PATH. It works on macOS and Linux:
