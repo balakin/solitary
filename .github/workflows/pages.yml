@@ -61,14 +61,14 @@ jobs:
       - name: 📚 Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Builds the site and rearranges it into what Pages serves under /solitary.
+      # Prerenders every route and turns the catch-all into Pages' 404.html.
       - name: 🏗️ Build site
         run: pnpm build:pages
 
       - name: 📤 Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: website/build/pages
+          path: website/build/client
 
   deploy:
     name: 🚀 Deploy
