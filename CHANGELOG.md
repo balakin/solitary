@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.0](https://github.com/balakin/solitary/compare/v0.1.1...v0.2.0) (2026-08-19)
+
+
+### Features
+
+* add an update command and a daily release check ([379f181](https://github.com/balakin/solitary/commit/379f181006fbe1d1ba7fae48f11744b206f20cb0))
+* install and update solitary without the release page ([e56c323](https://github.com/balakin/solitary/commit/e56c323d900461df9fa3e268b4f6eddd6b47b541))
+* publish a homebrew formula on release ([f37c80b](https://github.com/balakin/solitary/commit/f37c80b42c9ed26b0286f382098a7fdcf077375a))
+* **website:** serve the site from solitary.balakin.io ([619fd0f](https://github.com/balakin/solitary/commit/619fd0f24f41dabb05191026949e194feb5e6ee7))
+* **website:** serve the site from solitary.balakin.io ([4b9f600](https://github.com/balakin/solitary/commit/4b9f600238531ca36f2ba2ceecefa479ebab13d4))
+
+
+### Bug Fixes
+
+* **website:** stop asking a static host for the route manifest ([3186e50](https://github.com/balakin/solitary/commit/3186e50a0103961ec8a35b91f75aa3b8fdd3d133))
+
 ## [0.1.1](https://github.com/balakin/solitary/compare/v0.1.0...v0.1.1) (2026-08-18)
 
 
