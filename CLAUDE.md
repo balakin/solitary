@@ -142,9 +142,15 @@ Three ways in, all fed by the same release archives:
   which for an unsigned binary means a `postflight` hook stripping the attribute back off. A formula
   needs neither — and covers Linuxbrew, where `lima` has bottles too. `brews` warns for the rest of
   v2 and `goreleaser check` exits non-zero on it; when v3 drops it, generate the formula in the
-  release workflow rather than giving up Linux. The push is a write to another repository, which
-  `GITHUB_TOKEN` cannot do — it needs `HOMEBREW_TAP_TOKEN`, a fine-grained token with contents write
-  on the tap and nothing else. It is an environment secret on `homebrew-tap`, not a repository
+  release workflow rather than giving up Linux — and have that generator write to `Formula/` too.
+  The formula has to land there and nowhere else: a tap's formula directory is the first of
+  `Formula`, `HomebrewFormula` and the repository root that exists, and only that one is ever
+  searched, so a second copy elsewhere is not a fallback but a file Homebrew never reads.
+  `brews.directory` is set to `Formula` for exactly that reason; GoReleaser defaults it to the
+  repository root, where `homebrew_casks` defaults to `Casks`, and the tap served a stale version
+  for a release because of it. The push is a write to another repository, which `GITHUB_TOKEN`
+  cannot do — it needs `HOMEBREW_TAP_TOKEN`, a fine-grained token with contents write on the tap
+  and nothing else. It is an environment secret on `homebrew-tap`, not a repository
   secret: a repository secret is readable by any job in any workflow on any branch that names it,
   where an environment secret reaches only the job declaring that environment, and only from the
   branches its policy allows — `main`. The environment carries no reviewers, so it gates nothing;
