@@ -57,28 +57,26 @@ waits for a release. Nothing in the docs names a version — the install page po
 `releases/latest` — so the only skew the site can carry is prose describing behaviour that is
 written but not yet released.
 
-Pages serves a project site under `/solitary`, and reaching that prefix takes three pieces that
-have to agree, all of them named from `basename` in `website/app/lib/shared.ts`:
+The site is served from the root of `solitary.balakin.io`, a custom domain set in the repository's
+Pages settings; the DNS record is a `CNAME` from that subdomain to `balakin.github.io`. It used to
+be a project site under `/solitary`, and that one path prefix cost a `basename`, a
+`renderBuiltUrl` in `vite.config.ts` (Vite's `base` cannot be used: it also prefixes the URLs
+react-router asks itself for while prerendering, so the prerender fails, silently) and a build step
+that re-prefixed every URL react-router took from its own build manifest. Serving from a root
+removed all of it — so keep the site at a root, and reach for a second host rather than a
+subdirectory of this one.
 
-- `basename` in `react-router.config.ts`, which prefixes routes and nests every prerendered page
-  under `build/client/solitary/`;
-- `experimental.renderBuiltUrl` in `vite.config.ts`, which prefixes the URLs of bundled assets.
-  Vite's `base` would be the obvious way to do that, and it cannot be used: it also prefixes the
-  URLs react-router asks itself for while prerendering, so every resource route 404s and the
-  prerender fails — silently, when `basename` is set too;
-- `website/scripts/pages-artifact.mjs` (`pnpm build:pages`), which assembles `build/pages` from
-  that output: the pages move up out of the basename directory, the assets stay where they are,
-  the catch-all route becomes `404.html`, and the script tags react-router writes from its own
-  build manifest — the one thing `renderBuiltUrl` does not reach — are rewritten to the prefix.
+What a static host still asks of the app is two things:
 
-`routeDiscovery: { mode: 'initial' }` in `react-router.config.ts` is the other thing a static host
-needs. Under `ssr: true` react-router otherwise discovers routes lazily, asking `/__manifest` for the
-routes a link points at before it navigates there; nothing answers that on Pages, so the first
-client-side navigation lands on the error boundary while the server-rendered pages all look fine.
+- `routeDiscovery: { mode: 'initial' }` in `react-router.config.ts`. Under `ssr: true`
+  react-router otherwise discovers routes lazily, asking `/__manifest` for the routes a link
+  points at before it navigates there; nothing answers that on Pages, so the first client-side
+  navigation lands on the error boundary while the prerendered pages all look fine.
+- `website/scripts/pages-artifact.mjs` (`pnpm build:pages`), which renames the prerendered
+  catch-all route to `404.html`. Pages answers an unknown path with that file from the root of
+  what it serves, and a prerendered route is a directory with an `index.html` in it.
 
-Anything under `public/` is copied rather than resolved, so its URLs carry the prefix by hand:
-`asset()` in TypeScript, and a literal in the `@font-face` rules in `app/app.css`. Serving the site
-from a domain root instead would remove all of this.
+Everything else is prerendering: every route is a file, `/api/search` included.
 
 Search has no server behind it. `app/routes/search.ts` prerenders the whole index to `/api/search`
 and the dialog downloads it and searches in the browser.
