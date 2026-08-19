@@ -74,3 +74,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pushing the Homebrew cask is a write to another repository, which
+          # GITHUB_TOKEN cannot do: it is scoped to this one. HOMEBREW_TAP_TOKEN
+          # is a personal access token with contents write on
+          # balakin/homebrew-solitary and nothing else.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

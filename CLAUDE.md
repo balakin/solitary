@@ -105,6 +105,34 @@ excludes `website/`, so a commit that only touches the docs site never proposes 
 site-only work a `website` scope so that stays true. Deliberate overrides go through `release-as` in
 that config, and it must be removed again once the release it forced has shipped.
 
+## Distribution
+
+Three ways in, all fed by the same release archives:
+
+- `website/public/install.sh`, served from `https://solitary.balakin.io/install.sh` because the site
+  is a root domain and `public/` is copied to the root of what Pages serves. It detects the
+  platform, verifies the archive against `checksums.txt` and stages the binary *inside* the install
+  directory before renaming it over the old one — a rename is only atomic within one filesystem,
+  and it is the one way to replace a binary that is currently running. It never uses `sudo`: a
+  script piped from the network does not ask for a password, it falls back to `~/.local/bin`.
+- `balakin/homebrew-solitary`, a tap holding one formula that GoReleaser regenerates and pushes on
+  every release. A formula rather than a cask although GoReleaser deprecated `brews` for
+  `homebrew_casks`: casks install on macOS only, and Homebrew quarantines what a cask downloads,
+  which for an unsigned binary means a `postflight` hook stripping the attribute back off. A formula
+  needs neither — and covers Linuxbrew, where `lima` has bottles too. `brews` warns for the rest of
+  v2 and `goreleaser check` exits non-zero on it; when v3 drops it, generate the formula in the
+  release workflow rather than giving up Linux. The push is a write to another repository, which
+  `GITHUB_TOKEN` cannot do — it needs `HOMEBREW_TAP_TOKEN`, a PAT with contents write on the tap and
+  nothing else.
+- `solitary update` (`internal/update`), which does what the install script does to the binary it is
+  running: resolve the latest tag, download, verify, rename over itself. Every other command asks
+  github once a day and mentions a newer release at most three times, only to a terminal, recorded
+  in `update.json` under `XDG_STATE_HOME` — `SOLITARY_NO_UPDATE_CHECK` turns it off.
+
+Only a bare dotted version is treated as a release. `make build` bakes in what `git describe` says
+(`v0.1.1-10-g619fd0f-dirty`), which is *ahead* of the tag it names, not a pre-release of it, so a
+source build is never notified and never replaced.
+
 ## Architecture
 
 The layering runs host → machine → container, and each package owns one layer:

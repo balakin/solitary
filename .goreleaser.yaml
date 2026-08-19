@@ -38,6 +38,34 @@ release:
   use_existing_draft: true
   mode: keep-existing
 
-# A Homebrew tap is added here once the tap repository exists. Check the
-# current GoReleaser docs for the right key before adding it: the Homebrew
-# section has been reorganised more than once.
+# Homebrew installs come from a tap of our own: balakin/homebrew-solitary, which
+# this pushes a formula to on every release.
+#
+# A formula rather than a cask, though GoReleaser deprecated `brews` in favour
+# of `homebrew_casks`: casks install on macOS only, and a formula covers
+# Linuxbrew with the same file. It also sidesteps Gatekeeper — Homebrew
+# quarantines what a cask downloads and not what a formula downloads, and these
+# binaries are unsigned, so a cask would need a postflight hook stripping the
+# quarantine attribute back off. `brews` still works throughout v2 (it warns,
+# and `goreleaser check` exits non-zero for it); v3 will remove it, and the
+# replacement then is to generate the formula ourselves rather than to give up
+# Linux.
+#
+# The token is a PAT with contents write on the tap, not GITHUB_TOKEN: that one
+# is scoped to this repository and cannot push to another.
+brews:
+  - name: solitary
+    repository:
+      owner: balakin
+      name: homebrew-solitary
+      token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
+    homepage: 'https://solitary.balakin.io'
+    description: 'Hypervisor-isolated cells for running coding agents off the leash'
+    license: 'Apache-2.0'
+    # solitary drives limactl on the host and has nothing to run without it.
+    dependencies:
+      - name: lima
+    # Everything else needs a machine to boot; this is what a formula can check
+    # on a machine that is only installing it.
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/solitary --version")
