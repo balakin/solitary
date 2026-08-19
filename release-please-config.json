@@ -6,9 +6,9 @@
       "draft": true,
       "include-component-in-tag": false,
       "exclude-paths": ["website"],
+      "last-release-sha": "619fd0f24f41dabb05191026949e194feb5e6ee7",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false,
-      "release-as": "0.1.1",
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },
