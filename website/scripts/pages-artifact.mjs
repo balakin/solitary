@@ -7,10 +7,12 @@
 // artifact is served at that prefix — while the assets it copies stay at the
 // top. So the pages move up and the assets stay put.
 //
-// The script tags react-router writes into that HTML are the one thing
-// `renderBuiltUrl` in vite.config.ts does not reach: they come from its own
-// build manifest, which follows Vite's `base`, and `base` cannot be used here
-// (see the comment there). They are rewritten below instead.
+// The URLs react-router takes from its own build manifest are the one thing
+// `renderBuiltUrl` in vite.config.ts does not reach: they follow Vite's `base`,
+// and `base` cannot be used here (see the comment there). That is both the
+// script tags in the prerendered HTML and the client manifest itself, which is
+// where a client-side navigation looks up the modules of the route it is going
+// to. They are rewritten below instead.
 
 import { cp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -46,14 +48,21 @@ await Promise.all(
 await rename(join(out, '404', 'index.html'), join(out, '404.html'));
 await rm(join(out, '404'), { recursive: true });
 
-const pages = [];
-for await (const file of htmlFiles(out)) pages.push(file);
+const targets = [];
+for await (const file of htmlFiles(out)) targets.push(file);
+
+// The client manifest, named for the build rather than for its own bytes, so
+// rewriting it in place leaves the script tags pointing at it.
+const assets = join(out, 'assets');
+for (const entry of await readdir(assets)) {
+  if (/^manifest-.*\.js$/.test(entry)) targets.push(join(assets, entry));
+}
 
 const rewrites = await Promise.all(
-  pages.map(async (file) => {
-    const html = await readFile(file, 'utf8');
-    const fixed = html.replaceAll('"/assets/', `"${basename}/assets/`);
-    if (fixed === html) return 0;
+  targets.map(async (file) => {
+    const source = await readFile(file, 'utf8');
+    const fixed = source.replaceAll('"/assets/', `"${basename}/assets/`);
+    if (fixed === source) return 0;
 
     await writeFile(file, fixed);
     return 1;
@@ -61,6 +70,7 @@ const rewrites = await Promise.all(
 );
 const rewritten = rewrites.reduce((total, one) => total + one, 0);
 
-// A page that kept the wrong asset URLs would still render, just unstyled and
-// without hydrating, so say what happened rather than leaving it to be noticed.
-console.log(`build/pages: ${rewritten} pages rewritten to serve from ${basename}`);
+// A file that kept the wrong asset URLs fails quietly — a page renders unstyled
+// and never hydrates, a manifest breaks the first client-side navigation — so
+// say what happened rather than leaving it to be noticed.
+console.log(`build/pages: ${rewritten} files rewritten to serve from ${basename}`);
