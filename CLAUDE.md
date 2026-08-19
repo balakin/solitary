@@ -68,8 +68,11 @@ have to agree, all of them named from `basename` in `website/app/lib/shared.ts`:
   prerender fails — silently, when `basename` is set too;
 - `website/scripts/pages-artifact.mjs` (`pnpm build:pages`), which assembles `build/pages` from
   that output: the pages move up out of the basename directory, the assets stay where they are,
-  the catch-all route becomes `404.html`, and the script tags react-router writes from its own
-  build manifest — the one thing `renderBuiltUrl` does not reach — are rewritten to the prefix.
+  the catch-all route becomes `404.html`, and the URLs react-router takes from its own build
+  manifest — the one thing `renderBuiltUrl` does not reach — are rewritten to the prefix. That is
+  both the script tags in the prerendered HTML and the client manifest itself, `assets/manifest-*.js`,
+  which is where a client-side navigation looks up the modules of the route it is going to; miss it
+  and the pages load but every navigation 404s on a module.
 
 `routeDiscovery: { mode: 'initial' }` in `react-router.config.ts` is the other thing a static host
 needs. Under `ssr: true` react-router otherwise discovers routes lazily, asking `/__manifest` for the
