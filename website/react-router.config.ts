@@ -1,15 +1,12 @@
 import type { Config } from '@react-router/dev/config';
 import { glob } from 'node:fs/promises';
 import { createGetUrl, getSlugs } from 'fumadocs-core/source';
-import { basename, getPageContentPath, getPageImagePath } from './app/lib/shared.ts';
+import { getPageContentPath, getPageImagePath } from './app/lib/shared.ts';
 
 const getUrl = createGetUrl('/docs');
 
 export default {
   ssr: true,
-  // GitHub Pages serves this repository's site under /solitary, so every route
-  // and every asset URL is one path segment deeper than it is in development.
-  basename,
   // Every route is in the manifest the first document ships with. The default
   // under `ssr: true` is to discover routes lazily, which makes the client ask
   // /__manifest for the routes a link points at before navigating to it — a
