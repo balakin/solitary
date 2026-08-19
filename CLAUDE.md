@@ -71,6 +71,11 @@ have to agree, all of them named from `basename` in `website/app/lib/shared.ts`:
   the catch-all route becomes `404.html`, and the script tags react-router writes from its own
   build manifest — the one thing `renderBuiltUrl` does not reach — are rewritten to the prefix.
 
+`routeDiscovery: { mode: 'initial' }` in `react-router.config.ts` is the other thing a static host
+needs. Under `ssr: true` react-router otherwise discovers routes lazily, asking `/__manifest` for the
+routes a link points at before it navigates there; nothing answers that on Pages, so the first
+client-side navigation lands on the error boundary while the server-rendered pages all look fine.
+
 Anything under `public/` is copied rather than resolved, so its URLs carry the prefix by hand:
 `asset()` in TypeScript, and a literal in the `@font-face` rules in `app/app.css`. Serving the site
 from a domain root instead would remove all of this.
