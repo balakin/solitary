@@ -101,9 +101,52 @@ release is `0.1.1`.
 
 The version lives in `.release-please-manifest.json` and nowhere else — `make build` and GoReleaser
 bake it in through `-ldflags`, so no source file names a version. `release-please-config.json`
-excludes `website/`, so a commit that only touches the docs site never proposes a CLI release; give
-site-only work a `website` scope so that stays true. Deliberate overrides go through `release-as` in
-that config, and it must be removed again once the release it forced has shipped.
+excludes `website/`, so a commit that only touches the docs site never proposes a CLI release. That
+exclusion is by path and nothing else: a commit is dropped only when *every* file it touches sits
+under `website/`. A `website` scope on the subject buys nothing, and neither does a hidden
+changelog type — `docs` and `chore` are kept out of the changelog but still count towards a bump.
+So site-only work has to be committed on its own; the moment the same commit also edits `CLAUDE.md`
+or `.github/workflows/pages.yml` it becomes a release trigger, and prose about the site belongs in
+its own `docs:` commit anyway.
+
+`last-release-sha` in that config is the floor release-please searches back to. It exists because
+commits that should have been excluded were not, and once they are in history nothing else can take
+them out of the next release; move it to the release commit only to disown that kind of mistake.
+Deliberate version overrides go through `release-as`, and it must be removed again once the release
+it forced has shipped — left in place it proposes the same version forever, and that version is
+already spent.
+
+## Distribution
+
+Three ways in, all fed by the same release archives:
+
+- `website/public/install.sh`, served from `https://solitary.balakin.io/install.sh` because the site
+  is a root domain and `public/` is copied to the root of what Pages serves. It detects the
+  platform, verifies the archive against `checksums.txt` and stages the binary *inside* the install
+  directory before renaming it over the old one — a rename is only atomic within one filesystem,
+  and it is the one way to replace a binary that is currently running. It never uses `sudo`: a
+  script piped from the network does not ask for a password, it falls back to `~/.local/bin`.
+- `balakin/homebrew-solitary`, a tap holding one formula that GoReleaser regenerates and pushes on
+  every release. A formula rather than a cask although GoReleaser deprecated `brews` for
+  `homebrew_casks`: casks install on macOS only, and Homebrew quarantines what a cask downloads,
+  which for an unsigned binary means a `postflight` hook stripping the attribute back off. A formula
+  needs neither — and covers Linuxbrew, where `lima` has bottles too. `brews` warns for the rest of
+  v2 and `goreleaser check` exits non-zero on it; when v3 drops it, generate the formula in the
+  release workflow rather than giving up Linux. The push is a write to another repository, which
+  `GITHUB_TOKEN` cannot do — it needs `HOMEBREW_TAP_TOKEN`, a fine-grained token with contents write
+  on the tap and nothing else. It is an environment secret on `homebrew-tap`, not a repository
+  secret: a repository secret is readable by any job in any workflow on any branch that names it,
+  where an environment secret reaches only the job declaring that environment, and only from the
+  branches its policy allows — `main`. The environment carries no reviewers, so it gates nothing;
+  it is there to scope the secret.
+- `solitary update` (`internal/update`), which does what the install script does to the binary it is
+  running: resolve the latest tag, download, verify, rename over itself. Every other command asks
+  github once a day and mentions a newer release at most three times, only to a terminal, recorded
+  in `update.json` under `XDG_STATE_HOME` — `SOLITARY_NO_UPDATE_CHECK` turns it off.
+
+Only a bare dotted version is treated as a release. `make build` bakes in what `git describe` says
+(`v0.1.1-10-g619fd0f-dirty`), which is *ahead* of the tag it names, not a pre-release of it, so a
+source build is never notified and never replaced.
 
 ## Architecture
 

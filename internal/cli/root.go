@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/update"
 )
 
 // version is overwritten at build time via -ldflags.
@@ -39,6 +41,7 @@ func newRootCmd() *cobra.Command {
 		newSendCmd(),
 		newDashboardCmd(),
 		newSecretsCmd(),
+		newUpdateCmd(),
 	)
 
 	return root
@@ -65,8 +68,9 @@ func confirm(cmd *cobra.Command, prompt string) (bool, error) {
 
 // Main runs the CLI and exits with a non-zero status on failure.
 func Main() {
-	err := newRootCmd().Execute()
+	cmd, err := newRootCmd().ExecuteC()
 	if err == nil {
+		notify(cmd)
 		return
 	}
 
@@ -80,4 +84,23 @@ func Main() {
 
 	fmt.Fprintln(os.Stderr, "solitary:", err)
 	os.Exit(1)
+}
+
+// notify mentions a newer release, at most once a day and only to a person:
+// piped output belongs to whatever is reading it, and update says this itself.
+//
+// exec is left out along with update: it stands in for the command it ran, and
+// nothing solitary has to say belongs in that command's output.
+func notify(cmd *cobra.Command) {
+	switch cmd.Name() {
+	case "update", "exec", "completion":
+		return
+	}
+	if !term.IsTerminal(int(os.Stderr.Fd())) {
+		return
+	}
+
+	if notice := update.Notice(cmd.Context(), version); notice != "" {
+		fmt.Fprintln(os.Stderr, notice)
+	}
 }

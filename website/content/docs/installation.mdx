@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Requirements, a released binary, and building solitary from source.
+description: Requirements, the install script, Homebrew, and keeping solitary current.
 ---
 
 Solitary is on its `0.x` line: the configuration shape can still change between releases. Read [the limitations](/docs/limitations) before trusting a cell with credentials.
@@ -11,7 +11,31 @@ Solitary is on its `0.x` line: the configuration shape can still change between 
 - **[Lima](https://lima-vm.io) 2.0 or newer** — solitary drives `limactl` on the host and `podman` through it in the machine, so there is nothing else to install
 - **Go**, only if you build from source
 
-## Download a release
+## Install
+
+The install script downloads the release archive for your platform, checks it against the published checksum and puts the binary on your PATH. It works on macOS and Linux:
+
+```sh
+curl -fsSL https://solitary.balakin.io/install.sh | sh
+```
+
+It installs into `/usr/local/bin` when that is writable without `sudo` and `~/.local/bin` otherwise. `SOLITARY_INSTALL_DIR` overrides that, and `SOLITARY_VERSION` installs a tag other than the latest:
+
+```sh
+curl -fsSL https://solitary.balakin.io/install.sh | SOLITARY_VERSION=v0.1.1 sh
+```
+
+## Homebrew
+
+A tap of our own carries the formula, on macOS and on Linux, and installs Lima with it:
+
+```sh
+brew install balakin/solitary/solitary
+```
+
+`brew upgrade solitary` keeps it current after that. Both the install script and `solitary update` recognise an install Homebrew owns and say so rather than fighting over the binary.
+
+## Download a release by hand
 
 Every release carries a `tar.gz` per platform and a `checksums.txt`. Pick the archive for your machine — `darwin` or `linux`, `arm64` for Apple silicon, `amd64` otherwise:
 
@@ -27,7 +51,20 @@ install -m 755 solitary /usr/local/bin/solitary
 
 `solitary --version` prints the version that was baked in at build time. The [release page](https://github.com/balakin/solitary/releases/latest) lists every archive and the changelog for the version.
 
-On macOS the binary is unsigned, so Gatekeeper quarantines a download from the browser; fetching it with `curl` as above avoids that.
+On macOS the binary is unsigned, so Gatekeeper quarantines a download from the browser; fetching it with `curl` as above avoids that, and neither Homebrew nor `solitary update` quarantines anything.
+
+## Staying current
+
+`solitary update` replaces the binary with the newest release, after checking it against the published checksum:
+
+```sh
+solitary update          # install the latest release
+solitary update --check  # only say whether one exists
+```
+
+Every other command mentions a newer release once a day, at most three times per release, and only when it is talking to a terminal. Set `SOLITARY_NO_UPDATE_CHECK=1` to keep solitary from asking GitHub anything on its own.
+
+A binary built from source is left alone by both: it is ahead of the release it names rather than behind it.
 
 ## Build from source
 

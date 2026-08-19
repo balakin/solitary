@@ -71,8 +71,14 @@ built from `website/`. Start with the [quickstart](website/content/docs/quicksta
 
 ## Install
 
+```sh
+curl -fsSL https://solitary.balakin.io/install.sh | sh   # macOS and Linux
+brew install balakin/solitary/solitary                   # macOS and Linux
+```
+
 Binaries for macOS and Linux are attached to every
-[release](https://github.com/balakin/solitary/releases/latest); see the
+[release](https://github.com/balakin/solitary/releases/latest) too, and
+`solitary update` replaces the binary with the newest one. See the
 [installation guide](website/content/docs/installation.mdx) for the rest.
 
 Requirements:

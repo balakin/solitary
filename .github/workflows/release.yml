@@ -46,6 +46,11 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write # fill the draft release and publish it
+    # HOMEBREW_TAP_TOKEN lives on this environment rather than on the
+    # repository, so it is readable only by a job that names the environment
+    # and only from main, which its branch policy restricts it to. A
+    # repository secret would be readable by any workflow on any branch.
+    environment: homebrew-tap
     env:
       TAG: ${{ needs.release-please.outputs.tag }}
     steps:
@@ -74,3 +79,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pushing the Homebrew formula is a write to another repository,
+          # which GITHUB_TOKEN cannot do: it is scoped to this one.
+          # HOMEBREW_TAP_TOKEN is a fine-grained token with contents write on
+          # balakin/homebrew-solitary and nothing else, held by the
+          # homebrew-tap environment above.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
