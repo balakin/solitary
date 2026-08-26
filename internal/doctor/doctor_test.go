@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/balakin/solitary/internal/host"
+	"github.com/balakin/solitary/internal/lima"
 )
 
 // isolate points the config and state trees at temporary locations, so a test
@@ -308,6 +309,106 @@ func TestHostAnswersEveryCheck(t *testing.T) {
 		case OK, Warn, Fail:
 		default:
 			t.Errorf("check %q has status %q", c.Name, c.Status)
+		}
+	}
+}
+
+func TestMachinesStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		instances []lima.Instance
+		defined   []machine
+		sizes     map[string]uint64
+		want      Status
+		detail    string
+	}{
+		{
+			name:      "every machine matches its cell",
+			instances: []lima.Instance{{Name: "solitary-a"}},
+			defined:   []machine{{name: "a", disk: "20GiB"}},
+			sizes:     map[string]uint64{"solitary-a": 20 * gib},
+			want:      OK,
+		},
+		{
+			// Lima grows a disk and refuses to shrink one, so this is
+			// the cell that will not start until it is said out loud.
+			name:      "a cell asks for less than its machine has",
+			instances: []lima.Instance{{Name: "solitary-a"}},
+			defined:   []machine{{name: "a", disk: "20GiB"}},
+			sizes:     map[string]uint64{"solitary-a": 50 * gib},
+			want:      Warn,
+			detail:    "a asks for 20.0GiB, its machine has 50.0GiB",
+		},
+		{
+			// A larger disk is fine: that one Lima applies at the next
+			// start.
+			name:      "a cell asks for more than its machine has",
+			instances: []lima.Instance{{Name: "solitary-a"}},
+			defined:   []machine{{name: "a", disk: "80GiB"}},
+			sizes:     map[string]uint64{"solitary-a": 50 * gib},
+			want:      OK,
+		},
+		{
+			// Renaming a cell renames its directory, and the machine
+			// the old name was backed by stays where it was.
+			name:      "a machine with no cell",
+			instances: []lima.Instance{{Name: "solitary-old"}},
+			want:      Warn,
+			detail:    "solitary-old",
+		},
+		{
+			// Lima manages machines for other tools on the same host,
+			// and those are not this tool's to comment on.
+			name:      "a machine that is not a cell's",
+			instances: []lima.Instance{{Name: "default"}},
+			want:      OK,
+		},
+		{
+			// Neither finding hides the other.
+			name:      "both at once",
+			instances: []lima.Instance{{Name: "solitary-a"}, {Name: "solitary-old"}},
+			defined:   []machine{{name: "a", disk: "20GiB"}},
+			sizes:     map[string]uint64{"solitary-a": 50 * gib},
+			want:      Warn,
+			detail:    "solitary-old",
+		},
+		{
+			// A disk that could not be measured is not a finding.
+			name:      "an unmeasurable disk",
+			instances: []lima.Instance{{Name: "solitary-a"}},
+			defined:   []machine{{name: "a", disk: "20GiB"}},
+			want:      OK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := machinesStatus(tt.instances, tt.defined, tt.sizes)
+			if got.Status != tt.want {
+				t.Errorf("machinesStatus() = %q (%s), want %q", got.Status, got.Detail, tt.want)
+			}
+			if tt.detail != "" && !strings.Contains(got.Detail, tt.detail) {
+				t.Errorf("machinesStatus() detail = %q, want it to name %q", got.Detail, tt.detail)
+			}
+			if got.Status != OK && got.Fix == "" {
+				t.Error("machinesStatus() left a finding with nothing to do about it")
+			}
+		})
+	}
+}
+
+// Both findings at once have to carry both fixes, since each names a different
+// command.
+func TestMachinesStatusFixesBoth(t *testing.T) {
+	got := machinesStatus(
+		[]lima.Instance{{Name: "solitary-a"}, {Name: "solitary-old"}},
+		[]machine{{name: "a", disk: "20GiB"}},
+		map[string]uint64{"solitary-a": 50 * gib},
+	)
+
+	for _, want := range []string{"solitary rm", "limactl delete"} {
+		if !strings.Contains(got.Fix, want) {
+			t.Errorf("machinesStatus() fix = %q, want it to name %q", got.Fix, want)
 		}
 	}
 }
