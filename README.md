@@ -64,6 +64,7 @@ built from `website/`. Start with the [quickstart](website/content/docs/quicksta
 | [Networking](website/content/docs/networking.mdx) | Egress control, DNS, ports and VPN routing |
 | [Moving work in and out](website/content/docs/artifacts.mdx) | `fetch`, `send`, and the cell's own `artifact` |
 | [Sharing cells](website/content/docs/sharing.mdx) | Publish a definition; take one out of someone's repository |
+| [Example cells](website/content/docs/guides-examples.mdx) | Two complete cells in [`examples/`](examples/), ready to clone |
 | [The dashboard](website/content/docs/dashboard.mdx) | Every cell and its state in one live view |
 | [Security model](website/content/docs/security.mdx) | What the boundary protects, and what it leaves to you |
 | [Limitations](website/content/docs/limitations.mdx) | What this does not protect against |

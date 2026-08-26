@@ -1,0 +1,21 @@
+#!/bin/sh
+# Seed the cell's home from /opt/cell-skel.
+#
+# The home is a directory on the machine, mounted over /home/cell when the
+# container starts: it outlives every container the cell ever runs, and it is
+# empty the first time. So the image ships its dotfiles here instead, and this
+# merges in whatever is missing — an edit you make inside the cell is never
+# overwritten by a rebuilt image, and a file added to the skel later still
+# arrives.
+set -eu
+
+SKEL=/opt/cell-skel
+
+[ -d "$SKEL" ] || exit 0
+
+# --skip-old-files is what makes this safe to run at every start: it unpacks
+# what is not there and leaves everything else exactly as it is. tar rather
+# than cp because cp's equivalent flag warns that it is going away.
+tar -C "$SKEL" -cf - . | tar -C "$HOME" -xf - --skip-old-files
+
+echo "cell-init: $HOME seeded from $SKEL"

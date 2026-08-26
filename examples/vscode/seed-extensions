@@ -1,0 +1,32 @@
+#!/bin/sh
+# Reconcile the editor's extension list with the ones the image ships.
+#
+# cell-init copies in what the home is missing and overwrites nothing, which is
+# right for a settings file and not enough for extensions: the editor reads
+# extensions.json and ignores any directory not named in it. A home seeded
+# before the image gained an extension therefore has the directory and does not
+# show the extension. Merging the two lists is what makes a rebuilt image
+# arrive.
+#
+# The home's entry wins wherever both name an extension, so a version installed
+# from inside the editor is left alone. An extension the image ships comes back
+# if you uninstall it — take it out of the Containerfile instead.
+set -eu
+
+SKEL=/opt/cell-skel/.openvscode-server/extensions
+DEST="$HOME/.openvscode-server/extensions"
+
+# Nothing to reconcile before the first start: cell-init has just copied the
+# whole store in, list and all.
+[ -f "$SKEL/extensions.json" ] || exit 0
+[ -f "$DEST/extensions.json" ] || exit 0
+
+merged="$DEST/extensions.json.merged"
+jq -s '.[0] + .[1] | group_by(.identifier.id) | map(.[0])' \
+	"$DEST/extensions.json" "$SKEL/extensions.json" > "$merged"
+
+# Renamed over the list it replaces, so an interrupted start cannot leave the
+# editor with half of one.
+mv "$merged" "$DEST/extensions.json"
+
+echo "seed-extensions: $(jq -r 'length' "$DEST/extensions.json") extensions listed"

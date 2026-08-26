@@ -1,0 +1,62 @@
+# An editor in a cell: openvscode-server reached from the host's browser, with
+# claude, node from nvm, corepack, and the extensions a web project wants.
+#
+#   solitary clone balakin/solitary/examples/vscode
+#   solitary up vscode
+#   open http://localhost:9797
+#
+# See https://solitary.balakin.io/docs/guides-examples
+
+build: ./Containerfile
+
+# cell-init seeds the home the first time the container starts, and
+# seed-extensions makes sure the editor's own list names the extensions a
+# rebuilt image added — it reads that list, not the directories beside it. The
+# editor's settings are not seeded at all: the web workbench keeps those in the
+# viewer's browser, so the image sets defaults instead (see the Containerfile).
+# The server is the container's life, so it runs in the foreground.
+#
+# 9797 rather than openvscode-server's own 3000: that port belongs to whatever
+# dev server you are here to work on. It is written twice — change --port and
+# ports: together.
+# The two directory flags are the defaults spelled out: they are where
+# cell-init seeds the settings and the extensions, and naming them here means
+# the editor cannot look somewhere else.
+command: >
+  cell-init && seed-extensions
+  && exec /opt/openvscode-server/bin/openvscode-server
+  --host 0.0.0.0 --port 9797 --without-connection-token
+  --user-data-dir "$HOME/.openvscode-server/data"
+  --extensions-dir "$HOME/.openvscode-server/extensions"
+
+# Naming any port at all turns off forwarding every port the cell listens on,
+# so a dev server started inside the editor does not reach the host until it is
+# listed here too. The three after the editor are the ones a web project
+# reaches for first — add yours beside them.
+ports:
+  - 9797 # the editor
+  - 3000 # next, remix, rails
+  - 5173 # vite
+  - 8080 # everything else
+
+vm:
+  cpus: 4
+  memory: 6GiB
+# Claude signs in inside the cell, and the cell's home survives a container
+# being replaced — so no secret is declared. Uncomment to pass an API key in
+# from ~/.config/solitary/cells/vscode/.env instead.
+#
+# secrets:
+#   - ANTHROPIC_API_KEY
+
+# Left open so the cell reaches whatever the host reaches: an allow list gates
+# the build as well, and a domain missing from it fails the build rather than
+# one request. The list that works for this cell is in the documentation, under
+# "Restrict what it reaches".
+#
+# network:
+#   allow:
+#     - archive.ubuntu.com
+#     - github.com
+#     - open-vsx.org
+#     - api.anthropic.com
