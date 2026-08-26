@@ -1,0 +1,137 @@
+---
+title: Example cells
+description: Two complete cells to clone — a terminal setup around claude, and an editor in the browser.
+---
+
+The repository holds two cell definitions that are meant to be run rather than read. Each is a `cell.yaml`, the `Containerfile` it builds from, and a `skel/` directory of dotfiles.
+
+- **`claude`** — a terminal working environment: claude, Neovim with LazyVim, tmux, [workmux](https://github.com/raine/workmux), and node from nvm with corepack enabled.
+- **`vscode`** — an editor reached from the host's browser: openvscode-server with the extensions a web project wants, plus claude, node and corepack.
+
+## Take one
+
+```sh
+solitary doctor
+solitary clone balakin/solitary/examples/claude
+solitary up claude
+solitary shell claude
+```
+
+`doctor` comes first because both examples ask for `6GiB`, and its `memory` check is the one that says whether every cell you have defined fits at once — see [`doctor` checks the host](/docs/commands#doctor-checks-the-host). If it warns, lower `vm.memory` in the cloned `cell.yaml`; it is a machine setting, so it takes effect at the cell's next boot rather than immediately.
+
+`clone` shows you what the definition asks for before installing anything, and what lands is a copy with no link back here. `--as <name>` takes one under a name of your own, which is also how you run both at once:
+
+```sh
+solitary clone balakin/solitary/examples/claude --as review
+```
+
+The first `up` builds the image inside the cell's own machine, so nothing in either `Containerfile` runs on the host. It is a slow first build — the `claude` cell installs Neovim's plugins and its Mason packages during it, which is what makes opening `nvim` in a fresh cell instant afterwards.
+
+## What is in `claude`
+
+`solitary shell claude` opens a shell in the container with everything already there:
+
+```text
+claude       the agent, from npm
+nvim         LazyVim, plugins and treesitter parsers preinstalled
+tmux         status line at the top, mouse on
+workmux      one agent per git worktree, each in its own tmux window
+node, pnpm   node from nvm, pnpm through corepack
+lazygit, rg, fd, jq
+```
+
+Sign claude in once inside the cell. The cell's home is a directory on the machine rather than in the container, so signing in survives a new image, a changed secret, and `solitary rm` followed by `up` — see [changing a cell](/docs/concepts#changing-a-cell).
+
+workmux has its sandbox turned off in this cell, deliberately. It can put each worktree in a Lima VM of its own, which is the isolation solitary has already provided, and it cannot nest: the cell is the sandbox.
+
+The statusline shows how much of each rate-limit window is left as a duration rather than as a wall-clock time:
+
+```text
+[Opus 5] medium | ctx:34% | 5h:12% (2h5m) | 7d:41% (3d4h)
+```
+
+A cell has no reason to agree with the host on a timezone, and `2h5m` means the same thing in both.
+
+## What is in `vscode`
+
+```sh
+solitary clone balakin/solitary/examples/vscode
+solitary up vscode
+```
+
+Then open `http://localhost:9797`. The port is 9797 rather than openvscode-server's own 3000 because 3000 belongs to whatever dev server you are there to work on; it is written twice in `cell.yaml`, in `--port` and in `ports:`, and the two move together.
+
+The server runs without a connection token. What makes that safe is the forward: a cell's ports reach **host localhost** and nothing else, and the container has no route in from anywhere. See [ports](/docs/configuration#ports).
+
+That same forward is the thing to remember when you start a dev server inside the editor. Naming any port at all turns off forwarding every port the cell listens on, so add yours:
+
+```yaml
+ports:
+  - 9797
+  - 5173
+```
+
+### The editor comes configured
+
+Six extensions are installed at build time, from Open VSX: ESLint, Prettier, Tailwind CSS, EditorConfig, [oxc](https://oxc.rs) and Astro. The user settings format on save, let Prettier do the formatting and ESLint only fix:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+  "eslint.format.enable": false
+}
+```
+
+Both the settings and the extensions are seeded into the cell's home the first time the container starts, rather than baked into the image — so an extension you install from inside the editor stays installed, and a rebuilt image does not overwrite a setting you changed. A project that formats with something else sets its own `editor.defaultFormatter` in its `.vscode/settings.json`, which wins; there is no need to edit the seed for one repository.
+
+## How the dotfiles get there
+
+A cell's home is mounted over the container's, so anything an image writes under `$HOME` is hidden the moment the container runs — and the home starts empty. Both examples handle that the same way: the image ships its dotfiles under `/opt/cell-skel`, and `cell-init` copies in whatever is missing when the container starts.
+
+```yaml
+command: cell-init && exec sleep infinity
+```
+
+It never overwrites. Your edits survive a rebuild, and a file added to the skel later still arrives. It is worth copying into a cell of your own, for the same reason.
+
+## Restrict what it reaches
+
+Neither example sets `network.allow`, so both reach whatever the host reaches. That is the safe default for something you are cloning: the allow list gates the **build** as well as the running cell, and a domain missing from it fails the build rather than one request.
+
+Add it once the cell works. For `claude`:
+
+```yaml
+network:
+  allow:
+    # while it builds
+    - archive.ubuntu.com
+    - security.ubuntu.com
+    - github.com
+    - githubusercontent.com
+    - nodejs.org
+    - registry.npmjs.org
+    # while it runs
+    - api.anthropic.com
+    - statsig.anthropic.com
+    - sentry.io
+```
+
+For `vscode`, the same list plus `open-vsx.org` — needed at build time for the extensions, and again at run time if you install one from inside the editor. Either way, add whatever the code you work on has to reach.
+
+A domain covers its subdomains, and setting `allow` at all makes the cell default-deny. [Network policy](/docs/guides-network-policy) covers what the cell sees when a request is refused.
+
+## Make it yours
+
+A cloned cell is a copy. Edit its `cell.yaml` or its `Containerfile` under `~/.config/solitary/cells/<name>/` and run `up` again — the image rebuilds when the build context changed, and the cell's home is kept.
+
+The versions each cell pins live in the `ARG` lines at the top of its `Containerfile`, which is the one place to change to move Neovim, node or the editor.
+
+To take an updated definition from here without losing your `.env` or anything else you added:
+
+```sh
+solitary clone balakin/solitary/examples/claude --force
+```
+
+See [sharing cells](/docs/sharing) for what `clone` refuses to copy, and [use an image or build a container](/docs/guides-images) for swapping the toolset out entirely.
