@@ -19,13 +19,13 @@ solitary shell claude
 
 `doctor` comes first because both examples ask for `6GiB`, and its `memory` check is the one that says whether every cell you have defined fits at once — see [`doctor` checks the host](/docs/commands#doctor-checks-the-host). If it warns, lower `vm.memory` in the cloned `cell.yaml`; it is a machine setting, so it takes effect at the cell's next boot rather than immediately.
 
-`clone` shows you what the definition asks for before installing anything, and what lands is a copy with no link back here. `--as <name>` takes one under a name of your own, which is also how you run both at once:
+`clone` shows you what the definition asks for before installing anything, and what lands is a copy with no link back here. `--as <name>` takes one under a name of your own, which is how you keep a second copy of the same example — one to change, one to fall back to:
 
 ```sh
 solitary clone balakin/solitary/examples/claude --as review
 ```
 
-The first `up` builds the image inside the cell's own machine, so nothing in either `Containerfile` runs on the host. It is a slow first build — the `claude` cell installs Neovim's plugins and its Mason packages during it, which is what makes opening `nvim` in a fresh cell instant afterwards.
+The first `up` builds the image inside the cell's own machine, so nothing in either `Containerfile` runs on the host. It is a slow first build — the `claude` cell installs Neovim's plugins and its treesitter parsers during it, which is what makes opening `nvim` in a fresh cell instant afterwards.
 
 ## What is in `claude`
 
@@ -40,9 +40,11 @@ node, pnpm   node from nvm, pnpm through corepack
 lazygit, rg, fd, jq
 ```
 
-Sign claude in once inside the cell. The cell's home is a directory on the machine rather than in the container, so signing in survives a new image, a changed secret, and `solitary rm` followed by `up` — see [changing a cell](/docs/concepts#changing-a-cell).
+Sign claude in once inside the cell. The cell's home is a directory on the machine rather than in the container, so the login survives every change that replaces the container — a new image, an edited `Containerfile`, a rotated secret. It does not survive `solitary rm`, which discards the machine's disk and the home with it. Declaring `ANTHROPIC_API_KEY` under `secrets:` is the other way round: the value is held on the host, so it outlives the cell entirely. See [changing a cell](/docs/concepts#changing-a-cell).
 
 workmux has its sandbox turned off in this cell, deliberately. It can put each worktree in a Lima VM of its own, which is the isolation solitary has already provided, and it cannot nest: the cell is the sandbox.
+
+The seeded `~/.claude/settings.json` sets `skipDangerousModePermissionPrompt`, so claude does not ask you to confirm that you meant to skip permissions. That is a setting to make deliberately, and it is here because the cell is the answer to the question it asks: the agent already cannot reach the host, and what it can reach is what `cell.yaml` says. Delete the line if you would rather be asked.
 
 The statusline shows how much of each rate-limit window is left as a duration rather than as a wall-clock time:
 
