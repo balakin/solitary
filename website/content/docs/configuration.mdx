@@ -115,7 +115,7 @@ Every field is optional and falls back to `config.yaml`, then to the defaults bu
 | `base`      | `ubuntu-lts` | The Lima image template.                                                                                                                    |
 | `cpus`      | `2`          |                                                                                                                                             |
 | `memory`    | `4GiB`       | On Linux this must fit `/dev/shm`; see [troubleshooting](/docs/troubleshooting).                                                            |
-| `disk`      | `20GiB`      |                                                                                                                                             |
+| `disk`      | `20GiB`      | Grows at the next boot. It cannot shrink: a value below what the machine already has is refused, naming both ways out.                      |
 | `provision` | —            | A shell script run once, as root, after the built-in podman setup. A value here **replaces** the user-wide one rather than appending to it. |
 
 ```yaml

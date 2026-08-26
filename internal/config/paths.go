@@ -101,8 +101,11 @@ func UserConfigFile() (string, error) {
 	return filepath.Join(root, "config.yaml"), nil
 }
 
-// Instance is the name of the Lima machine backing a cell. Cells are prefixed
-// so they are distinguishable from machines Lima manages for other tools.
+// InstancePrefix opens the name of every machine a cell is backed by, and is
+// what tells one apart from a machine Lima manages for something else.
+const InstancePrefix = "solitary-"
+
+// Instance is the name of the Lima machine backing a cell.
 func Instance(name string) string {
-	return "solitary-" + name
+	return InstancePrefix + name
 }

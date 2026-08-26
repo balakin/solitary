@@ -80,6 +80,21 @@ Stopping and starting applies them. The disk, the cell's home, and the secrets a
 
 Removing a setting applies the same way, and applies fully: a machine that was restricted or tunnelled has its resolver, firewall and tunnel taken back out at the next boot, so what the guest enforces is what `cell.yaml` says.
 
+## A smaller `vm.disk` than the machine has
+
+A disk grows at the next boot and never shrinks — Lima has no way to give the space back. So a `vm.disk` below what the machine already carries is refused before anything is written:
+
+```text
+solitary: cell "vscode" asks for a 20.0GiB disk, but its machine already has 50.0GiB,
+and a disk cannot be shrunk.
+Set vm.disk to 50GiB or more in ~/.config/solitary/cells/vscode/cell.yaml,
+or discard the machine and everything on it with 'solitary rm vscode' and run up again
+```
+
+Both ways out are real ones. Raising the setting keeps the machine and everything on it, and costs nothing: a disk is allocated sparsely, so a larger one does not take more space than it holds. `rm` then `up` gets a machine built to the smaller size and discards the disk, the cell's home with it.
+
+This bites hardest on a cell that is not the one you think: a cell is named by its directory, so a definition installed under a name a previous cell used is backed by that cell's machine. `solitary doctor` reports both — the mismatch, and any machine no cell names any more.
+
 ## A change to `vm.provision`
 
 The one setting a restart cannot apply, because the old script has already run:

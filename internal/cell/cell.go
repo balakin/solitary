@@ -167,7 +167,12 @@ func Up(name string, progress io.Writer) error {
 	default:
 		// A stopped machine reads its definition again when it starts, so
 		// this is the moment a change to the vm block can take effect
-		// without destroying the disk that machine carries.
+		// without destroying the disk that machine carries. The one such
+		// change a machine cannot take is asked about before the
+		// definition is replaced.
+		if err := verifyDisk(name, instance, c.VM.Disk); err != nil {
+			return err
+		}
 		if err := applyDrift(name, instance, c, rendered, progress); err != nil {
 			return err
 		}
@@ -726,6 +731,57 @@ func verifyMemory(memory string, progress io.Writer) error {
 	}
 
 	return nil
+}
+
+// verifyDisk refuses a vm.disk smaller than the disk the machine already has.
+//
+// Lima grows a disk when a machine starts and gives up on a smaller one with
+// "disk shrinking is not supported" — after the new definition has been written
+// in, which leaves the machine holding a definition that cannot start it and
+// says nothing about which setting was at fault. Asking first turns that into a
+// sentence naming the cell, both sizes and the two ways out.
+//
+// A disk whose size cannot be read is not a reason to refuse: the check is
+// skipped rather than guessed at, and Lima still has the last word.
+func verifyDisk(name, instance, disk string) error {
+	actual := lima.DiskSize(instance)
+	if actual == 0 {
+		return nil
+	}
+
+	// A size that does not parse reads as zero and is left alone: what
+	// vm.disk may say is Lima's to rule on, and refusing here would stop a
+	// machine over a string solitary only passes through.
+	want, _ := host.ParseSize(disk)
+	if want == 0 || want >= actual {
+		return nil
+	}
+
+	path, err := config.CellFile(name)
+	if err != nil {
+		return err
+	}
+
+	return diskRefusal(name, path, want, actual)
+}
+
+// diskRefusal is the sentence verifyDisk refuses with, separated from the host
+// it measures so that what it says can be tested.
+func diskRefusal(name, path string, want, actual uint64) error {
+	return fmt.Errorf("cell %q asks for a %s disk, but its machine already has %s, and a disk cannot be shrunk.\n"+
+		"Set vm.disk to %s or more in %s,\n"+
+		"or discard the machine and everything on it with 'solitary rm %s' and run up again",
+		name, host.FormatSize(want), host.FormatSize(actual), wholeGiB(actual), path, name)
+}
+
+// wholeGiB renders a size as a whole number of GiB, rounded up, for a value
+// someone is being asked to write into cell.yaml. FormatSize is right for
+// reporting what was measured; a setting reads better without a decimal, and
+// rounding up keeps the suggestion above what it has to clear.
+func wholeGiB(b uint64) string {
+	const gib = 1 << 30
+
+	return fmt.Sprintf("%dGiB", (b+gib-1)/gib)
 }
 
 // warnDrift reports settings that changed since the machine started. Lima

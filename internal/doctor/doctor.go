@@ -61,6 +61,7 @@ func Host() []Check {
 		checkHypervisor(),
 		checkMemory(),
 		checkDisk(),
+		checkMachines(),
 		checkConfig(),
 		checkProxy(),
 	}
@@ -326,10 +327,108 @@ func checkProxy() Check {
 	}
 }
 
+// checkMachines compares the machines on this host with the cells defined for
+// them. The two drift apart in ways nothing else reports: a cell renamed by
+// renaming its directory leaves its old machine behind, and a machine whose
+// disk grew once cannot be given a smaller vm.disk afterwards.
+func checkMachines() Check {
+	instances, err := lima.List()
+	if err != nil {
+		return Check{Name: "machines", Status: Warn, Detail: err.Error()}
+	}
+	defined, _ := definedMachines()
+
+	// Measured here rather than in the judgement below, so that what is
+	// asked of this host stays in one place. A disk that cannot be measured
+	// is left out: an unknown size is not a finding.
+	sizes := make(map[string]uint64, len(instances))
+	for _, inst := range instances {
+		if size := lima.DiskSize(inst.Name); size > 0 {
+			sizes[inst.Name] = size
+		}
+	}
+
+	return machinesStatus(instances, defined, sizes)
+}
+
+// machinesStatus is the judgement checkMachines makes, separated from the host
+// it asks about so it can be exercised against hosts this one is not.
+func machinesStatus(instances []lima.Instance, defined []machine, sizes map[string]uint64) Check {
+	cellOf := make(map[string]machine, len(defined))
+	for _, m := range defined {
+		cellOf[config.Instance(m.name)] = m
+	}
+
+	var orphans, shrunk []string
+	for _, inst := range instances {
+		m, ok := cellOf[inst.Name]
+		if !ok {
+			if strings.HasPrefix(inst.Name, config.InstancePrefix) {
+				orphans = append(orphans, inst.Name)
+			}
+			continue
+		}
+
+		actual, ok := sizes[inst.Name]
+		if !ok {
+			continue
+		}
+		want, err := host.ParseSize(m.disk)
+		if err == nil && want < actual {
+			shrunk = append(shrunk, fmt.Sprintf("%s asks for %s, its machine has %s",
+				m.name, host.FormatSize(want), host.FormatSize(actual)))
+		}
+	}
+
+	// Both are reported when both are there: a disk that cannot shrink is
+	// about one cell, a machine with no cell is about another, and hiding
+	// either behind the other is how one of them goes unnoticed for months.
+	var detail, fix []string
+	if len(shrunk) > 0 {
+		detail = append(detail, strings.Join(shrunk, "; ")+"; a disk cannot be shrunk")
+		fix = append(fix,
+			"Raise vm.disk to what the machine already has, or discard the machine and",
+			"everything on it with 'solitary rm <name>'.")
+	}
+	if len(orphans) > 0 {
+		detail = append(detail, fmt.Sprintf("%s with no cell: %s", machineCount(len(orphans)), strings.Join(orphans, ", ")))
+		fix = append(fix,
+			"A cell is named by its directory, so renaming one leaves its machine behind,",
+			"holding the disk it was given. Discard one with 'limactl delete <name>'.")
+	}
+	if len(detail) == 0 {
+		return Check{
+			Name:   "machines",
+			Status: OK,
+			Detail: fmt.Sprintf("%s, each matching the cell that defines it", machineCount(len(instances))),
+		}
+	}
+
+	// A warning rather than a failure: the host is fine, and it is one cell
+	// that will not start. up says which, and says it in the only place the
+	// question comes up.
+	return Check{
+		Name:   "machines",
+		Status: Warn,
+		Detail: strings.Join(detail, "; "),
+		Fix:    strings.Join(fix, "\n"),
+	}
+}
+
+// machineCount pluralises a count, as cells does for the checks above.
+func machineCount(n int) string {
+	if n == 1 {
+		return "1 machine"
+	}
+
+	return fmt.Sprintf("%d machines", n)
+}
+
 // machine is what the host-level checks need out of a cell definition.
 type machine struct {
 	name   string
 	memory string
+	disk   string
 }
 
 // definedMachines reads every cell definition, reporting how many could not be
@@ -348,7 +447,7 @@ func definedMachines() (machines []machine, unreadable int) {
 			unreadable++
 			continue
 		}
-		machines = append(machines, machine{name: name, memory: c.VM.Memory})
+		machines = append(machines, machine{name: name, memory: c.VM.Memory, disk: c.VM.Disk})
 	}
 
 	return machines, unreadable
