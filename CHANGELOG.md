@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/balakin/solitary/compare/v0.3.0...v0.4.0) (2026-08-26)
+
+
+### Features
+
+* add example cells for claude and vscode ([d2118cc](https://github.com/balakin/solitary/commit/d2118cc5790be52950adef95f23d6623fdb6069c))
+* add example cells for claude and vscode ([#31](https://github.com/balakin/solitary/issues/31)) ([824dd07](https://github.com/balakin/solitary/commit/824dd0727abd1c1b310414ccd918348600790db3))
+* give the vscode example a theme, claude's extension and the usual ports ([5757883](https://github.com/balakin/solitary/commit/5757883c8dac764be1651d835f764cc67bf03ccf))
+
+
+### Bug Fixes
+
+* make the example cells' first start and build exit cleanly ([18da387](https://github.com/balakin/solitary/commit/18da3875be0bf6b98bcc8caac406bc50371c9d23))
+* make the vscode example show an extension a rebuilt image added ([c95a4fa](https://github.com/balakin/solitary/commit/c95a4fab33c18a020b16aa24578469f039d8941b))
+* refuse a vm.disk smaller than the machine already has ([7d7cd5d](https://github.com/balakin/solitary/commit/7d7cd5d310357afc46d4c783915a4b702cb245b2))
+* refuse a vm.disk smaller than the machine already has ([#32](https://github.com/balakin/solitary/issues/32)) ([b518b6e](https://github.com/balakin/solitary/commit/b518b6ed01af1c54c10c3cceddfe5d8329a91f94))
+* set the vscode example's editor defaults where the editor reads them ([95855f0](https://github.com/balakin/solitary/commit/95855f09cb9af61727d8434e27783c82e69470d8))
+
 ## [0.3.0](https://github.com/balakin/solitary/compare/v0.2.0...v0.3.0) (2026-08-19)
 
 
