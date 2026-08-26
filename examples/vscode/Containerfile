@@ -59,6 +59,27 @@ RUN arch="$(uname -m)" \
  && mv "/opt/openvscode-server-v${OPENVSCODE_VERSION}-linux-${vs_arch}" /opt/openvscode-server \
  && rm /tmp/openvscode.tar.gz
 
+# The editor's defaults.
+#
+# They cannot be shipped as a settings file: the web workbench keeps its user
+# data in the viewer's browser (IndexedDB, per origin), not in --user-data-dir,
+# and openvscode-server has no flag for defaults — product.overrides.json is
+# read only by a dev build. What upstream does define is configurationDefaults,
+# one of the options the page hands to create(), and nothing sets it. So this
+# does, in the one call that builds the workbench.
+#
+# Defaults, not settings: anything the viewer changes in the editor is stored in
+# their browser and still wins. The count check pins this to OPENVSCODE_VERSION
+# — a bundle that no longer holds exactly one such call fails the build here
+# rather than quietly dropping the defaults.
+COPY editor-defaults.json /opt/editor-defaults.json
+RUN set -eu; \
+    bootstrap=/opt/openvscode-server/out/vs/code/browser/workbench/workbench.js; \
+    test "$(grep -c 'document\.body,{' "$bootstrap")" = 1; \
+    defaults="$(jq -c . /opt/editor-defaults.json)"; \
+    sed -i "s|document\.body,{|document.body,{configurationDefaults:$defaults,|" "$bootstrap"; \
+    node --check "$bootstrap"
+
 # Extensions are installed into the skel rather than into /opt, so they are
 # seeded into the cell's home alongside anything you install later from inside
 # the editor — and survive the container being replaced.

@@ -81,7 +81,7 @@ Anything listening on another port needs it added here, and `ports` is read when
 
 Eight extensions are installed at build time, from Open VSX: Claude Code, ESLint, Prettier, Tailwind CSS, EditorConfig, [oxc](https://oxc.rs) and Astro, plus GitHub's themes. Claude Code's extension is there as well as the CLI — it drives the same agent from inside the editor, against the cell's own installation.
 
-The user settings pick a dark theme, format on save, and let Prettier do the formatting while ESLint only fixes:
+The editor's defaults — a dark theme, format on save, Prettier formatting while ESLint only fixes — are built into the image:
 
 ```json
 {
@@ -93,9 +93,13 @@ The user settings pick a dark theme, format on save, and let Prettier do the for
 }
 ```
 
-Both the settings and the extensions are seeded into the cell's home the first time the container starts, rather than baked into the image — so an extension you install from inside the editor stays installed, and a rebuilt image does not overwrite a setting you changed.
+Not as a settings file, because that would not work. The web workbench keeps its user data in the **viewer's browser** — IndexedDB, per origin — rather than in the server's `--user-data-dir`, so a `settings.json` placed inside the cell is never read by the editor, and openvscode-server has no flag for defaults either: its `product.overrides.json` is read only by a development build. What upstream does define is `configurationDefaults`, one of the options the page hands to `create()`, and nothing sets it — so the `Containerfile` injects it into the workbench bootstrap and checks that the result still parses. A bundle that no longer matches fails the build rather than quietly dropping the defaults.
 
-Extensions need one thing more, which `seed-extensions` does at every start: the editor reads `extensions.json` and ignores any directory not named in it, so a home seeded before the image gained an extension would hold the directory and never show the extension. The two lists are merged, and the home's entry wins wherever both name one, so a version you installed yourself is left alone. An extension the image ships comes back if you uninstall it — take it out of the `Containerfile` instead. A project that formats with something else sets its own `editor.defaultFormatter` in its `.vscode/settings.json`, which wins; there is no need to edit the seed for one repository.
+They are defaults, so anything you change in the editor is kept in your browser and still wins. That is the catch worth knowing, and it runs the other way too: those changes are per browser and per origin, they are not in the cell, and `solitary rm` does not clear them. Reset the site's data in the browser to get back to the defaults.
+
+Extensions are the opposite — they live on the server, so the cell does own them. They are seeded into its home the first time the container starts rather than left in the image, so an extension you install from inside the editor stays installed and a rebuilt image does not remove it.
+
+They need one thing more, which `seed-extensions` does at every start: the editor reads `extensions.json` and ignores any directory not named in it, so a home seeded before the image gained an extension would hold the directory and never show the extension. The two lists are merged, and the home's entry wins wherever both name one, so a version you installed yourself is left alone. An extension the image ships comes back if you uninstall it — take it out of the `Containerfile` instead.
 
 ## How the dotfiles get there
 
@@ -105,7 +109,7 @@ A cell's home is mounted over the container's, so anything an image writes under
 command: cell-init && exec sleep infinity
 ```
 
-It never overwrites. Your edits survive a rebuild, and a file added to the skel later still arrives — but a file that _changed_ in the skel does not, because the home already has one. That is the trade, and it is the right way round for a dotfile: to take a new version of one, copy it in from `/opt/cell-skel/` yourself. Anything that has to reconcile rather than copy — the editor's extension list, above — needs a step of its own.
+It never overwrites. Your edits survive a rebuild, and a file added to the skel later still arrives — but a file that _changed_ in the skel does not, because the home already has one. That is the trade, and it is the right way round for a dotfile: to take a new version of one, copy it in from `/opt/cell-skel/` yourself. Anything that has to reconcile rather than copy — the editor's extension list, above — needs a step of its own, and anything the cell does not own at all, like the web editor's settings, cannot be seeded from here.
 
 ## Restrict what it reaches
 
