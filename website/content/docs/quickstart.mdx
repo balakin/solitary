@@ -3,9 +3,29 @@ title: Quickstart
 description: Create, enter, use, and destroy a cell.
 ---
 
-This walks one cell from nothing to gone. It assumes solitary is [built and on your PATH](/docs/installation).
+This walks a cell from nothing to gone, twice: first one somebody already wrote, then one of your own. It assumes solitary is [built and on your PATH](/docs/installation).
 
-## Scaffold a definition
+## Start with one that exists
+
+The repository ships two finished cells. Take the editor one:
+
+```sh
+solitary clone balakin/solitary/examples/vscode
+solitary up vscode --detach
+```
+
+`clone` shows you what the definition asks for — its image, its machine, the secrets it wants, what it may reach — and installs a copy only after you say yes. `up` then creates the machine and builds the image **inside it**, so nothing in that `Containerfile` runs on your host. Expect the first build to take a while; it is downloading an editor and its extensions.
+
+When it finishes, open **http://localhost:9797**. That is VS Code, running in the cell, reached through a port the cell forwards to your host's localhost — and to localhost only, which is what makes an editor with no password on it safe to run this way.
+
+```sh
+solitary shell vscode      # a shell in the same cell
+solitary ls                # every cell and its state
+```
+
+`--detach` is what leaves you at your own prompt rather than in the cell's shell; without it, `up` attaches one. See [example cells](/docs/guides-examples) for what is inside this one and how to change it.
+
+## Then write your own
 
 ```sh
 solitary init demo
@@ -27,7 +47,7 @@ Everything else — `secrets`, `network`, `ports`, `vm`, `git` — is commented 
 solitary up demo
 ```
 
-`up` creates the machine if it is missing, boots it if it is stopped, replaces the container if the image or the secrets changed, asks for any declared secret that has no value, and then opens a shell inside the container. The first run takes a couple of minutes; every one after is seconds.
+`up` creates the machine if it is missing, boots it if it is stopped, replaces the container if the image or the secrets changed, asks for any declared secret that has no value, and then opens a shell inside the container. A cell on a published image is up in a couple of minutes; every run after is seconds.
 
 `up` is the only command that changes state, and it is idempotent. Editing `cell.yaml` and running `up` again is the entire change workflow.
 
@@ -68,14 +88,20 @@ The file lands in your current directory, not executable. See [moving work in an
 ## Stop or destroy it
 
 ```sh
-solitary ls           # every cell and its state
-solitary down demo    # stop the machine, keep the disk
-solitary rm demo      # destroy the machine and its disk
+solitary ls             # every cell and its state
+solitary down demo      # stop the machine, keep the disk
+solitary rm demo        # destroy the machine and its disk
+solitary rm vscode      # and the one you cloned, if you are done with it
 ```
 
 `rm` leaves the definition and the host-held secret values behind, so `solitary up demo` gives you a clean cell that is still authenticated. A clean rebuild is a normal operation here, not incident response.
 
 <Cards>
+  <Card
+    title="Example cells"
+    href="/docs/guides-examples"
+    description="Two complete cells to clone, and what is in them."
+  />
   <Card
     title="The configuration reference"
     href="/docs/configuration"
