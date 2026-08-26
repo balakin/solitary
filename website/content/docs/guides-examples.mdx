@@ -6,7 +6,7 @@ description: Two complete cells to clone — a terminal setup around claude, and
 The repository holds two cell definitions that are meant to be run rather than read. Each is a `cell.yaml`, the `Containerfile` it builds from, and a `skel/` directory of dotfiles.
 
 - **`claude`** — a terminal working environment: claude, Neovim with LazyVim, tmux, [workmux](https://github.com/raine/workmux), and node from nvm with corepack enabled.
-- **`vscode`** — an editor reached from the host's browser: openvscode-server with the extensions a web project wants, plus claude, node and corepack.
+- **`vscode`** — an editor reached from the host's browser: openvscode-server with the extensions a web project wants, a dark theme, and the ports a dev server listens on, plus claude, node and corepack.
 
 ## Take one
 
@@ -65,20 +65,27 @@ Then open `http://localhost:9797`. The port is 9797 rather than openvscode-serve
 
 The server runs without a connection token. What makes that safe is the forward: a cell's ports reach **host localhost** and nothing else, and the container has no route in from anywhere. See [ports](/docs/configuration#ports).
 
-That same forward is the thing to remember when you start a dev server inside the editor. Naming any port at all turns off forwarding every port the cell listens on, so add yours:
+That same forward is the thing to remember when you start a dev server inside the editor. Naming any port at all turns off forwarding every port the cell listens on, so the cell names the three a web project reaches for first alongside the editor's:
 
 ```yaml
 ports:
-  - 9797
-  - 5173
+  - 9797 # the editor
+  - 3000 # next, remix, rails
+  - 5173 # vite
+  - 8080 # everything else
 ```
+
+Anything listening on another port needs it added here, and `ports` is read when the machine boots — `solitary down vscode && solitary up vscode` is what applies a change to it.
 
 ### The editor comes configured
 
-Six extensions are installed at build time, from Open VSX: ESLint, Prettier, Tailwind CSS, EditorConfig, [oxc](https://oxc.rs) and Astro. The user settings format on save, let Prettier do the formatting and ESLint only fix:
+Eight extensions are installed at build time, from Open VSX: Claude Code, ESLint, Prettier, Tailwind CSS, EditorConfig, [oxc](https://oxc.rs) and Astro, plus GitHub's themes. Claude Code's extension is there as well as the CLI — it drives the same agent from inside the editor, against the cell's own installation.
+
+The user settings pick a dark theme, format on save, and let Prettier do the formatting while ESLint only fixes:
 
 ```json
 {
+  "workbench.colorTheme": "GitHub Dark Default",
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },

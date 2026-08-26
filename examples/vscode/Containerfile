@@ -66,13 +66,20 @@ RUN arch="$(uname -m)" \
 # openvscode-server's marketplace is Open VSX, where these ids are
 # case-sensitive. Deliberately unpinned: --install-extension takes the current
 # version at build time. Append @<version> to pin one.
+#
+# Claude Code's own extension is here alongside the CLI: it drives the same
+# agent from inside the editor. GitHub's themes are here because a theme is
+# the one setting nobody wants to pick twice, and the seeded settings name one
+# of them.
 RUN for ext in \
+      Anthropic.claude-code \
       dbaeumer.vscode-eslint \
       esbenp.prettier-vscode \
       bradlc.vscode-tailwindcss \
       EditorConfig.EditorConfig \
       oxc.oxc-vscode \
-      astro-build.astro-vscode; do \
+      astro-build.astro-vscode \
+      GitHub.github-vscode-theme; do \
       /opt/openvscode-server/bin/openvscode-server \
         --extensions-dir /opt/cell-skel/.openvscode-server/extensions \
         --install-extension "$ext" || exit 1; \

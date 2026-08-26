@@ -27,10 +27,13 @@ command: >
 
 # Naming any port at all turns off forwarding every port the cell listens on,
 # so a dev server started inside the editor does not reach the host until it is
-# listed here too.
+# listed here too. The three after the editor are the ones a web project
+# reaches for first — add yours beside them.
 ports:
-  - 9797
-  # - 5173
+  - 9797 # the editor
+  - 3000 # next, remix, rails
+  - 5173 # vite
+  - 8080 # everything else
 
 vm:
   cpus: 4
