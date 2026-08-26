@@ -103,14 +103,22 @@ COPY skel/ /opt/cell-skel/
 COPY cell-init /usr/local/bin/cell-init
 RUN chmod 755 /usr/local/bin/cell-init /opt/cell-skel/.claude/statusline-command.sh
 
-# LazyVim, its plugins and its Mason packages are installed here rather than on
-# first start: a build is the one place with time to spend, and it is what makes
-# opening nvim in a fresh cell instant. HOME points at the skel so that both the
-# config and the state it produces are seeded together.
+# LazyVim, its plugins and its treesitter parsers are installed here rather than
+# on first start: a build is the one place with time to spend, and it is what
+# makes opening nvim in a fresh cell instant. HOME points at the skel so that
+# both the config and the state it produces are seeded together.
+#
+# TSInstall is asynchronous and headless nvim would exit out from under it, so
+# the second run waits for the parsers to appear rather than for a fixed number
+# of seconds. The list above installs a few more than the 20 it waits for —
+# some of its entries share a parser — and the count is checked again
+# afterwards: a wait that timed out leaves nvim quitting either way, and only
+# the test can tell the difference.
 RUN git clone --depth 1 https://github.com/LazyVim/starter /opt/cell-skel/.config/nvim \
  && rm -rf /opt/cell-skel/.config/nvim/.git \
  && HOME=/opt/cell-skel timeout 900 nvim --headless "+Lazy! sync" +qa \
  && HOME=/opt/cell-skel timeout 900 nvim --headless \
       "+TSInstall bash c diff html javascript jsdoc json lua luadoc luap markdown markdown_inline printf python query regex toml tsx typescript vim vimdoc xml yaml" \
-      "+lua vim.defer_fn(function() vim.api.nvim_command('qa!') end, 600000)" \
- && test "$(find /opt/cell-skel/.local/share/nvim -type f \( -name '*.so' -o -name '*-parser' \) | wc -l)" -ge 20
+      "+lua vim.wait(600000, function() return #vim.fn.glob(vim.fn.stdpath('data') .. '/**/parser/*.so', true, true) >= 20 end, 2000) vim.cmd('qa!')" \
+ && test "$(find /opt/cell-skel/.local/share/nvim -type f \( -name '*.so' -o -name '*-parser' \) | wc -l)" -ge 20 \
+ && rm -rf /opt/cell-skel/.cache /opt/cell-skel/.local/state/nvim
