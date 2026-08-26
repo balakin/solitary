@@ -1,0 +1,24 @@
+#!/bin/sh
+# Seed the cell's home from /opt/cell-skel.
+#
+# The home is a directory on the machine, mounted over /home/cell when the
+# container starts: it outlives every container the cell ever runs, and it is
+# empty the first time. So the image ships its dotfiles here instead, and this
+# copies in only what is missing — an edit you make inside the cell is never
+# overwritten by a rebuilt image, and a file added to the skel later still
+# arrives.
+set -eu
+
+SKEL=/opt/cell-skel
+
+[ -d "$SKEL" ] || exit 0
+
+cd "$SKEL"
+find . -mindepth 1 -type d -exec mkdir -p "$HOME/{}" \;
+find . -mindepth 1 -type f | while IFS= read -r file; do
+	dest="$HOME/${file#./}"
+	if [ ! -e "$dest" ]; then
+		cp -p "$file" "$dest"
+		echo "seeded ${file#./}"
+	fi
+done

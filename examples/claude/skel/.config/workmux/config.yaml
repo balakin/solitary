@@ -1,0 +1,10 @@
+# workmux inside a cell.
+#
+# The one setting that matters here is the sandbox being off. workmux can put
+# each worktree in a Lima VM of its own, which is the same isolation solitary
+# already provides — and it cannot nest: there is no hypervisor inside the
+# container. The cell is the sandbox.
+agent: claude
+
+sandbox:
+  enabled: false

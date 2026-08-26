@@ -1,0 +1,44 @@
+# A terminal working environment: claude, neovim (LazyVim), tmux and workmux,
+# with node from nvm and corepack enabled.
+#
+#   solitary clone balakin/solitary/examples/claude
+#   solitary up claude
+#   solitary shell claude
+#
+# See https://solitary.balakin.io/docs/guides-examples
+
+build: ./Containerfile
+
+# cell-init seeds ~/.bashrc, ~/.tmux.conf, ~/.config/nvim and the rest into the
+# cell's home the first time the container starts. The home is a directory on
+# the machine, not in the image, so what it seeds is yours to edit afterwards
+# and a rebuilt image never overwrites it.
+command: cell-init && exec sleep infinity
+
+vm:
+  cpus: 4
+  memory: 6GiB
+  # Neovim's plugins and Mason's packages are baked into the image, so the
+  # build is the large thing here rather than the home.
+  disk: 40GiB
+# Claude signs in inside the cell, and the cell's home survives a container
+# being replaced — so no secret is declared. Uncomment to pass an API key in
+# from ~/.config/solitary/cells/claude/.env instead.
+#
+# secrets:
+#   - ANTHROPIC_API_KEY
+
+# Left open so the cell reaches whatever the host reaches: an allow list gates
+# the build as well, and a domain missing from it fails the build rather than
+# one request. The list that works for this cell is in the documentation, under
+# "Restrict what it reaches".
+#
+# network:
+#   allow:
+#     - archive.ubuntu.com
+#     - github.com
+#     - api.anthropic.com
+
+# git:
+#   name: Ada Lovelace
+#   email: ada@example.com

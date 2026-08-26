@@ -1,0 +1,116 @@
+# The toolset for the claude cell. The VM around it is the boundary; this is
+# replaceable tooling, so everything here is installed from a pinned version and
+# nothing here holds a credential.
+FROM docker.io/library/ubuntu:24.04
+
+# The versions this cell pins. Nothing else in the repository names them.
+ARG NODE_VERSION=24.20.0
+ARG NVM_VERSION=v0.40.7
+ARG NVIM_VERSION=v0.12.5
+ARG LAZYGIT_VERSION=0.64.1
+ARG WORKMUX_VERSION=v0.1.247
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NVM_DIR=/opt/nvm
+# /opt/nvm/current is a symlink this file creates. It keeps node on PATH for
+# `solitary exec`, which runs a command in a non-interactive shell where nvm's
+# own shell function is never sourced.
+ENV PATH=/opt/nvm/current/bin:/usr/local/bin:$PATH
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      bash-completion \
+      build-essential \
+      ca-certificates \
+      curl \
+      fd-find \
+      git \
+      jq \
+      less \
+      ripgrep \
+      tmux \
+      unzip \
+      xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+# nvm lives in /opt rather than in the home, because the cell's home is a
+# directory on the machine that is mounted over /home/cell at start: anything
+# this image writes under there would be hidden the moment the container runs.
+# PROFILE=/dev/null keeps the installer from editing a shell rc that the seeded
+# ~/.bashrc owns.
+RUN mkdir -p "$NVM_DIR" \
+ && curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" \
+    | PROFILE=/dev/null bash \
+ && . "$NVM_DIR/nvm.sh" \
+ && nvm install "$NODE_VERSION" \
+ && nvm alias default "$NODE_VERSION" \
+ && ln -s "$NVM_DIR/versions/node/v${NODE_VERSION}" "$NVM_DIR/current" \
+ && corepack enable \
+ && node --version
+
+RUN npm install -g @anthropic-ai/claude-code \
+ && claude --version
+
+# Neovim: Ubuntu ships one far too old for LazyVim.
+RUN arch="$(uname -m)" \
+ && case "$arch" in \
+      x86_64)  nvim_arch=x86_64 ;; \
+      aarch64) nvim_arch=arm64 ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /tmp/nvim.tar.gz \
+      "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-${nvim_arch}.tar.gz" \
+ && tar -C /opt -xzf /tmp/nvim.tar.gz \
+ && ln -s "/opt/nvim-linux-${nvim_arch}/bin/nvim" /usr/local/bin/nvim \
+ && rm /tmp/nvim.tar.gz \
+ && nvim --version | head -n 1
+
+# lazygit drives LazyVim's <leader>gg, which is only mapped when the binary is
+# there.
+RUN arch="$(uname -m)" \
+ && case "$arch" in \
+      x86_64)  lg_arch=x86_64 ;; \
+      aarch64) lg_arch=arm64 ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /tmp/lazygit.tar.gz \
+      "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_linux_${lg_arch}.tar.gz" \
+ && tar -C /tmp -xzf /tmp/lazygit.tar.gz lazygit \
+ && install -m755 /tmp/lazygit /usr/local/bin/lazygit \
+ && rm /tmp/lazygit.tar.gz /tmp/lazygit \
+ && lazygit --version
+
+# workmux runs one agent per git worktree in its own tmux window. Verified
+# against the checksum published beside the archive.
+RUN arch="$(uname -m)" \
+ && case "$arch" in \
+      x86_64)  wm_arch=amd64 ;; \
+      aarch64) wm_arch=arm64 ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac \
+ && base="https://github.com/raine/workmux/releases/download/${WORKMUX_VERSION}/workmux-linux-${wm_arch}" \
+ && curl -fsSL -o /tmp/workmux.tar.gz "${base}.tar.gz" \
+ && curl -fsSL -o /tmp/workmux.sha256 "${base}.sha256" \
+ && echo "$(cut -d' ' -f1 /tmp/workmux.sha256)  /tmp/workmux.tar.gz" | sha256sum -c - \
+ && tar -C /tmp -xzf /tmp/workmux.tar.gz \
+ && install -m755 /tmp/workmux /usr/local/bin/workmux \
+ && rm /tmp/workmux.tar.gz /tmp/workmux.sha256 /tmp/workmux \
+ && workmux --version
+
+# Everything under /opt/cell-skel is copied into the cell's home the first time
+# the container starts, and only where nothing is there already.
+COPY skel/ /opt/cell-skel/
+COPY cell-init /usr/local/bin/cell-init
+RUN chmod 755 /usr/local/bin/cell-init /opt/cell-skel/.claude/statusline-command.sh
+
+# LazyVim, its plugins and its Mason packages are installed here rather than on
+# first start: a build is the one place with time to spend, and it is what makes
+# opening nvim in a fresh cell instant. HOME points at the skel so that both the
+# config and the state it produces are seeded together.
+RUN git clone --depth 1 https://github.com/LazyVim/starter /opt/cell-skel/.config/nvim \
+ && rm -rf /opt/cell-skel/.config/nvim/.git \
+ && HOME=/opt/cell-skel timeout 900 nvim --headless "+Lazy! sync" +qa \
+ && HOME=/opt/cell-skel timeout 900 nvim --headless \
+      "+TSInstall bash c diff html javascript jsdoc json lua luadoc luap markdown markdown_inline printf python query regex toml tsx typescript vim vimdoc xml yaml" \
+      "+lua vim.defer_fn(function() vim.api.nvim_command('qa!') end, 600000)" \
+ && test "$(find /opt/cell-skel/.local/share/nvim -type f \( -name '*.so' -o -name '*-parser' \) | wc -l)" -ge 20
