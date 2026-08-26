@@ -93,7 +93,9 @@ The user settings pick a dark theme, format on save, and let Prettier do the for
 }
 ```
 
-Both the settings and the extensions are seeded into the cell's home the first time the container starts, rather than baked into the image — so an extension you install from inside the editor stays installed, and a rebuilt image does not overwrite a setting you changed. A project that formats with something else sets its own `editor.defaultFormatter` in its `.vscode/settings.json`, which wins; there is no need to edit the seed for one repository.
+Both the settings and the extensions are seeded into the cell's home the first time the container starts, rather than baked into the image — so an extension you install from inside the editor stays installed, and a rebuilt image does not overwrite a setting you changed.
+
+Extensions need one thing more, which `seed-extensions` does at every start: the editor reads `extensions.json` and ignores any directory not named in it, so a home seeded before the image gained an extension would hold the directory and never show the extension. The two lists are merged, and the home's entry wins wherever both name one, so a version you installed yourself is left alone. An extension the image ships comes back if you uninstall it — take it out of the `Containerfile` instead. A project that formats with something else sets its own `editor.defaultFormatter` in its `.vscode/settings.json`, which wins; there is no need to edit the seed for one repository.
 
 ## How the dotfiles get there
 
@@ -103,7 +105,7 @@ A cell's home is mounted over the container's, so anything an image writes under
 command: cell-init && exec sleep infinity
 ```
 
-It never overwrites. Your edits survive a rebuild, and a file added to the skel later still arrives. It is worth copying into a cell of your own, for the same reason.
+It never overwrites. Your edits survive a rebuild, and a file added to the skel later still arrives — but a file that _changed_ in the skel does not, because the home already has one. That is the trade, and it is the right way round for a dotfile: to take a new version of one, copy it in from `/opt/cell-skel/` yourself. Anything that has to reconcile rather than copy — the editor's extension list, above — needs a step of its own.
 
 ## Restrict what it reaches
 

@@ -10,8 +10,10 @@
 build: ./Containerfile
 
 # cell-init seeds the editor's settings and extensions into the cell's home the
-# first time the container starts; the server is the container's life, so it
-# runs in the foreground.
+# first time the container starts, and seed-extensions makes sure the editor's
+# own list names the ones a rebuilt image added — it reads that list, not the
+# directories beside it. The server is the container's life, so it runs in the
+# foreground.
 #
 # 9797 rather than openvscode-server's own 3000: that port belongs to whatever
 # dev server you are here to work on. It is written twice — change --port and
@@ -20,7 +22,8 @@ build: ./Containerfile
 # cell-init seeds the settings and the extensions, and naming them here means
 # the editor cannot look somewhere else.
 command: >
-  cell-init && exec /opt/openvscode-server/bin/openvscode-server
+  cell-init && seed-extensions
+  && exec /opt/openvscode-server/bin/openvscode-server
   --host 0.0.0.0 --port 9797 --without-connection-token
   --user-data-dir "$HOME/.openvscode-server/data"
   --extensions-dir "$HOME/.openvscode-server/extensions"
