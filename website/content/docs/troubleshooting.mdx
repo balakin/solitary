@@ -29,10 +29,9 @@ On Linux, a guest's entire memory is a file on `/dev/shm`, which is usually half
 `up` refuses to create such a machine and says what to lower `vm.memory` to:
 
 ```text
-this machine asks for 16.0GiB of memory, but /dev/shm on this host holds 7.8GiB,
-and that is where the guest's memory lives
-A machine larger than that starts, reports itself running and then dies with no error
-Lower vm.memory to 7.8GiB or less, or raise /dev/shm
+solitary: this machine asks for 16.0GiB of memory, but /dev/shm on this host holds 7.8GiB, and that is where the guest's memory lives
+         A machine larger than that starts, reports itself running and then dies with no error
+         Lower vm.memory to 7.8GiB or less, or raise /dev/shm
 ```
 
 It also warns — without refusing — when a machine fits the filesystem but not the space free on it right now. Stop another cell if it then fails to start.
@@ -58,10 +57,11 @@ A `degraded` cell has lost its container, usually because `command` exited — i
 
 ## A tunnel that will not come up
 
-Two things a WireGuard configuration must not have, both refused when the cell is read rather than at boot:
+Three things a WireGuard configuration must not have, all refused when the cell is read rather than at boot:
 
 - **A missing `Endpoint`.** There is nothing to connect to, and nothing for the firewall to allow.
 - **A `DNS =` line.** A cell resolves through its own resolver; name the address under `network.resolvers` instead.
+- **An IPv6 `Endpoint`.** A cell's machine has no IPv6 route, so the firewall cannot allow the peer through. Use the provider's IPv4 endpoint.
 
 If the tunnel is configured and down, the cell reaches nothing at all — that is the kill switch working, not a separate fault. The dashboard's VPN row says so directly. See [routing a cell through a VPN](/docs/guides-vpn).
 
@@ -85,8 +85,7 @@ Removing a setting applies the same way, and applies fully: a machine that was r
 A disk grows at the next boot and never shrinks — Lima has no way to give the space back. So a `vm.disk` below what the machine already carries is refused before anything is written:
 
 ```text
-solitary: cell "vscode" asks for a 20.0GiB disk, but its machine already has 50.0GiB,
-and a disk cannot be shrunk.
+solitary: cell "vscode" asks for a 20.0GiB disk, but its machine already has 50.0GiB, and a disk cannot be shrunk.
 Set vm.disk to 50GiB or more in ~/.config/solitary/cells/vscode/cell.yaml,
 or discard the machine and everything on it with 'solitary rm vscode' and run up again
 ```

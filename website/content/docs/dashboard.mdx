@@ -15,6 +15,9 @@ description: Every cell and its state in one live view.
                         │ network 2 allowed                │
                         │         github.com               │
                         │         api.anthropic.com        │
+                        │ vpn     none                     │
+                        │ inbox   0 files · 0 B            │
+                        │ outbox  2 files · 4.1 MiB        │
                         │ secrets 2 of 2 set               │
                         ╰──────────────────────────────────╯
  ↑↓ move · ⏎ shell · u up · s stop · e secrets · n network · t traffic · d rm · q quit
@@ -41,14 +44,26 @@ It does nothing the commands cannot, and the slow ones it runs _as_ those comman
 
 A cell whose `vm.provision` changed since its machine was provisioned says so in its detail view. It is the one setting stopping and starting the cell does not apply: the old script has already run, and only `d` then `u` — destroying the machine and its disk — gets one built by the current script alone. Every other change to `vm`, `ports` or `network` is applied by a restart, so the dashboard leaves those to `up`.
 
+## The inbox and outbox rows
+
+What is waiting to go in and what is waiting to come out, for the selected cell — the same two directories [`send` and `fetch`](/docs/artifacts) work on, counted rather than listed:
+
+```text
+ inbox   0 files · 0 B
+ outbox  2 files · 4.1 MiB
+```
+
+They are read out of the machine, so they say `machine not running` for a cell that is not up, and `asking the machine…` for the moment between selecting a running cell and the answer arriving. An outbox with something in it is the cue to run `solitary fetch`; the dashboard does not move files itself, because where they land is the host's business and the cell's names are not to be trusted with it.
+
 ## The VPN row
 
-A cell with `network.vpn` set reports the tunnel in its detail view, refreshed as the view is open:
+Every cell has one, so a cell with no tunnel is as plain to read as a cell with one. It is refreshed while the view is open:
 
 | Shown                                  | Means                                                                                                              |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `vpn none`                             | No tunnel configured.                                                                                              |
 | `vpn configured`                       | The cell is not running, so there is nothing to ask.                                                               |
+| `vpn asking the machine…`              | Running, and the first answer has not come back yet.                                                               |
 | `vpn down — this cell reaches nothing` | The tunnel is not up, and the kill switch is therefore dropping everything.                                        |
 | `vpn up, no recent handshake`          | Up but silent. From inside the cell this is indistinguishable from a broken network, which is why it is said here. |
 | `vpn up · handshake 12s ago`           | Working, with the peer it is actually talking to and the bytes moved in each direction.                            |
