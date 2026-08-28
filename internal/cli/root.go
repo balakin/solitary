@@ -22,7 +22,7 @@ var version = "dev"
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "solitary",
-		Short:         "Hypervisor-isolated cells for running coding agents off the leash",
+		Short:         "Run coding agents on a VM, not on your machine",
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
