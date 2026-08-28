@@ -120,6 +120,19 @@ So site-only work has to be committed on its own; the moment the same commit als
 or `.github/workflows/pages.yml` it becomes a release trigger, and prose about the site belongs in
 its own `docs:` commit anyway.
 
+Pull requests are merged with a merge commit, so the changelog is composed from the commits on the
+branch: every one of them has to be a well-formed Conventional Commit, and every one of them becomes
+its own changelog line. What keeps the merge commit itself out of that is a repository setting and
+nothing in the tree — its title is GitHub's own `MERGE_MESSAGE` (`Merge pull request #34 from ...`),
+which release-please cannot parse and therefore skips. Set it back to `PR_TITLE` and every pull
+request lands in the changelog twice, once as the branch commit and once as a merge commit repeating
+the same conventional subject; that is why 0.2.0 through 0.5.0 shipped with duplicated entries.
+GitHub pairs `MERGE_MESSAGE` only with `PR_TITLE` as the body, so the conventional subject does still
+sit in the merge commit's body — a header that does not parse is enough for the commit to be dropped.
+Squash merging is release-please's own recommendation and would collapse a pull request to a single
+line instead; it is disabled here, which is also why the squash-only commit overrides are
+unavailable and `release-as` is the only way to force a version.
+
 Deliberate version overrides go through `release-as`, and it must be removed again once the release
 it forced has shipped — left in place it proposes the same version forever, and that version is
 already spent. `last-release-sha` is the floor the commit search stops at, for disowning commits
