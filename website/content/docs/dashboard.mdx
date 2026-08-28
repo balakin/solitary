@@ -88,4 +88,6 @@ This is the fastest way to find what an allow list is missing: a `refused` line 
 
 `e` manages the selected cell's secrets: which names are set, which are not, and a masked field to set or rotate one (`↑↓` to move, `⏎` to set a value, `esc` to go back).
 
+A name the cell declared `required: false` is marked optional, and its description is shown under it. The count in the detail pane covers every declared name, but only a missing required one colours it: a cell running without an optional secret is doing what it was asked to.
+
 Values are never displayed. The dashboard reads only whether each declared name has one.

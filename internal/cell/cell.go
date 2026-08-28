@@ -227,14 +227,11 @@ func resolveSecrets(name string, c *config.Cell, progress io.Writer) ([]string, 
 		return nil, err
 	}
 
-	if missing := secrets.Missing(c.Secrets, values); len(missing) > 0 {
-		if !secrets.CanPrompt() {
-			return nil, fmt.Errorf("cell %q needs values for %s; set them with 'solitary secrets %s'",
-				name, strings.Join(missing, ", "), name)
-		}
-
-		fmt.Fprintf(progress, "Cell %q needs %d secret(s). Input is hidden.\n", name, len(missing))
-		changed, err := secrets.Prompt(progress, missing, values)
+	// An optional secret is asked about but never blocks: only the required
+	// ones decide whether this cell can start at all.
+	if unset := secrets.Missing(c.Secrets.Names(), values); len(unset) > 0 && secrets.CanPrompt() {
+		fmt.Fprintf(progress, "Cell %q needs %d secret(s). Input is hidden.\n", name, len(unset))
+		changed, err := secrets.Prompt(progress, fields(c.Secrets, unset), values)
 		if err != nil {
 			return nil, err
 		}
@@ -246,7 +243,35 @@ func resolveSecrets(name string, c *config.Cell, progress io.Writer) ([]string, 
 		}
 	}
 
-	return secrets.Env(c.Secrets, values), nil
+	if blocking := secrets.Missing(c.Secrets.RequiredNames(), values); len(blocking) > 0 {
+		return nil, fmt.Errorf("cell %q needs values for %s; set them with 'solitary secrets %s'",
+			name, strings.Join(blocking, ", "), name)
+	}
+
+	return secrets.Env(c.Secrets.Names(), values), nil
+}
+
+// fields describes the secrets to ask about, keeping the cell's declaration
+// order. A nil only limits the set to those names; passing every declared
+// secret is what rotating them all looks like.
+func fields(declared config.Secrets, only []string) []secrets.Field {
+	wanted := make(map[string]bool, len(only))
+	for _, name := range only {
+		wanted[name] = true
+	}
+
+	list := make([]secrets.Field, 0, len(declared))
+	for _, secret := range declared {
+		if only != nil && !wanted[secret.Name] {
+			continue
+		}
+		list = append(list, secrets.Field{
+			Name:        secret.Name,
+			Optional:    !secret.Required,
+			Description: secret.Description,
+		})
+	}
+	return list
 }
 
 // ensureContainer starts the cell's container if it is not already running the
@@ -553,8 +578,10 @@ func ParseTraffic(line string) (Traffic, bool) {
 // value itself is deliberately absent: this describes secrets for display, and
 // nothing displaying them should be able to reveal one.
 type SecretState struct {
-	Name string
-	Set  bool
+	Name        string
+	Set         bool
+	Required    bool
+	Description string
 }
 
 // Detail is what a cell's definition says about it, alongside which of its
@@ -613,8 +640,10 @@ func Describe(name string) (Detail, error) {
 		}
 		for _, declared := range c.Secrets {
 			detail.Secrets = append(detail.Secrets, SecretState{
-				Name: declared,
-				Set:  values[declared] != "",
+				Name:        declared.Name,
+				Set:         values[declared.Name] != "",
+				Required:    declared.Required,
+				Description: declared.Description,
 			})
 		}
 	}
@@ -899,7 +928,7 @@ func SetSecrets(name string, progress io.Writer) error {
 		return errors.New("solitary secrets needs a terminal to ask on")
 	}
 
-	changed, err := secrets.Prompt(progress, c.Secrets, values)
+	changed, err := secrets.Prompt(progress, fields(c.Secrets, nil), values)
 	if err != nil {
 		return err
 	}

@@ -227,7 +227,7 @@ func TestDefinedMachinesCountsUnreadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Neither an image nor a build: a definition that cannot be used.
-	if err := os.WriteFile(filepath.Join(dir, "cell.yaml"), []byte("secrets: [TOKEN]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "cell.yaml"), []byte("secrets:\n  TOKEN:\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

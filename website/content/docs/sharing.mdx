@@ -48,7 +48,7 @@ A cell names the secrets it wants, and running it hands them to an image someone
 Cell "claude" from github.com/balakin/cells
   image    build:./Containerfile
   machine  4 cpus · 8GiB · 40GiB
-  secrets  CLAUDE_API_KEY, GITHUB_TOKEN
+  secrets  CLAUDE_API_KEY, GITHUB_TOKEN (optional)
            set them with: solitary secrets claude
   ports    all reach host localhost
   network  2 allowed

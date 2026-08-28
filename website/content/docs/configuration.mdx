@@ -25,8 +25,9 @@ image: ghcr.io/you/nvim-claude:latest
 command: sleep infinity # optional; must not exit — it is the container's life
 
 secrets: # only these names are passed into the cell
-  - CLAUDE_API_KEY
-  - GITHUB_TOKEN
+  CLAUDE_API_KEY:
+  GITHUB_TOKEN:
+    required: false
 
 ports: # omit and every listening port reaches host localhost;
   - 8080 # set and only these do
@@ -72,13 +73,22 @@ The command the container runs. It **must not exit** — it is the container's l
 
 ### `secrets`
 
-The environment variable names this cell is allowed to see:
+The environment variable names this cell is allowed to see, as a mapping of name to options:
 
 ```yaml
 secrets:
-  - CLAUDE_API_KEY
-  - GITHUB_TOKEN
+  CLAUDE_API_KEY:
+  GITHUB_TOKEN:
+    required: false
+    description: pushing branches and opening pull requests
 ```
+
+| Option        | Default | Meaning                                                                  |
+| ------------- | ------- | ------------------------------------------------------------------------ |
+| `required`    | `true`  | The cell will not start until the name has a value.                      |
+| `description` | none    | What the value is for. Shown when `up` asks for it and in the dashboard. |
+
+A name written on its own — `CLAUDE_API_KEY:`, with nothing under it — takes both defaults, so it is required and undescribed. Set `required: false` for a credential the cell can work without: `up` still offers it, pressing enter skips it, and the variable is simply absent inside the container.
 
 Values come from `cells/<name>/.env`, which stays on the host and is never copied into the VM; the values are passed to the container as environment variables when it starts. The file may hold more than a cell needs — only the names that cell declares are ever passed in. `up` asks for any that are missing, and `solitary secrets <name>` sets or rotates them later.
 

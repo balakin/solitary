@@ -156,7 +156,17 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 	fmt.Fprintf(out, "  machine  %d cpus · %s · %s\n", c.VM.CPUs, c.VM.Memory, c.VM.Disk)
 
 	if len(c.Secrets) > 0 {
-		fmt.Fprintf(out, "  secrets  %s\n", strings.Join(c.Secrets, ", "))
+		// Which of them the cell can do without is part of what is being
+		// consented to here, so an optional one says so.
+		declared := make([]string, 0, len(c.Secrets))
+		for _, secret := range c.Secrets {
+			if secret.Required {
+				declared = append(declared, secret.Name)
+			} else {
+				declared = append(declared, secret.Name+" (optional)")
+			}
+		}
+		fmt.Fprintf(out, "  secrets  %s\n", strings.Join(declared, ", "))
 		fmt.Fprintf(out, "           set them with: solitary secrets %s\n", name)
 	}
 

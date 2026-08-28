@@ -210,7 +210,7 @@ func TestStageAndInstall(t *testing.T) {
 
 	repo := repository(t, func(dir string) {
 		write(t, filepath.Join(dir, "claude", "cell.yaml"),
-			"build: ./Containerfile\nsecrets:\n  - GITHUB_TOKEN\nnetwork:\n  allow:\n    - github.com\n", 0o644)
+			"build: ./Containerfile\nsecrets:\n  GITHUB_TOKEN:\nnetwork:\n  allow:\n    - github.com\n", 0o644)
 		write(t, filepath.Join(dir, "claude", "Containerfile"), "FROM ubuntu\n", 0o644)
 		write(t, filepath.Join(dir, "claude", ".env"), "GITHUB_TOKEN=leaked\n", 0o600)
 		write(t, filepath.Join(dir, "rust", "cell.yaml"), definition, 0o644)
@@ -250,7 +250,7 @@ func TestStageAndInstall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCell after install: %v", err)
 	}
-	if len(loaded.Secrets) != 1 || loaded.Secrets[0] != "GITHUB_TOKEN" {
+	if len(loaded.Secrets) != 1 || loaded.Secrets[0].Name != "GITHUB_TOKEN" {
 		t.Errorf("secrets = %v, want GITHUB_TOKEN", loaded.Secrets)
 	}
 

@@ -26,9 +26,15 @@ image: docker.io/library/ubuntu:24.04
 # .env file next to this one and passed into the container at run time. Names
 # not listed here are never passed, even if .env defines them.
 #
+# A name on its own is required: the cell will not start without a value. Add
+# required: false for one the cell can do without, and description: to say what
+# it is for when up asks.
+#
 # secrets:
-#   - CLAUDE_API_KEY
-#   - GITHUB_TOKEN
+#   CLAUDE_API_KEY:
+#   GITHUB_TOKEN:
+#     required: false
+#     description: pushing branches and opening pull requests
 
 # What this cell may reach. Leave it out and the cell reaches whatever the host
 # reaches. Set it and nothing leaves except to what is listed — the host and the

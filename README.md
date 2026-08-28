@@ -36,7 +36,7 @@ A cell is a Lima VM with a container inside it.
 image: ghcr.io/you/nvim-claude:latest
 
 secrets:
-  - GITHUB_TOKEN
+  GITHUB_TOKEN:
 
 ports:
   - 8080

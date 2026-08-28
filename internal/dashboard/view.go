@@ -378,14 +378,20 @@ func (m model) secretsSummary() string {
 		return labelStyle.Render("none declared")
 	}
 
-	set := 0
+	set, missing := 0, 0
 	for _, s := range m.detail.Secrets {
-		if s.Set {
+		switch {
+		case s.Set:
 			set++
+		case s.Required:
+			missing++
 		}
 	}
+	// Counted against every declared name, but degraded only on a missing
+	// required one: a cell running without an optional secret is working as
+	// asked, not broken.
 	summary := fmt.Sprintf("%d of %d set", set, len(m.detail.Secrets))
-	if set < len(m.detail.Secrets) {
+	if missing > 0 {
 		return statusStyle(cell.StatusDegraded).Render(summary)
 	}
 
@@ -414,10 +420,18 @@ func (m model) secretsBody() string {
 			style, cursor = selectedStyle, "› "
 		}
 		state := labelStyle.Render("not set")
-		if s.Set {
+		switch {
+		case s.Set:
 			state = noticeStyle.Render("set")
+		case !s.Required:
+			state = labelStyle.Render("not set (optional)")
 		}
 		rows = append(rows, fmt.Sprintf("%s%s  %s", cursor, style.Render(fmt.Sprintf("%-*s", width, s.Name)), state))
+		// What the secret is for, under the name it belongs to, so a
+		// value can be found before it is asked for.
+		if s.Description != "" {
+			rows = append(rows, fmt.Sprintf("  %s  %s", strings.Repeat(" ", width), labelStyle.Render(s.Description)))
+		}
 	}
 
 	if m.mode == typing {

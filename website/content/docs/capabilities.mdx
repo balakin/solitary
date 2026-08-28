@@ -13,11 +13,13 @@ Declare only the names a cell needs:
 
 ```yaml
 secrets:
-  - GITHUB_TOKEN
-  - CLAUDE_API_KEY
+  CLAUDE_API_KEY:
+  GITHUB_TOKEN:
+    required: false
+    description: pushing branches and opening pull requests
 ```
 
-Values are kept on the host. `up` asks for missing values, and the secrets command can set or rotate them later.
+Values are kept on the host. `up` asks for missing values, and the secrets command can set or rotate them later. A name is required unless it says otherwise, so a cell will not start without it; `required: false` marks one the cell can work without.
 
 ## Ports
 
