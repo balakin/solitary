@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/balakin/solitary/compare/v0.5.0...v0.5.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* refuse an IPv6 address a cell cannot reach ([78d515b](https://github.com/balakin/solitary/commit/78d515b7fd1b58c3798faf7bdeda9acaf8becb7c))
+* refuse an IPv6 address a cell cannot reach ([2c07573](https://github.com/balakin/solitary/commit/2c075731f08a8cbbc64a4932b19b517536665c0b))
+
 ## [0.5.0](https://github.com/balakin/solitary/compare/v0.4.0...v0.5.0) (2026-08-28)
 
 
