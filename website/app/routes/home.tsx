@@ -38,37 +38,37 @@ const controls: { icon: LucideIcon; title: string; text: string; href: string }[
   {
     icon: ShieldBan,
     title: 'Default-deny egress',
-    text: 'List the domains a cell may reach and it reaches nothing else — not the rest of the internet, not your machine, not your local network. One list drives both the resolver and the firewall.',
+    text: 'List the domains a cell may reach and it reaches nothing else — not the rest of the internet, not your machine, not your local network.',
     href: '/docs/guides-network-policy',
   },
   {
     icon: Waypoints,
     title: 'A VPN with a kill switch',
-    text: 'Point a cell at a WireGuard config and everything it reaches leaves through that tunnel. With the tunnel down, nothing leaves at all — no quiet fallback to the route it came in on.',
+    text: 'Point a cell at a WireGuard config and everything it reaches leaves through that tunnel. With the tunnel down, nothing leaves at all.',
     href: '/docs/guides-vpn',
   },
   {
     icon: KeyRound,
     title: 'Secrets whitelisted per cell',
-    text: 'This cell sees a GitHub token; that one does not. Values live on the host and are passed in by name, so a cell you destroy is a cell you can rebuild already authenticated.',
+    text: 'A cell receives the names it declares and nothing else. The values stay on the host, so a cell you destroy is one you can rebuild already authenticated.',
     href: '/docs/guides-secrets',
   },
   {
     icon: DoorOpen,
     title: 'Ports are the way in',
-    text: 'Run a dev server in the cell and open it in the browser on your host. Name the ports you want and only those are forwarded.',
+    text: 'Run a dev server in the cell and open it in your own browser. Name the ports you want forwarded, and only those reach the host.',
     href: '/docs/networking',
   },
   {
     icon: ArrowRightLeft,
     title: 'An explicit hand-off',
-    text: 'The cell publishes; the host collects. Files come out by name, never executable, and never over something already there — because a name chosen inside a cell is untrusted input.',
+    text: 'The cell publishes; the host collects. Files come out by name, never executable, and never over something already there.',
     href: '/docs/artifacts',
   },
   {
     icon: Trash2,
     title: 'Cells are disposable',
-    text: 'Destroy one and make a clean one from the same definition. The disk goes; the definition and the credentials, which were never inside it, stay.',
+    text: 'Destroy a cell and build a clean one from the same definition. The disk goes with it; the definition and the host-held secrets stay.',
     href: '/docs/commands',
   },
 ];
@@ -87,10 +87,7 @@ network:            # and it reaches nothing else
     - registry.npmjs.org
   vpn: ./vpn.conf   # optional: all of it, through this tunnel`;
 
-const install = `curl -fsSL -o solitary.tar.gz \\
-  https://github.com/balakin/solitary/releases/latest/download/solitary_darwin_arm64.tar.gz
-tar -xzf solitary.tar.gz solitary
-install -m 755 solitary /usr/local/bin/solitary`;
+const install = 'curl -fsSL https://solitary.balakin.io/install.sh | sh';
 
 const dashboard = `╭─────────────────────╮╭──────────────────────────────────╮
 │ cells               ││ claude                           │
@@ -133,7 +130,7 @@ export default function Home() {
     <HomeLayout {...homeOptions()}>
       <main>
         {/* Hero */}
-        <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pt-24 pb-24 text-center md:pt-36">
+        <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pt-20 pb-20 text-center md:pt-28">
           <p className="mb-6 rounded-full border border-fd-border bg-fd-card px-4 py-1.5 text-sm text-fd-muted-foreground">
             Early · macOS and Linux
           </p>
@@ -142,12 +139,35 @@ export default function Home() {
             <br />
             <span className="text-fd-primary">Keep your machine out of reach.</span>
           </h1>
-          <p className="mt-8 max-w-2xl text-lg leading-8 text-balance text-fd-muted-foreground md:text-xl">
-            Solitary runs coding agents in hypervisor-isolated cells: disposable virtual machines
-            with no host mounts, narrowly scoped secrets, controlled network access, and a
-            deliberate way to move work in and out.
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-balance text-fd-muted-foreground md:text-xl">
+            Solitary runs coding agents in disposable virtual machines: no host mounts, secrets
+            whitelisted per cell, a default-deny network, and a deliberate way to move work in and
+            out.
           </p>
-          <div className="mt-10 flex flex-wrap justify-center gap-3">
+          {/* The install line is the hero's own call to action, not a link to
+              one: it is short enough to read before running, and the button
+              below it is where someone goes who would rather read first. */}
+          <div className="mt-10 w-full max-w-xl text-left">
+            <DynamicCodeBlock lang="sh" code={install} />
+          </div>
+          <p className="mt-3 text-sm text-fd-muted-foreground">
+            Or <code className="text-fd-foreground">brew install balakin/solitary/solitary</code>.
+            Needs{' '}
+            <a
+              className="text-fd-primary hover:underline"
+              href="https://lima-vm.io"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Lima
+            </a>{' '}
+            2.0 —{' '}
+            <Link className="text-fd-primary hover:underline" to="/docs/installation">
+              other ways to install
+            </Link>
+            .
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
               className="rounded-full bg-fd-primary px-6 py-3 font-medium text-fd-primary-foreground transition-opacity hover:opacity-85"
               to="/docs/quickstart"
@@ -369,47 +389,6 @@ export default function Home() {
                 Limitations and trade-offs →
               </Link>
             </div>
-          </div>
-        </section>
-
-        {/* Get started */}
-        <section className="border-t border-fd-border bg-fd-secondary/40">
-          <div className="mx-auto grid max-w-6xl gap-12 px-6 py-24 md:grid-cols-[1fr_1.1fr] md:items-center">
-            <div>
-              <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-                Install it and take a cell for a walk.
-              </h2>
-              <p className="mt-5 leading-8 text-fd-muted-foreground">
-                Every release ships a binary for macOS and Linux, and the source builds in one
-                command. It needs{' '}
-                <a
-                  className="text-fd-primary hover:underline"
-                  href="https://lima-vm.io"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Lima
-                </a>{' '}
-                2.0 or newer, and Go only if you build it yourself. Creating the first cell takes a
-                couple of minutes while it downloads a cloud image and installs podman; everything
-                after that is container-speed.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link
-                  className="rounded-full bg-fd-primary px-6 py-3 font-medium text-fd-primary-foreground transition-opacity hover:opacity-85"
-                  to="/docs/installation"
-                >
-                  Installation
-                </Link>
-                <Link
-                  className="rounded-full border border-fd-border px-6 py-3 font-medium transition-colors hover:bg-fd-accent"
-                  to="/docs"
-                >
-                  Read the documentation
-                </Link>
-              </div>
-            </div>
-            <DynamicCodeBlock lang="sh" code={install} />
           </div>
         </section>
       </main>
