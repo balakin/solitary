@@ -43,7 +43,7 @@ network:
     - registry.npmjs.org
 ```
 
-Domains, IP addresses, and CIDR blocks are supported. Custom resolvers can be configured for corporate or split-horizon networks. A WireGuard configuration can route the cell's traffic through a separate exit.
+Domains, IPv4 addresses, and IPv4 CIDR blocks are supported; a cell's machine has no IPv6 route, so an IPv6 entry is refused when the cell is read. Custom resolvers can be configured for corporate or split-horizon networks. A WireGuard configuration can route the cell's traffic through a separate exit.
 
 ## Artifacts
 
