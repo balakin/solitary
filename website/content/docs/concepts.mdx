@@ -56,6 +56,6 @@ A cell receives authority in named pieces:
 - `network.allow` controls which destinations the cell can reach.
 - `image` or `build` determines which code is trusted inside the cell.
 
-A cell also has **no browser** and no launcher configured. Anything that would normally authenticate by opening one is authenticated on the host instead, and the resulting credential is passed in under `secrets`.
+A cell also **cannot open a browser on your machine**. It has no path to the host at all, so a sign-in that works by launching one has nothing to launch, whatever the image happens to contain. Authenticate on the host instead and pass the credential in under `secrets`.
 
 The configuration should make those decisions reviewable before the cell runs. Because values are separated from names, the definition can be committed and shared as a reusable workflow without sharing credentials, and taken with [`solitary clone`](/docs/sharing).

@@ -9,6 +9,7 @@ Solitary is on its `0.x` line: the configuration shape can still change between 
 
 - **macOS or Linux**
 - **[Lima](https://lima-vm.io) 2.0 or newer** — solitary drives `limactl` on the host and `podman` through it in the machine, so there is nothing else to install
+- **git**, only for [`solitary clone`](/docs/sharing), which shells out to it so that your existing credentials and SSH agent apply
 - **Go**, only if you build from source
 
 A host also has to be able to run a guest at all, which is not something an install can check. `solitary doctor` does, once solitary is on your PATH: Lima and its version, the hypervisor, memory, disk and the config tree. See [`doctor` checks the host](/docs/commands#doctor-checks-the-host).
@@ -21,10 +22,10 @@ The install script downloads the release archive for your platform, checks it ag
 curl -fsSL https://solitary.balakin.io/install.sh | sh
 ```
 
-It installs into `/usr/local/bin` when that is writable without `sudo` and `~/.local/bin` otherwise. `SOLITARY_INSTALL_DIR` overrides that, and `SOLITARY_VERSION` installs a tag other than the latest:
+It installs into `/usr/local/bin` when that is writable without `sudo` and `~/.local/bin` otherwise. `SOLITARY_INSTALL_DIR` overrides that, and `SOLITARY_VERSION` installs a tag from [the releases page](https://github.com/balakin/solitary/releases) other than the latest:
 
 ```sh
-curl -fsSL https://solitary.balakin.io/install.sh | SOLITARY_VERSION=v0.1.1 sh
+curl -fsSL https://solitary.balakin.io/install.sh | SOLITARY_VERSION=v1.2.3 sh
 ```
 
 ## Homebrew

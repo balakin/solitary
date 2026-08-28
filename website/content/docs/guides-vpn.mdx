@@ -37,12 +37,13 @@ If the tunnel is down, nothing leaves — the same traffic does not quietly go o
 
 Deleting `network.vpn` ends the tunnel at the next boot: the machine disables the interface and deletes the configuration it came up from, private key and all. A running cell keeps the tunnel it started with until it is stopped and started again.
 
-## Two things a configuration must not have
+## Three things a configuration must not have
 
-Both are refused when the cell is read, rather than leaving you with a machine whose tunnel never comes up:
+All three are refused when the cell is read, rather than leaving you with a machine whose tunnel never comes up:
 
 - **A missing `Endpoint`.** There is nothing to connect to, and nothing for the firewall to allow.
 - **A `DNS =` line.** A cell resolves through its own resolver. If you want the tunnel's resolver, name its address under `resolvers:` instead.
+- **An IPv6 `Endpoint`.** The peer is allowed through the same firewall as everything else, and a cell's machine has no IPv6 route. Most providers publish both, so this is usually a line to change rather than a provider to leave.
 
 ## Not the host resolver
 

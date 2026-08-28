@@ -106,13 +106,15 @@ ports:
 
 ### `network`
 
-| Field       | Meaning                                                                                                                                                                                  |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `allow`     | Domains, IP addresses, and CIDR blocks the cell may open connections to. Empty means the cell reaches whatever the host reaches; set means default-deny. A domain covers its subdomains. |
-| `resolvers` | The DNS servers the cell's own resolver forwards to. Empty means `1.1.1.1` and `8.8.8.8`. The entry `host` means the resolver the machine is given by its network, which is the host's.  |
-| `vpn`       | A `wg-quick` configuration, as a path relative to the cell's directory. Everything the cell reaches then leaves through that tunnel.                                                     |
+| Field       | Meaning                                                                                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`     | Domains, IPv4 addresses, and IPv4 CIDR blocks the cell may open connections to. Empty means the cell reaches whatever the host reaches; set means default-deny. A domain covers its subdomains. |
+| `resolvers` | The DNS servers the cell's own resolver forwards to. Empty means `1.1.1.1` and `8.8.8.8`. The entry `host` means the resolver the machine is given by its network, which is the host's.         |
+| `vpn`       | A `wg-quick` configuration, as a path relative to the cell's directory. Everything the cell reaches then leaves through that tunnel.                                                            |
 
-Each entry under `resolvers` must be an IP address or the literal `host`; anything else is refused when the cell is read. See [networking](/docs/networking) and [routing a cell through a VPN](/docs/guides-vpn).
+Each entry under `resolvers` must be an IPv4 address or the literal `host`; anything else is refused when the cell is read.
+
+IPv6 is refused throughout — in `allow`, in `resolvers`, and as a tunnel's `Endpoint`. A cell's machine has no IPv6 route, so such an address was never reachable; it is named when the cell is read rather than left to fail as a machine that cannot be reached. See [networking](/docs/networking) and [routing a cell through a VPN](/docs/guides-vpn).
 
 ## The machine
 

@@ -14,9 +14,11 @@ Omit `ports` and every port the container listens on reaches host localhost. Set
 
 ## Allow lists
 
-Without `network.allow`, the cell reaches whatever the host reaches. With an allow list, the cell is default-deny: the listed domains, addresses, and CIDR blocks resolve and are reachable, and nothing else is — not the rest of the internet, not your machine, not your local network.
+Without `network.allow`, the cell reaches whatever the host reaches. With an allow list, the cell is default-deny: the listed domains, IPv4 addresses, and CIDR blocks resolve and are reachable, and nothing else is — not the rest of the internet, not your machine, not your local network.
 
 A domain covers its subdomains; a different domain the same site uses has to be listed itself. The list must include every dependency: source control, container registries, package registries, APIs, and any CDN a build needs.
+
+A cell's machine has no IPv6 route, so the policy is IPv4 throughout: its resolver answers `AAAA` queries with nothing, and an IPv6 address in `allow` or `resolvers` is refused when the cell is read rather than accepted into a rule that cannot hold it.
 
 Enforcement lives in the machine and outside the container, in two halves that agree with each other. A resolver answers for the listed names only, and records the addresses it hands out in a set the firewall allows. So a name resolves and is reachable, or does neither. The container is rootless and cannot load a firewall rule, stop the resolver, or edit either one's configuration.
 
