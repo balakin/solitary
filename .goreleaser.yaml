@@ -67,7 +67,7 @@ brews:
       name: homebrew-solitary
       token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
     homepage: 'https://solitary.balakin.io'
-    description: 'Hypervisor-isolated cells for running coding agents off the leash'
+    description: 'Run coding agents on a VM, not on your machine'
     license: 'Apache-2.0'
     # solitary drives limactl on the host and has nothing to run without it.
     dependencies:

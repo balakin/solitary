@@ -4,7 +4,7 @@ export const docsRoute = '/docs';
 export const docsImageRoute = '/og/docs';
 export const docsContentRoute = '/llms.mdx/docs';
 
-export const siteTagline = 'Hypervisor-isolated cells for running coding agents off the leash';
+export const siteTagline = 'Run coding agents on a VM, not on your machine';
 export const siteDescription =
   'Run coding agents in disposable, hypervisor-isolated cells: no host mounts, secrets whitelisted per cell, default-deny egress, and an explicit way to move work in and out.';
 

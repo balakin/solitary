@@ -1,6 +1,6 @@
 # solitary
 
-**Hypervisor-isolated cells for running coding agents off the leash.**
+**Run coding agents on a VM, not on your machine.**
 
 > Early. The `0.x` line can still change the shape of a cell's configuration —
 > read [the limitations](website/content/docs/limitations.mdx) before trusting a
