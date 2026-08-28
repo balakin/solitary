@@ -84,6 +84,16 @@ func ReadTunnel(path string) (*Tunnel, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%s: Endpoint %q is not host:port", path, value)
 			}
+			if ipv6(host) {
+				// The peer is the one address that has to be
+				// reachable before the tunnel is, and it is
+				// allowed by the same firewall as everything
+				// else. Most providers publish both, so this
+				// is usually a line to change rather than a
+				// provider to leave.
+				return nil, fmt.Errorf("%s: Endpoint %q is an IPv6 address, which a cell cannot reach: %s\n"+
+					"Use the peer's IPv4 endpoint instead", path, host, noIPv6)
+			}
 			tunnel.EndpointHost, tunnel.EndpointPort = host, port
 		}
 	}

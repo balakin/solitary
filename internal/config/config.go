@@ -221,8 +221,9 @@ type Network struct {
 	// A domain covers its subdomains, so "github.com" reaches
 	// "api.github.com"; it does not cover a different domain the site
 	// happens to use, so "objects.githubusercontent.com" has to be listed
-	// too. An entry that parses as an IP address or CIDR block is used as
-	// given.
+	// too. An entry that parses as an IPv4 address or CIDR block is used as
+	// given; an IPv6 one is refused, since a cell's machine has no IPv6
+	// route to reach it through.
 	Allow []string `yaml:"allow,omitempty"`
 }
 
@@ -288,14 +289,50 @@ func (n Network) HostResolverOutsideTunnel() bool {
 // nothing.
 func (n Network) validateResolvers() error {
 	for _, entry := range n.Resolvers {
-		if entry == HostResolver || net.ParseIP(entry) != nil {
+		if entry == HostResolver {
 			continue
 		}
-
-		return fmt.Errorf("network.resolvers: %q is neither an IP address nor %q", entry, HostResolver)
+		if net.ParseIP(entry) == nil {
+			return fmt.Errorf("network.resolvers: %q is neither an IP address nor %q", entry, HostResolver)
+		}
+		if ipv6(entry) {
+			return fmt.Errorf("network.resolvers: %q is an IPv6 address, which a cell cannot reach: %s", entry, noIPv6)
+		}
 	}
 
 	return nil
+}
+
+// validateAllow refuses an IPv6 entry. A domain is left alone: what it resolves
+// to is the resolver's business, and it answers with A records only.
+func (n Network) validateAllow() error {
+	for _, entry := range n.Allow {
+		if ipv6(entry) {
+			return fmt.Errorf("network.allow: %q is an IPv6 address, which a cell cannot reach: %s", entry, noIPv6)
+		}
+	}
+
+	return nil
+}
+
+// noIPv6 is why an IPv6 entry is refused rather than rendered, said the same
+// way wherever one turns up.
+const noIPv6 = "a cell's machine has no IPv6 route, and its firewall holds IPv4 addresses only"
+
+// ipv6 reports whether an entry is an IPv6 address or an IPv6 CIDR block.
+//
+// Rendering one into the firewall is not a narrower policy but no policy: the
+// sets it would go into are ipv4_addr, so nft refuses the whole ruleset and the
+// machine comes up allowing everything. The resolver already filters AAAA
+// answers for the same reason, so nothing a cell can reach is being kept from
+// it here.
+func ipv6(entry string) bool {
+	ip, _, err := net.ParseCIDR(entry)
+	if err != nil {
+		ip = net.ParseIP(entry)
+	}
+
+	return ip != nil && ip.To4() == nil
 }
 
 // Restricted reports whether this network is default-deny.
@@ -531,6 +568,9 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 	cell.Git = ResolveGit(cell.Git, user.Git)
 	cell.Network = ResolveNetwork(cell.Network, user.Network)
 	if err := cell.Network.validateResolvers(); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if err := cell.Network.validateAllow(); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if cell.Network.VPN != "" {

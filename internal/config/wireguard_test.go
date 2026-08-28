@@ -99,6 +99,13 @@ func TestReadTunnelRefusesWhatCannotWork(t *testing.T) {
 			contents: "[Peer]\nEndpoint = de-01.example.net\n",
 			want:     "host:port",
 		},
+		{
+			// The peer is allowed by the same firewall as
+			// everything else, which holds IPv4 addresses only.
+			name:     "an IPv6 endpoint",
+			contents: "[Peer]\nEndpoint = [2001:db8::1]:51820\n",
+			want:     "IPv6",
+		},
 	}
 
 	for _, tc := range cases {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -216,6 +217,48 @@ func TestNetworkRejectsAResolverThatIsNeither(t *testing.T) {
 		t.Error("a hostname was accepted as a resolver")
 	}
 	if err := (Network{Resolvers: []string{HostResolver, "10.0.0.53"}}).validateResolvers(); err != nil {
+		t.Errorf("validateResolvers() error = %v", err)
+	}
+}
+
+// An IPv6 entry rendered into the firewall is not a narrower policy but no
+// policy: the sets are ipv4_addr, so nft refuses the whole ruleset and the
+// machine comes up allowing everything. Both lists are checked before it can.
+func TestNetworkRefusesIPv6(t *testing.T) {
+	cases := []struct {
+		name    string
+		network Network
+		err     func(Network) error
+	}{
+		{"an address in the allow list", Network{Allow: []string{"2606:4700:4700::1111"}}, Network.validateAllow},
+		{"a CIDR block in the allow list", Network{Allow: []string{"2606:4700::/32"}}, Network.validateAllow},
+		{"a resolver", Network{Resolvers: []string{"2606:4700:4700::1111"}}, Network.validateResolvers},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.err(tc.network)
+			if err == nil {
+				t.Fatal("an IPv6 entry was accepted")
+			}
+			if !strings.Contains(err.Error(), "IPv6") {
+				t.Errorf("error %q does not say what was wrong", err)
+			}
+		})
+	}
+}
+
+// The refusal is of IPv6 and nothing else: a domain is left to the resolver,
+// which answers with A records only, and IPv4 is what the firewall holds.
+func TestNetworkAllowsWhatACellCanReach(t *testing.T) {
+	network := Network{
+		Allow:     []string{"github.com", "198.51.100.7", "10.1.2.0/24"},
+		Resolvers: []string{HostResolver, "10.0.0.53"},
+	}
+	if err := network.validateAllow(); err != nil {
+		t.Errorf("validateAllow() error = %v", err)
+	}
+	if err := network.validateResolvers(); err != nil {
 		t.Errorf("validateResolvers() error = %v", err)
 	}
 }
