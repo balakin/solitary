@@ -3,8 +3,8 @@
 **Hypervisor-isolated cells for running coding agents off the leash.**
 
 > Early. The `0.x` line can still change the shape of a cell's configuration —
-> read [the limitations](website/content/docs/limitations.mdx) before trusting a
-> cell with credentials.
+> read [the limitations](https://solitary.balakin.io/docs/limitations) before
+> trusting a cell with credentials.
 
 ## The problem
 
@@ -51,41 +51,53 @@ network:
 solitary up claude
 ```
 
-## Documentation
-
-The docs are in [`website/content/docs`](website/content/docs) and are the site
-built from `website/`. Start with the [quickstart](website/content/docs/quickstart.mdx).
-
-| | |
-| --- | --- |
-| [Core concepts](website/content/docs/concepts.mdx) | What a cell is made of, and which layer a change lands in |
-| [Configuration](website/content/docs/configuration.mdx) | Every field in `cell.yaml` and `config.yaml` |
-| [Commands](website/content/docs/commands.mdx) | The whole command surface |
-| [Networking](website/content/docs/networking.mdx) | Egress control, DNS, ports and VPN routing |
-| [Moving work in and out](website/content/docs/artifacts.mdx) | `fetch`, `send`, and the cell's own `artifact` |
-| [Sharing cells](website/content/docs/sharing.mdx) | Publish a definition; take one out of someone's repository |
-| [Example cells](website/content/docs/guides-examples.mdx) | Two complete cells in [`examples/`](examples/), ready to clone |
-| [The dashboard](website/content/docs/dashboard.mdx) | Every cell and its state in one live view |
-| [Security model](website/content/docs/security.mdx) | What the boundary protects, and what it leaves to you |
-| [Limitations](website/content/docs/limitations.mdx) | What this does not protect against |
-| [Troubleshooting](website/content/docs/troubleshooting.mdx) | The failure modes a cell actually has |
-
 ## Install
 
+Either one, on macOS or Linux:
+
 ```sh
-curl -fsSL https://solitary.balakin.io/install.sh | sh   # macOS and Linux
-brew install balakin/solitary/solitary                   # macOS and Linux
+curl -fsSL https://solitary.balakin.io/install.sh | sh
+```
+
+```sh
+brew install balakin/solitary/solitary
 ```
 
 Binaries for macOS and Linux are attached to every
 [release](https://github.com/balakin/solitary/releases/latest) too, and
 `solitary update` replaces the binary with the newest one. See the
-[installation guide](website/content/docs/installation.mdx) for the rest.
+[installation guide](https://solitary.balakin.io/docs/installation) for the rest.
 
 Requirements:
 
 - [Lima](https://lima-vm.io) 2.0 or newer
 - macOS or Linux
+
+## Quick start
+
+An editor in a cell, from nothing:
+
+```sh
+solitary clone balakin/solitary/examples/vscode
+solitary up vscode --detach
+open http://localhost:9797
+```
+
+That is VS Code with Claude Code beside it, running in the cell and reached
+through a port forwarded to your host's localhost only. `clone` shows you what
+the definition asks for before installing it; `up` builds the image **inside**
+the machine, so nothing in that `Containerfile` runs on your host. Then
+`solitary shell vscode` for a shell in the same cell, `solitary rm vscode` when
+you are done.
+
+Write your own with `solitary init <name>` — see the
+[quickstart](https://solitary.balakin.io/docs/quickstart).
+
+## Documentation
+
+Everything else — the configuration reference, the command surface, networking,
+secrets, the security model — is at
+**[solitary.balakin.io](https://solitary.balakin.io/)**.
 
 ## Development
 
