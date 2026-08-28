@@ -122,13 +122,20 @@ its own `docs:` commit anyway.
 
 Pull requests are merged with a merge commit, so the changelog is composed from the commits on the
 branch: every one of them has to be a well-formed Conventional Commit, and every one of them becomes
-its own changelog line. What keeps the merge commit itself out of that is a repository setting and
-nothing in the tree — its title is GitHub's own `MERGE_MESSAGE` (`Merge pull request #34 from ...`),
-which release-please cannot parse and therefore skips. Set it back to `PR_TITLE` and every pull
-request lands in the changelog twice, once as the branch commit and once as a merge commit repeating
-the same conventional subject; that is why 0.2.0 through 0.5.0 shipped with duplicated entries.
-GitHub pairs `MERGE_MESSAGE` only with `PR_TITLE` as the body, so the conventional subject does still
-sit in the merge commit's body — a header that does not parse is enough for the commit to be dropped.
+its own changelog line. The merge commit is the trap. Its title is GitHub's own `MERGE_MESSAGE`
+(`Merge pull request #34 from ...`), which release-please cannot parse — but GitHub pairs that title
+with the pull request's own as the *body*, and release-please reads the body as well as the header.
+So a pull request titled `fix: …` lands in the changelog twice: once as the branch commit, once as
+the merge commit repeating it. That is what 0.2.0 through 0.5.1 shipped, and the repository setting
+is not where it is fixed — 0.5.1 was cut after the title had already been moved from `PR_TITLE` to
+`MERGE_MESSAGE`, which only moved the conventional subject out of the header and into the body.
+
+What leaves one entry is the pull request's title: write it as a sentence rather than a conventional
+subject, so that the body it becomes does not parse either. `Correct a description that says the
+opposite of what a cell does`, not `fix: correct a description that says the opposite of what a cell
+does` — the branch commit underneath still carries the type, and it is the one that counts. This is
+the one place where what goes in the GitHub UI is load-bearing for what ships.
+
 Squash merging is release-please's own recommendation and would collapse a pull request to a single
 line instead; it is disabled here, which is also why the squash-only commit overrides are
 unavailable and `release-as` is the only way to force a version.
