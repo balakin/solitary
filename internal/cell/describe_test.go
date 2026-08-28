@@ -3,6 +3,7 @@ package cell
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -39,8 +40,11 @@ func writeCell(t *testing.T, definition, env string) {
 
 const definition = `image: docker.io/library/ubuntu:24.04
 secrets:
-  - SET_ONE
-  - MISSING_ONE
+  SET_ONE:
+  MISSING_ONE:
+  OPTIONAL_ONE:
+    required: false
+    description: only needed to push
 ports:
   - 8080
 vm:
@@ -66,14 +70,13 @@ func TestDescribeReportsWhichSecretsAreSet(t *testing.T) {
 		t.Errorf("ports = %v, want [8080]", detail.Ports)
 	}
 
-	want := map[string]bool{"SET_ONE": true, "MISSING_ONE": false}
-	if len(detail.Secrets) != len(want) {
-		t.Fatalf("secrets = %+v, want one entry per declared name", detail.Secrets)
+	want := []SecretState{
+		{Name: "SET_ONE", Set: true, Required: true},
+		{Name: "MISSING_ONE", Set: false, Required: true},
+		{Name: "OPTIONAL_ONE", Set: false, Required: false, Description: "only needed to push"},
 	}
-	for _, got := range detail.Secrets {
-		if set, declared := want[got.Name]; !declared || set != got.Set {
-			t.Errorf("secret %q set = %v, want %v", got.Name, got.Set, set)
-		}
+	if !reflect.DeepEqual(detail.Secrets, want) {
+		t.Errorf("secrets = %+v, want %+v", detail.Secrets, want)
 	}
 }
 

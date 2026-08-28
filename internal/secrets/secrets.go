@@ -164,35 +164,56 @@ func CanPrompt() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
-// Prompt asks for each name in turn and records what is typed. Input is not
+// Field is one secret to ask about. It carries what the cell said about the
+// name rather than the name alone, so the prompt can say what a value is for
+// and which ones may be left out.
+type Field struct {
+	Name        string
+	Optional    bool
+	Description string
+}
+
+// Prompt asks for each field in turn and records what is typed. Input is not
 // echoed. An empty answer keeps whatever value is already set, so re-running
 // over a filled-in file is safe.
 //
 // It reports whether anything changed.
-func Prompt(out io.Writer, names []string, values map[string]string) (bool, error) {
+func Prompt(out io.Writer, fields []Field, values map[string]string) (bool, error) {
 	if !CanPrompt() {
 		return false, errors.New("no terminal to prompt on")
 	}
 
 	changed := false
-	for _, name := range names {
-		if values[name] != "" {
-			fmt.Fprintf(out, "%s (set — enter to keep): ", name)
-		} else {
-			fmt.Fprintf(out, "%s: ", name)
+	for _, field := range fields {
+		if field.Description != "" {
+			fmt.Fprintf(out, "  %s\n", field.Description)
 		}
+		fmt.Fprint(out, label(field, values[field.Name] != ""))
 
 		typed, err := term.ReadPassword(int(os.Stdin.Fd()))
 		fmt.Fprintln(out)
 		if err != nil {
-			return changed, fmt.Errorf("reading %s: %w", name, err)
+			return changed, fmt.Errorf("reading %s: %w", field.Name, err)
 		}
 
 		if v := strings.TrimSpace(string(typed)); v != "" {
-			values[name] = v
+			values[field.Name] = v
 			changed = true
 		}
 	}
 
 	return changed, nil
+}
+
+// label is what one field is asked with. Every case has to say what pressing
+// enter does, since that is the only other key the caller has.
+func label(field Field, set bool) string {
+	switch {
+	case set:
+		return field.Name + " (set — enter to keep): "
+	case field.Optional:
+		return field.Name + " (optional, enter to skip): "
+	default:
+		return field.Name + ": "
+	}
 }

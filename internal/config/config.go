@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 
 	"gopkg.in/yaml.v3"
@@ -34,11 +35,11 @@ type Cell struct {
 	// copied into the machine and built there — the host never runs a build.
 	Build string `yaml:"build"`
 
-	// Secrets lists the environment variable names this cell is allowed to
+	// Secrets are the environment variable names this cell is allowed to
 	// see. Values come from the cell's .env file and are passed to the
-	// container at run time. Names absent from this list are never passed,
-	// even when present in .env.
-	Secrets []string `yaml:"secrets"`
+	// container at run time. Names absent from this mapping are never
+	// passed, even when present in .env.
+	Secrets Secrets `yaml:"secrets"`
 
 	// Command is the shell command the container runs. It must not exit: the
 	// container lives as long as this process does, and shells opened with
@@ -69,6 +70,102 @@ type Cell struct {
 // built images with localhost/.
 func Tag(name string) string {
 	return "localhost/solitary-" + name + ":latest"
+}
+
+// Secret is one environment variable a cell may receive.
+type Secret struct {
+	// Name is the mapping key the secret was declared under, so it is not a
+	// field of its own — the two could otherwise disagree.
+	Name string `yaml:"-"`
+
+	// Required says the cell cannot start without a value. It defaults to
+	// true: a name is declared because the cell needs it, and the optional
+	// one is the exception that has to say so.
+	Required bool `yaml:"required"`
+
+	// Description says what the secret is for. It is shown when asking for a
+	// value and when listing what a cell wants, and is never stored beside
+	// the value itself.
+	Description string `yaml:"description"`
+}
+
+// Secrets are the secrets a cell declares, in the order it declared them:
+// asking for values follows that order, and so does every listing.
+type Secrets []Secret
+
+// envName is what a name has to look like to survive being passed to podman as
+// an environment variable.
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// UnmarshalYAML reads the mapping of name to options.
+//
+// A mapping rather than the list of names this used to be, so that a name can
+// carry the two labels above; the list form is refused by name rather than left
+// to the yaml package, since a definition written against the old shape is the
+// one thing certain to arrive here.
+func (s *Secrets) UnmarshalYAML(node *yaml.Node) error {
+	if node.Tag == "!!null" {
+		return nil
+	}
+	if node.Kind == yaml.SequenceNode {
+		hint := "NAME"
+		if len(node.Content) > 0 && node.Content[0].Kind == yaml.ScalarNode {
+			hint = node.Content[0].Value
+		}
+		return fmt.Errorf("secrets: is a mapping of name to options now, not a list; write %q on its own line rather than %q", hint+":", "- "+hint)
+	}
+	if node.Kind != yaml.MappingNode {
+		return errors.New("secrets: must be a mapping of name to options")
+	}
+
+	seen := map[string]bool{}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key, value := node.Content[i], node.Content[i+1]
+		if key.Kind != yaml.ScalarNode {
+			return errors.New("secrets: every key must be an environment variable name")
+		}
+		if !envName.MatchString(key.Value) {
+			return fmt.Errorf("secrets: %q is not an environment variable name", key.Value)
+		}
+		if seen[key.Value] {
+			return fmt.Errorf("secrets: %s is declared twice", key.Value)
+		}
+		seen[key.Value] = true
+
+		// Required starts true so that a document saying nothing about it
+		// gets the default, and only an explicit required: false turns it
+		// off: yaml leaves fields the document does not mention alone.
+		entry := Secret{Name: key.Value, Required: true}
+		if value.Tag != "!!null" {
+			if err := value.Decode(&entry); err != nil {
+				return fmt.Errorf("secrets: %s: %w", key.Value, err)
+			}
+			entry.Name = key.Value
+		}
+		*s = append(*s, entry)
+	}
+
+	return nil
+}
+
+// Names returns every declared name, in declaration order.
+func (s Secrets) Names() []string {
+	names := make([]string, 0, len(s))
+	for _, secret := range s {
+		names = append(names, secret.Name)
+	}
+	return names
+}
+
+// RequiredNames returns the names a cell cannot start without.
+func (s Secrets) RequiredNames() []string {
+	var names []string
+	for _, secret := range s {
+		if secret.Required {
+			names = append(names, secret.Name)
+		}
+	}
+	return names
 }
 
 // VM describes the Lima machine backing a cell. Every field is optional: values

@@ -24,7 +24,7 @@ network:
     - registry.npmjs.org
 
 secrets:
-  - GITHUB_TOKEN
+  GITHUB_TOKEN:
 ```
 
 The definition says what the cell needs, not the values it receives. Each operator supplies their own `.env`, credentials, and optional VPN configuration locally.

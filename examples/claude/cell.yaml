@@ -26,7 +26,7 @@ vm:
 # from ~/.config/solitary/cells/claude/.env instead.
 #
 # secrets:
-#   - ANTHROPIC_API_KEY
+#   ANTHROPIC_API_KEY:
 
 # Left open so the cell reaches whatever the host reaches: an allow list gates
 # the build as well, and a domain missing from it fails the build rather than

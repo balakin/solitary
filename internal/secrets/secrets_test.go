@@ -118,3 +118,24 @@ func TestMissingReportsUnsetDeclaredNames(t *testing.T) {
 		t.Errorf("Missing() = %v, want %v", got, want)
 	}
 }
+
+func TestLabelSaysWhatEnterDoes(t *testing.T) {
+	cases := []struct {
+		field Field
+		set   bool
+		want  string
+	}{
+		{Field{Name: "TOKEN"}, false, "TOKEN: "},
+		{Field{Name: "TOKEN"}, true, "TOKEN (set — enter to keep): "},
+		{Field{Name: "SPARE", Optional: true}, false, "SPARE (optional, enter to skip): "},
+		// A value it already has is kept the same way whether or not the
+		// cell can do without it.
+		{Field{Name: "SPARE", Optional: true}, true, "SPARE (set — enter to keep): "},
+	}
+
+	for _, c := range cases {
+		if got := label(c.field, c.set); got != c.want {
+			t.Errorf("label(%+v, set=%v) = %q, want %q", c.field, c.set, got, c.want)
+		}
+	}
+}

@@ -76,7 +76,7 @@ const controls: { icon: LucideIcon; title: string; text: string; href: string }[
 const cellYaml = `image: ghcr.io/you/agent:latest
 
 secrets:            # only these names are passed in
-  - GITHUB_TOKEN
+  GITHUB_TOKEN:
 
 ports:              # only these reach the host
   - 8080
