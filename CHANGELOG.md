@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/balakin/solitary/compare/v0.5.1...v0.5.2) (2026-08-28)
+
+
+### Bug Fixes
+
+* correct a description that says the opposite of what a cell does ([18825b0](https://github.com/balakin/solitary/commit/18825b0423f59fe14aa0d677843efbcfbed5e351))
+
 ## [0.5.1](https://github.com/balakin/solitary/compare/v0.5.0...v0.5.1) (2026-08-28)
 
 
