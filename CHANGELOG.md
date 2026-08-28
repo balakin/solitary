@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/balakin/solitary/compare/v0.4.0...v0.5.0) (2026-08-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* let a cell say which secrets it can do without ([#34](https://github.com/balakin/solitary/issues/34))
+* secrets: is a mapping of name to options, not a list of names. Drop the dashes: "- GITHUB_TOKEN" becomes "GITHUB_TOKEN:". A cell still using the list form refuses to load and names the line to write.
+
+### Features
+
+* let a cell say which secrets it can do without ([da6f58d](https://github.com/balakin/solitary/commit/da6f58dea9a494410c3f9ff2efba5e6c171525a5))
+* let a cell say which secrets it can do without ([#34](https://github.com/balakin/solitary/issues/34)) ([395ac30](https://github.com/balakin/solitary/commit/395ac30587e689ede2d8645694bab7201508c260))
+
 ## [0.4.0](https://github.com/balakin/solitary/compare/v0.3.0...v0.4.0) (2026-08-26)
 
 
