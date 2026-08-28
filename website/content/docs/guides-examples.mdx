@@ -81,15 +81,23 @@ Anything listening on another port needs it added here, and `ports` is read when
 
 Eight extensions are installed at build time, from Open VSX: Claude Code, ESLint, Prettier, Tailwind CSS, EditorConfig, [oxc](https://oxc.rs) and Astro, plus GitHub's themes. Claude Code's extension is there as well as the CLI — it drives the same agent from inside the editor, against the cell's own installation.
 
-The editor's defaults — a dark theme, format on save, Prettier formatting while ESLint only fixes — are built into the image:
+The editor's defaults — a dark theme, format on save, Prettier formatting while ESLint only fixes, and telemetry off — are built into the image, from `editor-defaults.json` beside the `Containerfile`:
 
-```json
+```json title="examples/vscode/editor-defaults.json"
 {
   "workbench.colorTheme": "GitHub Dark Default",
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
-  "eslint.format.enable": false
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.format.enable": false,
+  "editor.tabSize": 2,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "workbench.startupEditor": "none",
+  "telemetry.telemetryLevel": "off"
 }
 ```
 

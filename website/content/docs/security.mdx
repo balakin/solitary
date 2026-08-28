@@ -11,7 +11,7 @@ Solitary is designed to stop a compromised coding agent from modifying or execut
 - The agent cannot read the host project, home directory, Git credentials, SSH agent, or Docker socket unless you deliberately provide an equivalent path.
 - Files produced in the cell do not silently appear on the host.
 - Secrets are selected by name and passed to individual cells rather than mounted as the host `.env` file.
-- A cell has no browser and no launcher, so nothing inside it can open a page on your machine. Authenticate on the host and pass the credential in as a secret.
+- Nothing inside a cell can open a page on your machine. A cell has no path to the host, so a sign-in that works by launching a browser has nothing to launch. Authenticate on the host and pass the credential in as a secret.
 
 ## Explicit permissions
 

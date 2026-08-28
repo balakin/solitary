@@ -16,7 +16,7 @@ network:
     - 10.1.2.0/24
 ```
 
-A domain covers its subdomains, so `github.com` reaches `api.github.com`. It does not cover a different domain the same site happens to use, so `objects.githubusercontent.com` has to be listed too. IP addresses and CIDR blocks are used as written.
+A domain covers its subdomains, so `github.com` reaches `api.github.com`. It does not cover a different domain the same site happens to use, so `objects.githubusercontent.com` has to be listed too. IPv4 addresses and CIDR blocks are used as written; IPv6 is refused when the cell is read, because a cell's machine has no route to reach it through.
 
 Two pieces enforce the list, both in the machine and outside the container. A resolver answers for the listed names only — anything else gets NXDOMAIN, so a query cannot carry data out to a resolver of an agent's choosing — and it records the addresses it hands out in a set the firewall allows. A name resolves and is reachable, or does neither, and a site that changes its addresses keeps working without anyone editing a rule. The container is rootless: nothing inside it can load a firewall rule, stop the resolver, or edit either one's configuration.
 

@@ -70,7 +70,7 @@ solitary clone balakin/cells/claude --as work
 
 A repository is written by someone else and its file names become paths on your machine, so what may be copied is decided here rather than by whatever the repository happens to contain. Anything refused is named rather than quietly skipped:
 
-- **`.env`, `*.env` and `vpn.conf` never arrive.** They are the two files that carry credentials, and those belong to whoever runs a cell rather than to the cell. One in a published repository is a mistake in it, or an attempt to seed your machine with someone else's key.
+- **`.env`, `*.env` and `vpn.conf` never arrive.** Those are the names that carry credentials, and a credential belongs to whoever runs a cell rather than to the cell. One in a published repository is a mistake in it, or an attempt to seed your machine with someone else's key.
 - **A symlink is refused, at any depth.** It is the one entry whose target need not be inside the repository.
 - `.git` is left behind. A cloned cell is a copy, with no link back to where it came from.
 - What lands is written the way `init` writes a cell: `0600`, or `0700` for something the repository marked executable — a build context runs inside the machine, never here.
