@@ -160,15 +160,21 @@ func Build(instance, containerfile, tag, digest string) error {
 	}
 	defer os.RemoveAll(staged)
 
-	// Start from an empty directory so a file deleted on the host does not
-	// linger in the machine and end up in the image.
+	// Start from nothing, so a file deleted on the host does not linger in
+	// the machine and end up in the image — and so that the copy lands where
+	// this expects it to.
+	//
+	// The directory is deliberately not created first. lima copies with scp,
+	// which puts a directory *inside* a destination that already exists and
+	// *at* one that does not, and the two are only the same thing on scp
+	// versions new enough to have stopped doing the first. OpenSSH 9.x, which
+	// is what Debian 12 and Ubuntu 24.04 ship, does the first: the context
+	// lands in a subdirectory named after the staging directory, and the
+	// build fails on a Containerfile that is not where it was put. Copying to
+	// a path that does not exist yet means the same thing everywhere.
 	if _, err := lima.Exec(instance, "rm", "-rf", buildDir); err != nil {
 		return fmt.Errorf("clearing the build directory: %w", err)
 	}
-	if _, err := lima.Exec(instance, "mkdir", "-p", buildDir); err != nil {
-		return fmt.Errorf("creating the build directory: %w", err)
-	}
-	// lima copies the contents of a directory, not the directory itself.
 	if err := lima.Copy(staged, instance, buildDir); err != nil {
 		return fmt.Errorf("copying the build context into the machine: %w", err)
 	}
