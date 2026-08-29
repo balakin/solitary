@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/balakin/solitary/compare/v0.7.0...v0.8.0) (2026-08-29)
+
+
+### Features
+
+* let a cell be given a device ([5c20b38](https://github.com/balakin/solitary/commit/5c20b381dfad263afd6808d63a388da09ddd40d2))
+
 ## [0.7.0](https://github.com/balakin/solitary/compare/v0.6.0...v0.7.0) (2026-08-29)
 
 
