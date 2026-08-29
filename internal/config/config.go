@@ -702,11 +702,11 @@ func ListCells() ([]string, error) {
 		if !e.IsDir() {
 			continue
 		}
-		path, err := CellFile(e.Name())
+		defined, err := HasCell(e.Name())
 		if err != nil {
 			return nil, err
 		}
-		if _, err := os.Stat(path); err != nil {
+		if !defined {
 			continue
 		}
 		names = append(names, e.Name())
@@ -714,4 +714,24 @@ func ListCells() ([]string, error) {
 	sort.Strings(names)
 
 	return names, nil
+}
+
+// HasCell reports whether a definition exists for name. A cell is its
+// definition, so this is what tells a cell apart from a machine left behind by
+// one — and from a directory someone made and never filled in. The name is not
+// checked here: callers that take one from outside validate it first.
+func HasCell(name string) (bool, error) {
+	path, err := CellFile(name)
+	if err != nil {
+		return false, err
+	}
+
+	switch _, err := os.Stat(path); {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return false, nil
+	default:
+		return false, fmt.Errorf("reading %s: %w", path, err)
+	}
 }

@@ -60,6 +60,10 @@ Every other command mentions a newer release at most once a day, and only to a t
 
 `rm --force` skips the confirmation prompt. `init --force` overwrites an existing definition.
 
+### Machines that outlived their cell
+
+A cell is named by its directory, so deleting that directory — or renaming it — leaves the VM behind, still holding the disk it was given. `ls` lists such a machine as `orphaned` rather than hiding it, since nothing else on the host says it is there. `down` and `rm` take its name like any other cell's, and `rm --orphans` destroys every one of them at once. `solitary init <name>` gives the machine a definition again instead.
+
 ## Taking someone else's cell
 
 `clone` installs one cell definition out of a git repository — a repository that is a single cell, or one directory out of a catalogue of them.

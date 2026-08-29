@@ -85,6 +85,16 @@ func (m model) detailPane() string {
 		return pane(m.selected().Name, errorStyle.Render(m.detailErr.Error()))
 	}
 
+	if m.detail.Orphaned {
+		return pane(m.detail.Name, strings.Join([]string{
+			field("status", statusStyle(cell.StatusDegraded).Render("no definition")),
+			"",
+			valueStyle.Render("Its machine is still here, holding the disk it"),
+			valueStyle.Render("was given. d discards it; 'solitary init " + m.detail.Name + "'"),
+			valueStyle.Render("gives the machine a definition again."),
+		}, "\n"))
+	}
+
 	machine := fmt.Sprintf("%d cpus · %s · %s", m.detail.VM.CPUs, m.detail.VM.Memory, m.detail.VM.Disk)
 
 	ports := "all reach host localhost"

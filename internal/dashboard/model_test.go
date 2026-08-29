@@ -309,6 +309,21 @@ func TestProvisionDriftIsShown(t *testing.T) {
 	}
 }
 
+// An orphan has nothing to describe, and the pane has to say that rather than
+// render a cell whose every field is empty.
+func TestOrphanPaneSaysWhatIsLeft(t *testing.T) {
+	m := listed(t)
+
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude", Orphaned: true}})
+	view := next.(model).View()
+	if !strings.Contains(view, "no definition") {
+		t.Errorf("the pane does not say the definition is gone:\n%s", view)
+	}
+	if strings.Contains(view, "0 cpus") {
+		t.Errorf("the pane renders empty machine settings as though they were read:\n%s", view)
+	}
+}
+
 // The preview is a preview; the whole list has to be readable somewhere, and
 // the dashboard is where someone is already looking.
 func TestNetworkViewShowsEveryEntry(t *testing.T) {
