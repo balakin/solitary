@@ -9,6 +9,7 @@
 #
 #   SOLITARY_INSTALL_DIR   where to look for the binary, instead of the search below
 #   SOLITARY_REMOVE_CELLS  1 to destroy every machine solitary created
+#   SOLITARY_KEEP_CELLS    1 to leave the machines where they are and go ahead anyway
 #   SOLITARY_PURGE         1 to delete the cell definitions, secrets and state
 set -eu
 
@@ -53,25 +54,38 @@ if command -v limactl >/dev/null 2>&1; then
 	machines=$(limactl list --quiet 2>/dev/null | grep '^solitary-' || true)
 fi
 
-if [ -n "$machines" ] && [ "${SOLITARY_REMOVE_CELLS:-}" != "1" ]; then
+if [ "${SOLITARY_REMOVE_CELLS:-}" = "1" ] && [ "${SOLITARY_KEEP_CELLS:-}" = "1" ]; then
+	die "SOLITARY_REMOVE_CELLS and SOLITARY_KEEP_CELLS ask for opposite things"
+fi
+
+if [ -n "$machines" ] && [ "${SOLITARY_REMOVE_CELLS:-}${SOLITARY_KEEP_CELLS:-}" = "" ]; then
 	echo "These cells still have a machine on this host:" >&2
 	echo "$machines" | sed 's/^solitary-/  /' >&2
 	cat >&2 <<'EOF'
 
-Remove them first — 'solitary rm <name>' for each, or 'solitary ls' to see
-them — or re-run with SOLITARY_REMOVE_CELLS=1 to destroy every machine above
-and its disk:
+Say what should happen to them and re-run:
+
+  ... | SOLITARY_REMOVE_CELLS=1 sh   destroy every machine above, and its disk
+  ... | SOLITARY_KEEP_CELLS=1 sh     leave them running, remove solitary only
+
+Or remove them first with 'solitary rm <name>' for each; 'solitary ls' lists
+them. The full line is:
 
   curl -fsSL https://solitary.balakin.io/uninstall.sh | SOLITARY_REMOVE_CELLS=1 sh
 EOF
 	exit 1
 fi
 
-if [ -n "$machines" ]; then
+if [ -n "$machines" ] && [ "${SOLITARY_REMOVE_CELLS:-}" = "1" ]; then
 	echo "$machines" | while IFS= read -r machine; do
 		note "Destroying ${machine#solitary-}"
 		limactl delete --force "$machine" >/dev/null || die "cannot delete $machine"
 	done
+elif [ -n "$machines" ]; then
+	# Kept on purpose. Lima still starts and stops them, and reinstalling
+	# solitary picks them up again, but nothing else here knows their names.
+	note "Machines left on this host, for 'limactl delete' or a later install:"
+	echo "$machines" | sed 's/^solitary-/      /'
 fi
 
 if [ -z "$binary" ]; then

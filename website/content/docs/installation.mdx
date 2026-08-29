@@ -83,11 +83,14 @@ A cell is a virtual machine with a disk, and a definition holds the secrets that
 # destroy every machine solitary created, then remove the binary
 curl -fsSL https://solitary.balakin.io/uninstall.sh | SOLITARY_REMOVE_CELLS=1 sh
 
+# or leave the machines where they are and remove solitary only
+curl -fsSL https://solitary.balakin.io/uninstall.sh | SOLITARY_KEEP_CELLS=1 sh
+
 # and delete the cell definitions, the secrets and the state with them
 curl -fsSL https://solitary.balakin.io/uninstall.sh | SOLITARY_PURGE=1 sh
 ```
 
-The script refuses to run while a machine is still on the host rather than orphaning it: once the binary is gone, the tool that knows how to remove one is gone too. `SOLITARY_INSTALL_DIR` points it at an install somewhere unusual, the same as during an install.
+While a machine is still on the host the script stops and asks for one of the two rather than choosing for you: once the binary is gone, the tool that knows how to remove a machine is gone too. Kept machines are named on the way out — `limactl delete solitary-<name>` removes one later, and installing solitary again picks them up where they are. `SOLITARY_INSTALL_DIR` points the script at an install somewhere unusual, the same as during an install.
 
 A Homebrew install is left for Homebrew, which the script says rather than deleting a file the formula still claims:
 
