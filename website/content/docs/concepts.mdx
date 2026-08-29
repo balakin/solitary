@@ -19,6 +19,10 @@ The container is the toolset, not the security boundary. Change `image:` or `bui
 
 The host is the operator and the display. It starts machines, forwards selected ports, stores secrets, and performs explicit file transfers. It does not mount your repository into a cell.
 
+## Naming
+
+A cell is named by its directory, and its VM is that name with a `solitary-` prefix. The VM also records the name inside itself: `/etc/solitary/cell` in the guest says which cell you are in, and the same name is kept in the VM's definition, where `limactl list --json` reports it back. That is what lets solitary recognise a VM it created after the cell directory is deleted — see [machines that outlived their cell](/docs/commands#machines-that-outlived-their-cell).
+
 ## Persistence
 
 The cell's home directory lives on the VM disk. It survives a stopped machine and a replaced container. `rm` destroys the VM and its disk; the cell definition and host-held secrets remain available for a fresh `up`.

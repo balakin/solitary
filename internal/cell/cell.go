@@ -112,9 +112,9 @@ func List() ([]Info, error) {
 	// Orphans are listed as cells rather than reported separately: what is
 	// asked of this list is what solitary is holding on this host, and a
 	// machine with no definition is holding as much as any other.
-	for _, name := range orphansAmong(instances, names) {
+	for _, orphan := range orphansAmong(instances, names) {
 		infos = append(infos, Info{
-			Name:   name,
+			Name:   orphan.Name,
 			Image:  "(no definition)",
 			Status: StatusOrphaned,
 		})
@@ -124,9 +124,22 @@ func List() ([]Info, error) {
 	return infos, nil
 }
 
-// Orphans returns the name of every cell whose machine outlived its definition,
-// in alphabetical order.
-func Orphans() ([]string, error) {
+// Orphan is a machine that outlived the definition it was created from.
+type Orphan struct {
+	// Name is the cell the machine was created for, and what rm takes to
+	// destroy it.
+	Name string
+
+	// Marked reports that the machine carries the parameter solitary writes
+	// into every definition it renders. An unmarked machine is either older
+	// than that parameter or was never solitary's at all, and nothing here
+	// can tell those apart — which is why it is reported rather than decided.
+	Marked bool
+}
+
+// Orphans returns every machine whose definition is gone, in alphabetical
+// order by the cell it was created for.
+func Orphans() ([]Orphan, error) {
 	names, err := config.ListCells()
 	if err != nil {
 		return nil, err
@@ -140,26 +153,34 @@ func Orphans() ([]string, error) {
 	return orphansAmong(instances, names), nil
 }
 
-// orphansAmong picks the machines solitary created that no definition claims.
+// orphansAmong picks the machines no definition claims.
 //
-// A machine is recognised by the prefix its name carries, which is the only
-// mark it has: Lima has no field to write one in. So a machine somebody else
-// named this way is indistinguishable from ours, and everything acting on this
-// list has to be something a person asked for by name.
-func orphansAmong(instances []lima.Instance, defined []string) []string {
+// A machine is recognised by the prefix its name carries and by the parameter
+// solitary renders into its definition. The prefix is what the name is built
+// from, so it is what makes a machine addressable as a cell — the parameter
+// cannot replace it, and a machine created before solitary wrote one has none.
+// What the parameter adds is the one thing the prefix cannot say: that
+// solitary created this machine, rather than somebody naming a machine of
+// their own the same way. Both are reported, and the person destroying them
+// decides.
+func orphansAmong(instances []lima.Instance, defined []string) []Orphan {
 	claimed := make(map[string]bool, len(defined))
 	for _, name := range defined {
 		claimed[config.Instance(name)] = true
 	}
 
-	var orphans []string
+	var orphans []Orphan
 	for _, inst := range instances {
 		if claimed[inst.Name] || !strings.HasPrefix(inst.Name, config.InstancePrefix) {
 			continue
 		}
-		orphans = append(orphans, strings.TrimPrefix(inst.Name, config.InstancePrefix))
+		_, marked := inst.Cell()
+		orphans = append(orphans, Orphan{
+			Name:   strings.TrimPrefix(inst.Name, config.InstancePrefix),
+			Marked: marked,
+		})
 	}
-	sort.Strings(orphans)
+	sort.Slice(orphans, func(i, j int) bool { return orphans[i].Name < orphans[j].Name })
 
 	return orphans
 }
@@ -186,7 +207,7 @@ func Up(name string, progress io.Writer) error {
 		return err
 	}
 
-	rendered, err := lima.Render(c.VM, c.Ports, c.Network)
+	rendered, err := lima.Render(name, c.VM, c.Ports, c.Network)
 	if err != nil {
 		return err
 	}

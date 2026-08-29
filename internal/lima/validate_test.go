@@ -33,9 +33,9 @@ func TestRenderedDefinitionsPassLimactlValidate(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			rendered, err := Render(tc.vm, tc.ports, tc.network)
+			rendered, err := Render(goldenCell, tc.vm, tc.ports, tc.network)
 			if err != nil {
-				t.Fatalf("Render() error = %v", err)
+				t.Fatalf("Render(goldenCell) error = %v", err)
 			}
 
 			path := filepath.Join(t.TempDir(), "cell.yaml")

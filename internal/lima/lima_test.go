@@ -11,6 +11,32 @@ import (
 
 var update = os.Getenv("UPDATE_GOLDEN") != ""
 
+// goldenCell is the cell name every rendering in these tests is for. Fixed
+// rather than taken from the case, so the goldens differ only in the setting
+// each case is about.
+const goldenCell = "probe"
+
+// The machine carries the cell's name, and the script reads it back from the
+// parameter rather than having it written in: the parameter is what makes the
+// machine nameable once its definition is gone, and Lima refuses one that
+// nothing reads.
+func TestRenderNamesTheCell(t *testing.T) {
+	got, err := Render("probe", config.Defaults(), nil, config.Network{})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	if !strings.Contains(got, ParamCell+`: "probe"`) {
+		t.Errorf("Render() does not record the cell's name:\n%s", got)
+	}
+	if !strings.Contains(got, "$PARAM_"+ParamCell) {
+		t.Errorf("Render() does not read the parameter back in the guest:\n%s", got)
+	}
+	if !strings.Contains(got, GuestCellFile) {
+		t.Errorf("Render() does not write the name into the guest:\n%s", got)
+	}
+}
+
 func TestRenderGolden(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -50,9 +76,9 @@ func TestRenderGolden(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := Render(tc.vm, tc.ports, tc.network)
+			got, err := Render(goldenCell, tc.vm, tc.ports, tc.network)
 			if err != nil {
-				t.Fatalf("Render() error = %v", err)
+				t.Fatalf("Render(goldenCell) error = %v", err)
 			}
 
 			path := filepath.Join("testdata", tc.golden)
@@ -67,31 +93,31 @@ func TestRenderGolden(t *testing.T) {
 				t.Fatalf("reading golden file (run with UPDATE_GOLDEN=1 to create it): %v", err)
 			}
 			if got != string(want) {
-				t.Errorf("Render() does not match %s:\n--- got ---\n%s\n--- want ---\n%s", path, got, want)
+				t.Errorf("Render(goldenCell) does not match %s:\n--- got ---\n%s\n--- want ---\n%s", path, got, want)
 			}
 		})
 	}
 }
 
 func TestRenderOmitsPortForwardsWhenNoPortsDeclared(t *testing.T) {
-	got, err := Render(config.Defaults(), nil, config.Network{})
+	got, err := Render(goldenCell, config.Defaults(), nil, config.Network{})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 	// With no ports declared, Lima's default forwarding must be left alone.
 	if strings.Contains(got, "portForwards") {
-		t.Error("Render() emitted portForwards for a cell that declares no ports")
+		t.Error("Render(goldenCell) emitted portForwards for a cell that declares no ports")
 	}
 }
 
 func TestRenderAlwaysDisablesMounts(t *testing.T) {
-	got, err := Render(config.Defaults(), nil, config.Network{})
+	got, err := Render(goldenCell, config.Defaults(), nil, config.Network{})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 	// A mount would hand an agent a path back to files the host executes.
 	if !strings.Contains(got, "mounts: []") {
-		t.Error("Render() did not disable mounts")
+		t.Error("Render(goldenCell) did not disable mounts")
 	}
 }
 
@@ -100,9 +126,9 @@ func TestRenderAlwaysDisablesMounts(t *testing.T) {
 // binds. An allow list that covers only one of the two lets through exactly the
 // ports it was written to keep out.
 func TestRenderCoversBothAddressesAServerCanBindTo(t *testing.T) {
-	got, err := Render(config.Defaults(), []int{3000}, config.Network{})
+	got, err := Render(goldenCell, config.Defaults(), []int{3000}, config.Network{})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 
 	for _, want := range []string{
@@ -120,18 +146,18 @@ func TestRenderCoversBothAddressesAServerCanBindTo(t *testing.T) {
 
 	// Nothing may widen where a forwarded port is reachable from.
 	if strings.Contains(got, "hostIP:") {
-		t.Error("Render() set hostIP; forwarded ports must reach this host's localhost only")
+		t.Error("Render(goldenCell) set hostIP; forwarded ports must reach this host's localhost only")
 	}
 }
 
 // The firewall is the whole point of the setting, so these are the properties
 // that make it one rather than a suggestion.
 func TestRenderRestrictedNetwork(t *testing.T) {
-	got, err := Render(config.Defaults(), nil, config.Network{
+	got, err := Render(goldenCell, config.Defaults(), nil, config.Network{
 		Allow: []string{"github.com", "10.1.2.0/24"},
 	})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 
 	for _, want := range []struct{ rule, why string }{
@@ -155,9 +181,9 @@ func TestRenderRestrictedNetwork(t *testing.T) {
 // A cell that allows nothing must carry no firewall at all, rather than an
 // empty one that denies everything.
 func TestRenderLeavesAnUnrestrictedNetworkAlone(t *testing.T) {
-	got, err := Render(config.Defaults(), nil, config.Network{})
+	got, err := Render(goldenCell, config.Defaults(), nil, config.Network{})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 
 	for _, unwanted := range []struct{ rule, why string }{
@@ -176,9 +202,9 @@ func TestRenderLeavesAnUnrestrictedNetworkAlone(t *testing.T) {
 // a setting has to reach the guest as surely as adding one did. What the
 // restriction wrote, an unrestricted definition takes back out.
 func TestRenderReleasesAMachineThatWasRestricted(t *testing.T) {
-	got, err := Render(config.Defaults(), nil, config.Network{})
+	got, err := Render(goldenCell, config.Defaults(), nil, config.Network{})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 
 	for _, want := range []struct{ rule, why string }{
@@ -197,9 +223,9 @@ func TestRenderReleasesAMachineThatWasRestricted(t *testing.T) {
 // The same for a tunnel: a configuration nothing describes any more must not
 // keep coming up at boot, and its private key must not stay on the disk.
 func TestRenderReleasesAMachineThatWasTunnelled(t *testing.T) {
-	got, err := Render(config.Defaults(), nil, config.Network{Allow: []string{"github.com"}})
+	got, err := Render(goldenCell, config.Defaults(), nil, config.Network{Allow: []string{"github.com"}})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 
 	for _, want := range []struct{ rule, why string }{
@@ -215,13 +241,13 @@ func TestRenderReleasesAMachineThatWasTunnelled(t *testing.T) {
 // A tunnel is only worth having if it cannot be gone around, so these are the
 // properties that decide whether a cell leaks when it drops.
 func TestRenderTunnel(t *testing.T) {
-	named, err := Render(config.Defaults(), nil, config.Network{
+	named, err := Render(goldenCell, config.Defaults(), nil, config.Network{
 		Allow:  []string{"github.com"},
 		VPN:    "./vpn.conf",
 		Tunnel: &config.Tunnel{EndpointHost: "de-01.example.net", EndpointPort: "51820", Digest: "8f1e"},
 	})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 
 	for _, want := range []struct{ rule, why string }{
@@ -247,13 +273,13 @@ func TestRenderTunnel(t *testing.T) {
 		}
 	}
 
-	addressed, err := Render(config.Defaults(), nil, config.Network{
+	addressed, err := Render(goldenCell, config.Defaults(), nil, config.Network{
 		Allow:  []string{"github.com"},
 		VPN:    "./vpn.conf",
 		Tunnel: &config.Tunnel{EndpointHost: "198.51.100.7", EndpointPort: "51820", Digest: "8f1e"},
 	})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 	if !strings.Contains(addressed, "set vpn4 { type ipv4_addr;\n          elements = { 198.51.100.7 }") {
 		t.Errorf("a peer given as an address is not allowed from the start:\n%s", addressed)
@@ -266,13 +292,13 @@ func TestRenderTunnel(t *testing.T) {
 // The configuration holds a private key, and a machine definition is kept on
 // disk, handed to the guest, and meant to be shared.
 func TestRenderNeverCarriesTheTunnelConfiguration(t *testing.T) {
-	got, err := Render(config.Defaults(), nil, config.Network{
+	got, err := Render(goldenCell, config.Defaults(), nil, config.Network{
 		Allow:  []string{"github.com"},
 		VPN:    "./vpn.conf",
 		Tunnel: &config.Tunnel{EndpointHost: "de-01.example.net", EndpointPort: "51820", Digest: "8f1e"},
 	})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 
 	for _, unwanted := range []string{"PrivateKey", "[Interface]", "[Peer]"} {
@@ -285,12 +311,12 @@ func TestRenderNeverCarriesTheTunnelConfiguration(t *testing.T) {
 // A network whose names only its own resolver knows — a corporate one, a split
 // horizon, a proxy that intercepts DNS — cannot be served by a public resolver.
 func TestRenderHostResolver(t *testing.T) {
-	got, err := Render(config.Defaults(), nil, config.Network{
+	got, err := Render(goldenCell, config.Defaults(), nil, config.Network{
 		Allow:     []string{"github.com"},
 		Resolvers: []string{config.HostResolver, "10.0.0.53"},
 	})
 	if err != nil {
-		t.Fatalf("Render() error = %v", err)
+		t.Fatalf("Render(goldenCell) error = %v", err)
 	}
 
 	for _, want := range []struct{ rule, why string }{
