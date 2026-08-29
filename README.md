@@ -65,8 +65,12 @@ brew install balakin/solitary/solitary
 
 Binaries for macOS and Linux are attached to every
 [release](https://github.com/balakin/solitary/releases/latest) too, and
-`solitary update` replaces the binary with the newest one. See the
-[installation guide](https://solitary.balakin.io/docs/installation) for the rest.
+`solitary update` replaces the binary with the newest one.
+
+To remove it again, `curl -fsSL https://solitary.balakin.io/uninstall.sh | sh`
+(or `brew uninstall solitary`); it keeps the cells unless told otherwise. See
+the [installation guide](https://solitary.balakin.io/docs/installation) for the
+rest.
 
 Requirements:
 

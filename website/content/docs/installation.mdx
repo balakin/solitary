@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Requirements, the install script, Homebrew, and keeping solitary current.
+description: Requirements, the install script, Homebrew, keeping solitary current, and removing it.
 ---
 
 Solitary is on its `0.x` line: the configuration shape can still change between releases. Read [the limitations](/docs/limitations) before trusting a cell with credentials.
@@ -68,6 +68,34 @@ solitary update --check  # only say whether one exists
 Every other command mentions a newer release once a day, at most three times per release, and only when it is talking to a terminal. Set `SOLITARY_NO_UPDATE_CHECK=1` to keep solitary from asking GitHub anything on its own.
 
 A binary built from source is left alone by both: it is ahead of the release it names rather than behind it.
+
+## Uninstall
+
+The uninstall script removes the binary the install script put on your PATH. It leaves the cells and their definitions alone unless you say otherwise:
+
+```sh
+curl -fsSL https://solitary.balakin.io/uninstall.sh | sh
+```
+
+A cell is a virtual machine with a disk, and a definition holds the secrets that cell was given, so neither is thrown away on a bare run. Remove the cells first — `solitary ls` lists them, `solitary rm <name>` destroys one machine — or let the script do it:
+
+```sh
+# destroy every machine solitary created, then remove the binary
+curl -fsSL https://solitary.balakin.io/uninstall.sh | SOLITARY_REMOVE_CELLS=1 sh
+
+# and delete the cell definitions, the secrets and the state with them
+curl -fsSL https://solitary.balakin.io/uninstall.sh | SOLITARY_PURGE=1 sh
+```
+
+The script refuses to run while a machine is still on the host rather than orphaning it: once the binary is gone, the tool that knows how to remove one is gone too. `SOLITARY_INSTALL_DIR` points it at an install somewhere unusual, the same as during an install.
+
+A Homebrew install is left for Homebrew, which the script says rather than deleting a file the formula still claims:
+
+```sh
+brew uninstall solitary
+```
+
+Lima is installed separately and is never removed: it may well be running machines of its own.
 
 ## Build from source
 

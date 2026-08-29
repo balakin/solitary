@@ -172,6 +172,11 @@ Three ways in, all fed by the same release archives:
   directory before renaming it over the old one — a rename is only atomic within one filesystem,
   and it is the one way to replace a binary that is currently running. It never uses `sudo`: a
   script piped from the network does not ask for a password, it falls back to `~/.local/bin`.
+  `website/public/uninstall.sh` is its counterpart at `/uninstall.sh`, and undoes only what the
+  install script did: the binary. A cell is a machine with a disk and a definition holding secrets,
+  so the script refuses to run while any `solitary-*` machine is left rather than orphaning one —
+  the binary is the tool that removes them — and `SOLITARY_REMOVE_CELLS` and `SOLITARY_PURGE` are
+  what say otherwise. It leaves a Homebrew install and Lima itself alone.
 - `balakin/homebrew-solitary`, a tap holding one formula that GoReleaser regenerates and pushes on
   every release. A formula rather than a cask although GoReleaser deprecated `brews` for
   `homebrew_casks`: casks install on macOS only, and Homebrew quarantines what a cask downloads,
