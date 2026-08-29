@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/balakin/solitary/compare/v0.6.0...v0.7.0) (2026-08-29)
+
+
+### Features
+
+* let a cell describe itself ([bd51b13](https://github.com/balakin/solitary/commit/bd51b13d51df0106cdfadc413bcdb3616adebf27))
+
 ## [0.6.0](https://github.com/balakin/solitary/compare/v0.5.2...v0.6.0) (2026-08-29)
 
 
