@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/balakin/solitary/compare/v0.8.0...v0.9.0) (2026-08-29)
+
+
+### Features
+
+* size a cell's shared memory to its machine ([c3371ca](https://github.com/balakin/solitary/commit/c3371caa13d834c964f195f729b664d7c80ef5af))
+
 ## [0.8.0](https://github.com/balakin/solitary/compare/v0.7.0...v0.8.0) (2026-08-29)
 
 
