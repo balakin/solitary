@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/balakin/solitary/compare/v0.10.0...v0.11.0) (2026-08-29)
+
+
+### Features
+
+* let uninstall.sh leave the cells where they are ([b0880d6](https://github.com/balakin/solitary/commit/b0880d66d0fa75dc22a55d50fb866ec6d1c8a731))
+
 ## [0.10.0](https://github.com/balakin/solitary/compare/v0.9.1...v0.10.0) (2026-08-29)
 
 
