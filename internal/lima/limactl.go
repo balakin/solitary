@@ -17,11 +17,25 @@ import (
 // ErrNotInstalled is returned when limactl is not on PATH.
 var ErrNotInstalled = errors.New("limactl not found on PATH: install Lima from https://lima-vm.io")
 
-// Instance is one Lima machine, as reported by limactl list --json.
+// Instance is one Lima machine, as reported by limactl list --json. The whole
+// definition comes back with it, of which only the parameters are read: they
+// are where solitary writes what it knows about the machine.
 type Instance struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
 	Dir    string `json:"dir"`
+	Config struct {
+		Param map[string]string `json:"param"`
+	} `json:"config"`
+}
+
+// Cell is the cell this machine was created for, and whether the machine says
+// so at all. A machine created before solitary wrote the parameter answers
+// false, which is not the same as not being ours: the name is what says that.
+func (i Instance) Cell() (string, bool) {
+	name, ok := i.Config.Param[ParamCell]
+
+	return name, ok && name != ""
 }
 
 // Machine statuses reported by Lima.

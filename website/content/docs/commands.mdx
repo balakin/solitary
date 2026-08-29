@@ -64,6 +64,8 @@ Every other command mentions a newer release at most once a day, and only to a t
 
 A cell is named by its directory, so deleting that directory — or renaming it — leaves the VM behind, still holding the disk it was given. `ls` lists such a machine as `orphaned` rather than hiding it, since nothing else on the host says it is there. `down` and `rm` take its name like any other cell's, and `rm --orphans` destroys every one of them at once. `solitary init <name>` gives the machine a definition again instead.
 
+`rm --orphans` says of each machine whether it carries solitary's own mark — the cell name written into the VM's definition, which is also what puts `/etc/solitary/cell` in the guest. A machine created before that mark existed, and a VM someone named `solitary-…` themselves, both come up unmarked and look alike, so the prompt reports it and leaves the decision to you.
+
 ## Taking someone else's cell
 
 `clone` installs one cell definition out of a git repository — a repository that is a single cell, or one directory out of a catalogue of them.

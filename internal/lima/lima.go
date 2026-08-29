@@ -16,8 +16,23 @@ import (
 //go:embed templates/cell.yaml.tmpl
 var cellTemplate string
 
+// ParamCell is the Lima parameter the cell's name is written into, and the
+// closest thing a machine has to a label: Lima has no field for metadata, and
+// refuses a parameter nothing reads, so this one is read by the provision
+// script that writes GuestCellFile. limactl reports it back under
+// config.param, which is how a machine can name its cell after the definition
+// it was created from is gone.
+const ParamCell = "solitary_cell"
+
+// GuestCellFile is where a machine records the cell it was created for.
+// Writing it is what makes ParamCell a parameter Lima accepts rather than a
+// marker it rejects — and inside a cell it is the only thing that says which
+// one this is.
+const GuestCellFile = "/etc/solitary/cell"
+
 // templateData is what cell.yaml.tmpl is rendered against.
 type templateData struct {
+	Name    string
 	VM      config.VM
 	Ports   []int
 	Network config.Network
@@ -44,18 +59,33 @@ var funcs = template.FuncMap{
 	// solitary later places in the machine cannot disagree.
 	"vpnInterface": func() string { return config.VPNInterface },
 	"vpnConfig":    func() string { return config.VPNConfigFile },
+	// cellParam and cellParamEnv name the parameter carrying the cell's name,
+	// and the environment variable Lima puts it in when it runs a provision
+	// script. Reading the parameter through the shell rather than through
+	// Lima's own templating keeps one set of delimiters in this file: both
+	// templates use the same ones, and a reference meant for Lima would be
+	// resolved here instead.
+	"cellParam":    func() string { return ParamCell },
+	"cellParamEnv": func() string { return "PARAM_" + ParamCell },
+	// guestCellFile is the path in the guest, from the same constant the
+	// rest of solitary reads it from.
+	"guestCellFile": func() string { return GuestCellFile },
 }
 
 // Render fills the embedded template with the resolved machine settings and
 // returns a Lima machine definition.
-func Render(vm config.VM, ports []int, network config.Network) (string, error) {
+//
+// The cell's name is rendered into the definition as well as into the
+// machine's name, so that a machine can still say which cell it belongs to
+// when the definition it came from is gone.
+func Render(name string, vm config.VM, ports []int, network config.Network) (string, error) {
 	tmpl, err := template.New("cell").Funcs(funcs).Parse(cellTemplate)
 	if err != nil {
 		return "", fmt.Errorf("parsing embedded template: %w", err)
 	}
 
 	var out strings.Builder
-	if err := tmpl.Execute(&out, templateData{VM: vm, Ports: ports, Network: network}); err != nil {
+	if err := tmpl.Execute(&out, templateData{Name: name, VM: vm, Ports: ports, Network: network}); err != nil {
 		return "", fmt.Errorf("rendering machine definition: %w", err)
 	}
 

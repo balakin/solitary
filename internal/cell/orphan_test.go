@@ -10,18 +10,29 @@ import (
 )
 
 // A machine whose cell is gone is an orphan; one that still has a definition,
-// and one Lima manages for something else, are not.
+// and one Lima manages for something else, are not. A machine carrying the
+// parameter says so, and one predating it is still listed.
 func TestOrphansAmong(t *testing.T) {
 	got := orphansAmong([]lima.Instance{
 		{Name: "solitary-gone"},
 		{Name: "solitary-kept"},
 		{Name: "docker"},
-		{Name: "solitary-also-gone"},
+		marked("solitary-also-gone", "also-gone"),
 	}, []string{"kept"})
 
-	if want := []string{"also-gone", "gone"}; !reflect.DeepEqual(got, want) {
+	want := []Orphan{{Name: "also-gone", Marked: true}, {Name: "gone"}}
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("orphansAmong() = %v, want %v", got, want)
 	}
+}
+
+// marked builds an instance carrying the parameter solitary renders into every
+// definition, the way limactl reports one back.
+func marked(instance, cell string) lima.Instance {
+	inst := lima.Instance{Name: instance}
+	inst.Config.Param = map[string]string{lima.ParamCell: cell}
+
+	return inst
 }
 
 // The prefix is the only mark a machine carries, so a machine named without it

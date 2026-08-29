@@ -20,7 +20,25 @@ mounts: []
 # Host proxy configuration can name internal hosts and carry credentials.
 propagateProxyEnv: false
 
+# The cell this machine was created for. Lima has no field for metadata, and
+# rejects a parameter that no provision, probe, copyToHost or portForward
+# reads — so this one is read by the first script below, which is where it
+# earns its keep anyway. limactl list --json reports it back, so a machine can
+# still name its cell once the definition it came from is deleted.
+param:
+  solitary_cell: "probe"
+
 provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      mkdir -p "$(dirname /etc/solitary/cell)"
+      # Lima puts every param in the environment of the scripts it runs, and
+      # reading one here is what makes the param above legal: Lima refuses a
+      # param that nothing reads.
+      echo "$PARAM_solitary_cell" > /etc/solitary/cell
+
   - mode: system
     script: |
       #!/bin/bash

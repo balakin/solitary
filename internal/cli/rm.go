@@ -59,23 +59,37 @@ func newRmCmd() *cobra.Command {
 	return cmd
 }
 
-// removeOrphans destroys the machines no definition claims. They are named in
+// removeOrphans destroys the machines no definition claims. They are listed in
 // the prompt rather than counted: nothing else on the host says what they are,
 // so the confirmation is the last chance to recognise one that should be kept.
+//
+// Each says whether it carries solitary's own mark. A machine named like one of
+// ours but created by hand looks exactly like a machine solitary made before it
+// wrote that mark, and this is the moment where somebody who knows which it is
+// can say so.
 func removeOrphans(cmd *cobra.Command, force bool) error {
-	names, err := cell.Orphans()
+	orphans, err := cell.Orphans()
 	if err != nil {
 		return err
 	}
-	if len(names) == 0 {
+	if len(orphans) == 0 {
 		fmt.Fprintln(cmd.ErrOrStderr(), "No orphaned machines.")
 		return nil
 	}
 
 	if !force {
-		ok, err := confirm(cmd, fmt.Sprintf(
-			"Destroy %s with no cell (%s)? Everything inside is lost. [y/N] ",
-			machineCount(len(names)), strings.Join(names, ", ")))
+		var b strings.Builder
+		fmt.Fprintf(&b, "Destroy %s with no cell? Everything inside is lost.\n", machineCount(len(orphans)))
+		for _, orphan := range orphans {
+			mark := "unmarked — solitary did not create it, or created it before the mark"
+			if orphan.Marked {
+				mark = "created by solitary"
+			}
+			fmt.Fprintf(&b, "  %s  (%s)\n", orphan.Name, mark)
+		}
+		b.WriteString("[y/N] ")
+
+		ok, err := confirm(cmd, b.String())
 		if err != nil {
 			return err
 		}
@@ -85,8 +99,8 @@ func removeOrphans(cmd *cobra.Command, force bool) error {
 		}
 	}
 
-	for _, name := range names {
-		if err := cell.Remove(name, cmd.ErrOrStderr()); err != nil {
+	for _, orphan := range orphans {
+		if err := cell.Remove(orphan.Name, cmd.ErrOrStderr()); err != nil {
 			return err
 		}
 	}
