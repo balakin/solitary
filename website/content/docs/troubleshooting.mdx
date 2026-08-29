@@ -50,10 +50,13 @@ Solitary reports more than running and stopped:
 | `degraded`      | The machine is up, but its container is not.                       |
 | `unreachable`   | Lima considers the machine running, but nothing inside it answers. |
 | `broken`        | Lima reports the machine as broken.                                |
+| `orphaned`      | The machine is here, but the definition it came from is gone.      |
 
 `unreachable` exists so that a hung machine fails your commands in seconds instead of blocking them. `solitary down` then `up` recovers it without touching the disk.
 
 A `degraded` cell has lost its container, usually because `command` exited — it must not exit; it is the container's life. `up` starts a replacement.
+
+An `orphaned` machine is what a deleted or renamed cell directory leaves behind, holding its disk with nothing left to name it. `solitary rm --orphans` discards them all; `solitary init <name>` gives one a definition again. `doctor` reports them too.
 
 ## A tunnel that will not come up
 

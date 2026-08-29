@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/balakin/solitary/internal/config"
@@ -38,6 +39,10 @@ const (
 	StatusUnreachable Status = "unreachable"
 	// StatusBroken means Lima reports the machine as broken.
 	StatusBroken Status = "broken"
+	// StatusOrphaned means a machine solitary created is still on the host
+	// but the definition it was created from is gone. It is listed because a
+	// machine nobody can name is a machine nobody reclaims the disk of.
+	StatusOrphaned Status = "orphaned"
 )
 
 // ErrNotRunning is returned by operations that need a running cell.
@@ -50,18 +55,22 @@ type Info struct {
 	Status Status
 }
 
-// List returns every defined cell with its current state.
+// List returns every defined cell with its current state, alongside the
+// machines left behind by cells that no longer have one.
 func List() ([]Info, error) {
 	names, err := config.ListCells()
 	if err != nil {
 		return nil, err
 	}
-	if len(names) == 0 {
-		return nil, nil
-	}
 
 	instances, err := lima.List()
 	if err != nil {
+		// A host with no cells and no Lima has nothing to list rather than
+		// something to complain about: Lima is what up asks for, and this is
+		// the command someone runs before they have got that far.
+		if len(names) == 0 && errors.Is(err, lima.ErrNotInstalled) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	byName := make(map[string]lima.Instance, len(instances))
@@ -100,7 +109,59 @@ func List() ([]Info, error) {
 		infos = append(infos, info)
 	}
 
+	// Orphans are listed as cells rather than reported separately: what is
+	// asked of this list is what solitary is holding on this host, and a
+	// machine with no definition is holding as much as any other.
+	for _, name := range orphansAmong(instances, names) {
+		infos = append(infos, Info{
+			Name:   name,
+			Image:  "(no definition)",
+			Status: StatusOrphaned,
+		})
+	}
+	sort.Slice(infos, func(i, j int) bool { return infos[i].Name < infos[j].Name })
+
 	return infos, nil
+}
+
+// Orphans returns the name of every cell whose machine outlived its definition,
+// in alphabetical order.
+func Orphans() ([]string, error) {
+	names, err := config.ListCells()
+	if err != nil {
+		return nil, err
+	}
+
+	instances, err := lima.List()
+	if err != nil {
+		return nil, err
+	}
+
+	return orphansAmong(instances, names), nil
+}
+
+// orphansAmong picks the machines solitary created that no definition claims.
+//
+// A machine is recognised by the prefix its name carries, which is the only
+// mark it has: Lima has no field to write one in. So a machine somebody else
+// named this way is indistinguishable from ours, and everything acting on this
+// list has to be something a person asked for by name.
+func orphansAmong(instances []lima.Instance, defined []string) []string {
+	claimed := make(map[string]bool, len(defined))
+	for _, name := range defined {
+		claimed[config.Instance(name)] = true
+	}
+
+	var orphans []string
+	for _, inst := range instances {
+		if claimed[inst.Name] || !strings.HasPrefix(inst.Name, config.InstancePrefix) {
+			continue
+		}
+		orphans = append(orphans, strings.TrimPrefix(inst.Name, config.InstancePrefix))
+	}
+	sort.Strings(orphans)
+
+	return orphans
 }
 
 // statusOf maps a machine's state onto a cell's state.
@@ -650,6 +711,10 @@ type Detail struct {
 	Network     config.Network
 	Secrets     []SecretState
 
+	// Orphaned reports that no definition exists for this name and every
+	// other field is therefore empty. The machine is all that is left.
+	Orphaned bool
+
 	// ProvisionChanged reports that vm.provision differs from the script the
 	// machine was given. Unlike every other setting, restarting the machine
 	// does not make it match the file: the old script has already run, and
@@ -659,6 +724,20 @@ type Detail struct {
 
 // Describe reads a cell's definition.
 func Describe(name string) (Detail, error) {
+	if err := config.ValidateName(name); err != nil {
+		return Detail{}, err
+	}
+
+	// An orphan has a machine and nothing else, so there is nothing here to
+	// describe. Saying so is still an answer: the alternative is an error
+	// where a caller expected a cell, for a row it was shown on purpose.
+	switch defined, err := config.HasCell(name); {
+	case err != nil:
+		return Detail{}, err
+	case !defined:
+		return Detail{Name: name, Orphaned: true}, nil
+	}
+
 	c, err := config.LoadCell(name)
 	if err != nil {
 		return Detail{}, err
@@ -1017,8 +1096,11 @@ func SetSecrets(name string, progress io.Writer) error {
 }
 
 // Down stops a cell's machine, keeping its disk and its secrets.
+//
+// The definition is not read: stopping a machine needs nothing from it, and an
+// orphaned machine is the one most worth being able to stop.
 func Down(name string, progress io.Writer) error {
-	if _, err := config.LoadCell(name); err != nil {
+	if err := config.ValidateName(name); err != nil {
 		return err
 	}
 
@@ -1065,6 +1147,16 @@ func Remove(name string, progress io.Writer) error {
 	// than comparing against a machine that no longer exists.
 	if err := config.RemoveApplied(name); err != nil {
 		return err
+	}
+
+	defined, err := config.HasCell(name)
+	if err != nil {
+		return err
+	}
+	if !defined {
+		// Nothing is kept and nothing rebuilds it: this was the last of it.
+		fmt.Fprintf(progress, "Nothing is left of %q; it had no definition to rebuild from.\n", name)
+		return nil
 	}
 
 	fmt.Fprintf(progress, "The definition and secrets for %q are kept; 'solitary up %s' rebuilds it.\n", name, name)

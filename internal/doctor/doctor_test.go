@@ -406,7 +406,7 @@ func TestMachinesStatusFixesBoth(t *testing.T) {
 		map[string]uint64{"solitary-a": 50 * gib},
 	)
 
-	for _, want := range []string{"solitary rm", "limactl delete"} {
+	for _, want := range []string{"solitary rm <name>", "solitary rm --orphans"} {
 		if !strings.Contains(got.Fix, want) {
 			t.Errorf("machinesStatus() fix = %q, want it to name %q", got.Fix, want)
 		}

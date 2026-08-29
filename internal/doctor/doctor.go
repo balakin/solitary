@@ -394,7 +394,8 @@ func machinesStatus(instances []lima.Instance, defined []machine, sizes map[stri
 		detail = append(detail, fmt.Sprintf("%s with no cell: %s", machineCount(len(orphans)), strings.Join(orphans, ", ")))
 		fix = append(fix,
 			"A cell is named by its directory, so renaming one leaves its machine behind,",
-			"holding the disk it was given. Discard one with 'limactl delete <name>'.")
+			"holding the disk it was given. 'solitary ls' shows them as orphaned;",
+			"'solitary rm --orphans' discards them all.")
 	}
 	if len(detail) == 0 {
 		return Check{
