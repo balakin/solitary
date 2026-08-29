@@ -154,6 +154,8 @@ Passing the node through is only half of what is needed, and `up` does the other
 
 A device is fixed once a container is created, so changing this list replaces the container the way changing `image` or `secrets` does.
 
+A cell that runs a guest of its own needs two more things beside the node. Its shared memory has to hold the guest — see [`vm`](#vm), which sizes it — and it has to be able to run the emulator as someone other than root, because lima refuses to run as root and a cell is root in its container until [`user`](#user) says otherwise.
+
 A device is authority, in the way a secret is. The machine stays the boundary — a cell given `/dev/kvm` can run a guest of its own, not read the host's disks — but this is the one setting that reaches past the container into the machine, so `clone` shows it before a definition is installed. Name only the nodes a cell needs.
 
 ### `network`
@@ -189,6 +191,8 @@ vm:
   provision: |
     apt-get install -y build-essential
 ```
+
+`memory` sizes one thing inside the cell as well: the container's `/dev/shm`. Podman would give it 64MiB, which is a limit from a world where a container shares a host with others — here the machine is already the bound, and a `tmpfs` costs nothing until it is written to. A cell given `/dev/kvm` depends on this, because a guest's memory is a file on `/dev/shm`. Changing `memory` therefore replaces the container as well as restarting the machine.
 
 The `vm` block describes settings a machine reads at boot. Change it while a cell is running and `up` warns that the running cell still uses the old ones; `down` then `up` applies them without touching the disk.
 

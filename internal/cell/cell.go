@@ -292,7 +292,7 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 	digest := podman.EnvDigest(env)
 	devices := podman.DeviceList(c.Devices)
 	if state.Running && state.Image == identity && state.EnvDigest == digest &&
-		state.User == c.User && state.Devices == devices {
+		state.User == c.User && state.Devices == devices && state.ShmSize == c.VM.Memory {
 		return nil
 	}
 
@@ -311,6 +311,10 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 		// Devices are handed to a container when it is created and cannot be
 		// added to it afterwards.
 		fmt.Fprintln(progress, "Devices changed; replacing the container.")
+	case state.Running && state.ShmSize != c.VM.Memory:
+		// The container's shared memory follows the machine's, and it is
+		// sized when the container is created.
+		fmt.Fprintln(progress, "Machine memory changed; replacing the container.")
 	}
 
 	if err := ensureDevices(instance, c.Devices); err != nil {
@@ -330,6 +334,7 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 		HostHome: home,
 		User:     c.User,
 		Devices:  c.Devices,
+		ShmSize:  c.VM.Memory,
 	})
 }
 
