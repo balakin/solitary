@@ -46,6 +46,9 @@ A cell names the secrets it wants, and running it hands them to an image someone
 
 ```text
 Cell "claude" from github.com/balakin/cells
+  Claude Code with neovim and tmux, on a network that reaches anthropic,
+  github and npm and nothing else.
+
   image    build:./Containerfile
   machine  4 cpus · 8GiB · 40GiB
   secrets  CLAUDE_API_KEY, GITHUB_TOKEN (optional)
@@ -57,6 +60,8 @@ Cell "claude" from github.com/balakin/cells
 
 Install it? [y/N]
 ```
+
+The sentence under the name is the definition's own `description:`, which is the one line here written by whoever published the cell. Write one for yours: it is what someone reads before they decide.
 
 Nothing has started either way — `up` does that, afterwards. `--yes` skips the question and `--list` shows this without installing anything.
 
