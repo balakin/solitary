@@ -5,8 +5,8 @@ description: Two complete cells to clone — a terminal setup around claude, and
 
 The repository holds two cell definitions that are meant to be run rather than read. Each is a `cell.yaml`, the `Containerfile` it builds from, and a `skel/` directory of dotfiles.
 
-- **`claude`** — a terminal working environment: claude, Neovim with LazyVim, tmux, [workmux](https://github.com/raine/workmux), and node from nvm with corepack enabled.
-- **`vscode`** — an editor reached from the host's browser: openvscode-server with the extensions a web project wants, a dark theme, and the ports a dev server listens on, plus claude, node and corepack.
+- **`claude`** — a terminal working environment: claude, Neovim with LazyVim, tmux, [workmux](https://github.com/raine/workmux), `gh`, and node from nvm with corepack enabled.
+- **`vscode`** — an editor reached from the host's browser: openvscode-server with the extensions a web project wants, a dark theme, and the ports a dev server listens on, plus claude, `gh`, node and corepack.
 
 ## Take one
 
@@ -37,8 +37,20 @@ nvim         LazyVim, plugins and treesitter parsers preinstalled
 tmux         status line at the top, mouse on
 workmux      one agent per git worktree, each in its own tmux window
 node, pnpm   node from nvm, pnpm through corepack
+gh           the GitHub CLI, authenticated from GITHUB_TOKEN
 lazygit, rg, fd, jq
 ```
+
+Both cells declare one secret, `GITHUB_TOKEN`, and it is optional:
+
+```yaml
+secrets:
+  GITHUB_TOKEN:
+    required: false
+    description: gh — cloning, pushing branches and opening pull requests
+```
+
+`up` offers it and enter skips it, so a cell with no token starts with the variable simply absent. It is declared because `gh auth login` cannot work here: a cell has no path to the host, so the browser that sign-in wants to open has nothing to open — the token has to come in from the host instead. Give it a fine-grained token scoped to the repositories that cell works on, and `solitary secrets claude` rotates it later. See [pass secrets safely](/docs/guides-secrets).
 
 Sign claude in once inside the cell. The cell's home is a directory on the machine rather than in the container, so the login survives every change that replaces the container — a new image, an edited `Containerfile`, a rotated secret. It does not survive `solitary rm`, which discards the machine's disk and the home with it. Declaring `ANTHROPIC_API_KEY` under `secrets:` is the other way round: the value is held on the host, so it outlives the cell entirely. See [changing a cell](/docs/concepts#changing-a-cell).
 

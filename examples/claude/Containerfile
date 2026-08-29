@@ -9,6 +9,7 @@ ARG NVM_VERSION=v0.40.7
 ARG NVIM_VERSION=v0.12.5
 ARG LAZYGIT_VERSION=0.64.1
 ARG WORKMUX_VERSION=v0.1.247
+ARG GH_VERSION=2.98.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NVM_DIR=/opt/nvm
@@ -96,6 +97,25 @@ RUN arch="$(uname -m)" \
  && install -m755 /tmp/workmux /usr/local/bin/workmux \
  && rm /tmp/workmux.tar.gz /tmp/workmux.sha256 /tmp/workmux \
  && workmux --version
+
+# gh, so the agent can open pull requests and read issues without a browser: a
+# cell cannot open one on the host, so GITHUB_TOKEN from cell.yaml is how it
+# authenticates. Verified against the checksums published beside the archive.
+RUN arch="$(uname -m)" \
+ && case "$arch" in \
+      x86_64)  gh_arch=amd64 ;; \
+      aarch64) gh_arch=arm64 ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac \
+ && base="https://github.com/cli/cli/releases/download/v${GH_VERSION}" \
+ && curl -fsSL -o /tmp/gh.tar.gz "${base}/gh_${GH_VERSION}_linux_${gh_arch}.tar.gz" \
+ && curl -fsSL -o /tmp/gh.sha256 "${base}/gh_${GH_VERSION}_checksums.txt" \
+ && echo "$(grep "gh_${GH_VERSION}_linux_${gh_arch}\.tar\.gz$" /tmp/gh.sha256 | cut -d' ' -f1)  /tmp/gh.tar.gz" \
+    | sha256sum -c - \
+ && tar -C /tmp -xzf /tmp/gh.tar.gz \
+ && install -m755 "/tmp/gh_${GH_VERSION}_linux_${gh_arch}/bin/gh" /usr/local/bin/gh \
+ && rm -rf /tmp/gh.tar.gz /tmp/gh.sha256 "/tmp/gh_${GH_VERSION}_linux_${gh_arch}" \
+ && gh --version
 
 # Everything under /opt/cell-skel is copied into the cell's home the first time
 # the container starts, and only where nothing is there already.
