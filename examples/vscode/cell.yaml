@@ -43,11 +43,19 @@ vm:
   cpus: 4
   memory: 6GiB
 # Claude signs in inside the cell, and the cell's home survives a container
-# being replaced — so no secret is declared. Uncomment to pass an API key in
-# from ~/.config/solitary/cells/vscode/.env instead.
+# being replaced — so no key is declared for it. Uncomment ANTHROPIC_API_KEY to
+# pass one in from ~/.config/solitary/cells/vscode/.env instead.
 #
-# secrets:
-#   ANTHROPIC_API_KEY:
+# GITHUB_TOKEN is the other way round: it is how gh authenticates, because a
+# cell cannot open a browser on the host and `gh auth login` has nothing to
+# launch. Optional, so the cell still starts without one — `up` offers it and
+# enter skips it. Give it a fine-grained token scoped to the repositories this
+# cell works on, and rotate it with `solitary secrets vscode`.
+secrets:
+  # ANTHROPIC_API_KEY:
+  GITHUB_TOKEN:
+    required: false
+    description: gh — cloning, pushing branches and opening pull requests
 
 # Left open so the cell reaches whatever the host reaches: an allow list gates
 # the build as well, and a domain missing from it fails the build rather than
