@@ -36,6 +36,9 @@ secrets: # only these names are passed into the cell
 ports: # omit and every listening port reaches host localhost;
   - 8080 # set and only these do
 
+devices: # optional; device nodes in the machine to pass into the cell
+  - /dev/kvm
+
 network: # omit and the cell reaches whatever the host reaches;
   allow: # set and it reaches these and nothing else
     - github.com
@@ -135,6 +138,23 @@ ports:
   - 8080
   - 3000
 ```
+
+### `devices`
+
+Device nodes in the machine to pass into the container, as absolute paths under `/dev`. A cell reaches none of the machine's own devices without this.
+
+```yaml
+devices:
+  - /dev/kvm
+```
+
+The node has to be one the machine already has, so this is not a way to reach the host's hardware — it is for what the guest kernel offers. `/dev/kvm` is the one worth naming: where the host allows nested virtualisation, it lets a cell run a virtual machine of its own.
+
+Passing the node through is only half of what is needed, and `up` does the other half. The container is rootless, so its root is the machine's user on the other side; a node the guest kernel left to `root` is one the cell would get and be unable to open. So each declared node is handed to that user at every `up` — every one, because a reboot makes the nodes again as the distribution says. The group is left alone and nothing is made world-readable.
+
+A device is fixed once a container is created, so changing this list replaces the container the way changing `image` or `secrets` does.
+
+A device is authority, in the way a secret is. The machine stays the boundary — a cell given `/dev/kvm` can run a guest of its own, not read the host's disks — but this is the one setting that reaches past the container into the machine, so `clone` shows it before a definition is installed. Name only the nodes a cell needs.
 
 ### `network`
 
