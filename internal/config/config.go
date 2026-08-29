@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -25,6 +27,17 @@ import (
 // The cell's name is the name of the directory holding the file, never a field
 // inside it, so the two can never disagree.
 type Cell struct {
+	// Description says what this cell is for, in a sentence or two. It is
+	// shown by clone before a definition is installed and in the dashboard,
+	// so it is written for someone deciding whether they want this cell
+	// rather than for someone who already runs it.
+	//
+	// It is capped at MaxDescription and folded to a single line: the
+	// definition is the documentation of a cell that is passed around, and a
+	// summary that does not fit on a screen beside the image and the allow
+	// list is a README instead.
+	Description string `yaml:"description"`
+
 	// Image is the container image holding the toolset, e.g.
 	// ghcr.io/you/nvim-claude:latest. Exactly one of image or build is
 	// required.
@@ -104,6 +117,11 @@ type Secret struct {
 // Secrets are the secrets a cell declares, in the order it declared them:
 // asking for values follows that order, and so does every listing.
 type Secrets []Secret
+
+// MaxDescription is how long a cell's description may be, in characters. Long
+// enough for a couple of sentences saying what the cell is for and what it
+// wants; short enough to show whole wherever a cell is listed.
+const MaxDescription = 350
 
 // userName is what a cell's user has to look like: a name or a numeric id, and
 // nothing that would mean something else to a shell.
@@ -577,6 +595,14 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 	}
 	if cell.User != "" && !userName.MatchString(cell.User) {
 		return nil, fmt.Errorf("%s: user: %q is not a user name or id", path, cell.User)
+	}
+
+	// Folded here rather than where it is shown, so that every reader of a
+	// definition gets the same one line out of it — a description written as
+	// a wrapped YAML block is the ordinary way to write one this long.
+	cell.Description = strings.Join(strings.Fields(cell.Description), " ")
+	if n := utf8.RuneCountInString(cell.Description); n > MaxDescription {
+		return nil, fmt.Errorf("%s: description: %d characters, at most %d", path, n, MaxDescription)
 	}
 
 	user, err := LoadUserConfig()

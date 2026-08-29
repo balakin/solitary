@@ -96,11 +96,12 @@ func (m model) detailPane() string {
 		ports = strings.Join(list, ", ")
 	}
 
-	lines := []string{
+	lines := m.about()
+	lines = append(lines,
 		field("image", m.detail.Image),
 		field("machine", machine),
 		field("ports", ports),
-	}
+	)
 	if m.detail.ProvisionChanged {
 		// The one change stopping and starting the cell does not apply, so
 		// it is said here rather than left to the next up.
@@ -115,6 +116,36 @@ func (m model) detailPane() string {
 	lines = append(lines, field("secrets", m.secretsSummary()))
 
 	return pane(m.detail.Name, strings.Join(lines, "\n"))
+}
+
+// descriptionWidth is what a cell's own summary is wrapped to. It is the widest
+// this pane gets before the list beside it starts losing room, and a
+// description is capped at a length that fits a few such lines.
+const descriptionWidth = 56
+
+// about is what the cell says it is for. It comes first in the pane: everything
+// below it describes how the cell is put together, which is only worth reading
+// once you know what it is.
+func (m model) about() []string {
+	if m.detail.Description == "" {
+		return nil
+	}
+
+	var lines []string
+	wrapped := lipgloss.NewStyle().Width(descriptionWidth).Render(m.detail.Description)
+	for i, line := range strings.Split(wrapped, "\n") {
+		// lipgloss pads every line out to the width it wrapped at, and
+		// the padding would sit under the pane's border as trailing
+		// space in a snapshot.
+		line = strings.TrimRight(line, " ")
+		if i == 0 {
+			lines = append(lines, field("about", line))
+			continue
+		}
+		lines = append(lines, field("", line))
+	}
+
+	return append(lines, "")
 }
 
 // networkPreview is how many allowed entries are shown before the rest are

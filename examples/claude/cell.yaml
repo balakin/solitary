@@ -1,5 +1,9 @@
-# A terminal working environment: claude, neovim (LazyVim), tmux and workmux,
-# with node from nvm and corepack enabled.
+description: >-
+  A terminal working environment: claude, neovim (LazyVim), tmux and workmux,
+  with node from nvm and corepack enabled. The network is left open, and the
+  home the tools are configured in survives a rebuilt image.
+
+# Try it:
 #
 #   solitary clone balakin/solitary/examples/claude
 #   solitary up claude

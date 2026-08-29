@@ -19,6 +19,10 @@ A cell's name is the name of its **directory**, never a field inside the file, s
 ## A complete cell
 
 ```yaml
+description: >- # optional; what this cell is for, at most 350 characters
+  Claude Code with neovim and tmux, on a network that reaches
+  anthropic, github and npm and nothing else.
+
 image: ghcr.io/you/nvim-claude:latest
 # build: ./Containerfile  # or build it instead — set one, not both
 
@@ -48,6 +52,20 @@ vm: # optional; falls back to config.yaml, then to built-ins
   cpus: 4
   memory: 8GiB
 ```
+
+## What it is
+
+### `description`
+
+What this cell is for, in a sentence or two. `clone` shows it before the definition is installed and the dashboard shows it above everything else about the cell, so it is written for someone who has not met the cell yet — what it holds, and what it is allowed to reach.
+
+```yaml
+description: >-
+  Claude Code with neovim and tmux, on a network that reaches
+  anthropic, github and npm and nothing else.
+```
+
+At most 350 characters, which is a few lines wherever a cell is listed. Line breaks are folded away, so `>-` above and `|` are the same as one long line: write it in whichever shape reads best in the file. A cell with no description is fine — nothing that shows one leaves a gap for it — but a published cell has an audience, and this is the only field written for them.
 
 ## The toolset
 
