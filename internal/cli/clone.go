@@ -189,6 +189,12 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 		fmt.Fprintln(out, "  ports    all reach host localhost")
 	}
 
+	// A device is authority the same way a secret is: it is the one thing in
+	// a definition that reaches past the container into the machine.
+	if len(c.Devices) > 0 {
+		fmt.Fprintf(out, "  devices  %s\n", strings.Join(c.Devices, ", "))
+	}
+
 	if c.Network.Restricted() {
 		fmt.Fprintf(out, "  network  %d allowed\n", len(c.Network.Allow))
 		for _, entry := range c.Network.Allow {

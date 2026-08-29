@@ -361,3 +361,37 @@ func TestCellDescriptionIsEmptyByDefault(t *testing.T) {
 		t.Errorf("Description = %q, want empty", cell.Description)
 	}
 }
+
+// A device is interpolated into a command inside the machine, so a definition
+// can only name a node under /dev — and only a node, never a path with
+// somewhere else on the end of it or something a shell would run.
+func TestCellDevicesHaveToBeDeviceNodes(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	for _, device := range []string{"/dev/kvm", "/dev/net/tun", "/dev/bus/usb/001/002"} {
+		if _, err := CheckCell([]byte("image: alpine\ndevices: [\""+device+"\"]\n"), t.TempDir()); err != nil {
+			t.Errorf("devices: %s was refused: %v", device, err)
+		}
+	}
+	for _, device := range []string{"/dev/kvm; rm -rf /", "$(id)", "kvm", "/etc/shadow", "/dev/../etc/shadow", "/dev/net/../../etc/shadow", "/dev/kvm/", "/dev/a b"} {
+		if _, err := CheckCell([]byte("image: alpine\ndevices: [\""+device+"\"]\n"), t.TempDir()); err == nil {
+			t.Errorf("devices: %q was accepted", device)
+		}
+	}
+}
+
+// Nothing declares a device, and the ordinary cell reaches none of the
+// machine's own.
+func TestCellDevicesAreEmptyByDefault(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	cell, err := CheckCell([]byte("image: alpine\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if len(cell.Devices) != 0 {
+		t.Errorf("Devices = %q, want none", cell.Devices)
+	}
+}

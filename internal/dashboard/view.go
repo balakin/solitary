@@ -102,6 +102,9 @@ func (m model) detailPane() string {
 		field("machine", machine),
 		field("ports", ports),
 	)
+	if len(m.detail.Devices) > 0 {
+		lines = append(lines, field("devices", strings.Join(m.detail.Devices, ", ")))
+	}
 	if m.detail.ProvisionChanged {
 		// The one change stopping and starting the cell does not apply, so
 		// it is said here rather than left to the next up.

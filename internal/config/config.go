@@ -76,6 +76,20 @@ type Cell struct {
 	// reachable on host localhost. When set, only these are forwarded.
 	Ports []int `yaml:"ports"`
 
+	// Devices are device nodes in the machine to pass into the container,
+	// as absolute paths under /dev.
+	//
+	// A cell reaches no device of the machine's own by default. Naming one
+	// here passes that node through and hands it to the machine's user,
+	// which is who a rootless container's root is on the other side of the
+	// container — without that the node arrives and cannot be opened.
+	//
+	// The node has to be one the machine already has, so this is not a way
+	// to reach the host's hardware: it is for what the guest kernel offers.
+	// /dev/kvm, on a host that allows nested virtualisation, is the one
+	// worth naming.
+	Devices []string `yaml:"devices"`
+
 	// VM overrides the machine the container runs in.
 	VM VM `yaml:"vm"`
 
@@ -126,6 +140,11 @@ const MaxDescription = 350
 // userName is what a cell's user has to look like: a name or a numeric id, and
 // nothing that would mean something else to a shell.
 var userName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
+
+// devicePath is what a cell's device has to look like: a node under /dev, and
+// nothing a shell would read as anything but a path. Machine-side commands
+// interpolate these, and this is what keeps that safe.
+var devicePath = regexp.MustCompile(`^/dev/[A-Za-z0-9_][A-Za-z0-9_./-]*$`)
 
 // envName is what a name has to look like to survive being passed to podman as
 // an environment variable.
@@ -595,6 +614,14 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 	}
 	if cell.User != "" && !userName.MatchString(cell.User) {
 		return nil, fmt.Errorf("%s: user: %q is not a user name or id", path, cell.User)
+	}
+	for _, device := range cell.Devices {
+		// Cleaned as well as matched: the pattern allows a nested node like
+		// /dev/net/tun, and a path that walks back out of /dev with .. would
+		// satisfy it while naming a file somewhere else entirely.
+		if !devicePath.MatchString(device) || filepath.Clean(device) != device {
+			return nil, fmt.Errorf("%s: devices: %q is not a device node under /dev", path, device)
+		}
 	}
 
 	// Folded here rather than where it is shown, so that every reader of a
