@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/balakin/solitary/compare/v0.9.0...v0.9.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* copy a build context the same way on every scp ([46fbe51](https://github.com/balakin/solitary/commit/46fbe51430201a447ae599a7b86d87c9884856d8))
+
 ## [0.9.0](https://github.com/balakin/solitary/compare/v0.8.0...v0.9.0) (2026-08-29)
 
 
