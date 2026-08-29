@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.0](https://github.com/balakin/solitary/compare/v0.9.1...v0.10.0) (2026-08-29)
+
+
+### Features
+
+* add an uninstall script ([d8ec7d2](https://github.com/balakin/solitary/commit/d8ec7d2612d0e3522727cf98128844eede6e1ce5))
+* list the machines a deleted cell left behind ([3bec054](https://github.com/balakin/solitary/commit/3bec054c5655f757715c679913c03cfd1272f3c7))
+* mark a cell's machine with the cell it was created for ([367b76d](https://github.com/balakin/solitary/commit/367b76d044bca3cf336af717bc1aecd6d1fa18f5))
+
 ## [0.9.1](https://github.com/balakin/solitary/compare/v0.9.0...v0.9.1) (2026-08-29)
 
 
