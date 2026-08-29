@@ -13,7 +13,16 @@ import (
 
 // scaffold is written by 'solitary init'. It is a commented file rather than
 // marshalled YAML so that a new cell explains its own options.
-const scaffold = `# The container image holding this cell's tools.
+const scaffold = `# What this cell is for, in a sentence or two — at most 350 characters. It is
+# what clone shows someone before they install this definition, and what the
+# dashboard shows beside the cell, so write it for whoever has not met the cell
+# yet. Long ones are easiest to write as a wrapped block:
+#
+# description: >-
+#   Claude Code with neovim and tmux, on a network that reaches
+#   anthropic, github and npm and nothing else.
+
+# The container image holding this cell's tools.
 image: docker.io/library/ubuntu:24.04
 
 # Or build the image instead, from a Containerfile beside this file. Its

@@ -596,12 +596,13 @@ type SecretState struct {
 // while this is read from files. List reports state for every cell at once, so
 // a caller showing both already has it.
 type Detail struct {
-	Name    string
-	Image   string
-	VM      config.VM
-	Ports   []int
-	Network config.Network
-	Secrets []SecretState
+	Name        string
+	Description string
+	Image       string
+	VM          config.VM
+	Ports       []int
+	Network     config.Network
+	Secrets     []SecretState
 
 	// ProvisionChanged reports that vm.provision differs from the script the
 	// machine was given. Unlike every other setting, restarting the machine
@@ -618,11 +619,12 @@ func Describe(name string) (Detail, error) {
 	}
 
 	detail := Detail{
-		Name:    name,
-		Image:   c.Image,
-		VM:      c.VM,
-		Ports:   c.Ports,
-		Network: c.Network,
+		Name:        name,
+		Description: c.Description,
+		Image:       c.Image,
+		VM:          c.VM,
+		Ports:       c.Ports,
+		Network:     c.Network,
 	}
 	if c.Build != "" {
 		detail.Image = "build:" + c.Build

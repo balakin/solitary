@@ -1,5 +1,10 @@
-# An editor in a cell: openvscode-server reached from the host's browser, with
-# claude, node from nvm, corepack, and the extensions a web project wants.
+description: >-
+  An editor in a cell: openvscode-server reached from the host's browser on
+  port 9797, with claude, node from nvm, corepack, and the extensions a web
+  project wants. The network is left open, and 3000, 5173 and 8080 reach the
+  host so a dev server started inside is one you can open.
+
+# Try it:
 #
 #   solitary clone balakin/solitary/examples/vscode
 #   solitary up vscode

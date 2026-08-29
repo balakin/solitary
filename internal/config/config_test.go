@@ -294,3 +294,70 @@ func TestCellUserIsEmptyByDefault(t *testing.T) {
 		t.Errorf("User = %q, want empty", cell.User)
 	}
 }
+
+// A description is what someone reads before they install a cell, and every
+// listing has to leave room for the rest of the definition beside it.
+func TestCellDescriptionIsCapped(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	fits := strings.Repeat("a", MaxDescription)
+	cell, err := CheckCell([]byte("image: alpine\ndescription: "+fits+"\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("a description of exactly %d characters was refused: %v", MaxDescription, err)
+	}
+	if cell.Description != fits {
+		t.Errorf("Description = %q, want the one the file holds", cell.Description)
+	}
+
+	// Characters, not bytes: a description written in a language that needs
+	// more than one byte for a letter is not half the length of one that
+	// does not.
+	wide := strings.Repeat("é", MaxDescription)
+	if _, err := CheckCell([]byte("image: alpine\ndescription: "+wide+"\n"), t.TempDir()); err != nil {
+		t.Errorf("a description of %d multi-byte characters was refused: %v", MaxDescription, err)
+	}
+
+	over := strings.Repeat("a", MaxDescription+1)
+	if _, err := CheckCell([]byte("image: alpine\ndescription: "+over+"\n"), t.TempDir()); err == nil {
+		t.Errorf("a description of %d characters was accepted", MaxDescription+1)
+	}
+}
+
+// A description long enough to be worth writing is written as a YAML block, so
+// what arrives here has the line breaks of the file in it rather than of the
+// prose. Every reader gets it as one line.
+func TestCellDescriptionIsFolded(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	cell, err := CheckCell([]byte("image: alpine\ndescription: |\n  Claude Code,\n  neovim and tmux.\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if want := "Claude Code, neovim and tmux."; cell.Description != want {
+		t.Errorf("Description = %q, want %q", cell.Description, want)
+	}
+
+	// The cap is on what a reader is shown, so it is checked after folding:
+	// a block that is only over it because of its own indentation is not.
+	block := "description: >-\n" + strings.Repeat("  "+strings.Repeat("a", 40)+"\n", 8)
+	if _, err := CheckCell([]byte("image: alpine\n"+block), t.TempDir()); err != nil {
+		t.Errorf("a folded description of 327 characters was refused: %v", err)
+	}
+}
+
+// A cell that says nothing about itself is the ordinary one, and every listing
+// has to read as well without a description as with one.
+func TestCellDescriptionIsEmptyByDefault(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	cell, err := CheckCell([]byte("image: alpine\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if cell.Description != "" {
+		t.Errorf("Description = %q, want empty", cell.Description)
+	}
+}

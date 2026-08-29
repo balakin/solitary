@@ -152,6 +152,15 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 	}
 
 	fmt.Fprintf(out, "\nCell %q from %s\n", name, staged.Source.Display)
+	if c.Description != "" {
+		// What the definition says it is for, before what it is made of:
+		// it is the only line here written by the author for someone who
+		// has not seen this cell before.
+		for _, line := range wrap(c.Description, 68) {
+			fmt.Fprintf(out, "  %s\n", line)
+		}
+		fmt.Fprintln(out)
+	}
 	fmt.Fprintf(out, "  image    %s\n", image)
 	fmt.Fprintf(out, "  machine  %d cpus · %s · %s\n", c.VM.CPUs, c.VM.Memory, c.VM.Disk)
 
@@ -194,4 +203,29 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 	}
 
 	fmt.Fprintln(out)
+}
+
+// wrap breaks a line of prose at width columns, on spaces. A word longer than
+// the width is left over it rather than cut: it is a URL or an image reference,
+// and half of one is worse than a long line.
+func wrap(text string, width int) []string {
+	var lines []string
+
+	line := ""
+	for _, word := range strings.Fields(text) {
+		switch {
+		case line == "":
+			line = word
+		case len(line)+1+len(word) <= width:
+			line += " " + word
+		default:
+			lines = append(lines, line)
+			line = word
+		}
+	}
+	if line != "" {
+		lines = append(lines, line)
+	}
+
+	return lines
 }

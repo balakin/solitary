@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/balakin/solitary/internal/cell"
 	"github.com/balakin/solitary/internal/config"
@@ -650,5 +651,33 @@ func TestTrafficScrollingPausesTheFeed(t *testing.T) {
 	m, _ = press(t, m, "up")
 	if m.offset != before {
 		t.Errorf("scrolled past the oldest row: %d then %d", before, m.offset)
+	}
+}
+
+// The description is the author's own line about the cell, and it is the
+// longest thing the pane holds, so it has to be shown whole and wrapped rather
+// than pushing the pane past the width of a terminal.
+func TestDescriptionIsShownWrapped(t *testing.T) {
+	m := listed(t)
+
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude"}})
+	if view := next.(model).View(); strings.Contains(view, "about") {
+		t.Errorf("a cell with no description has an about row:\n%s", view)
+	}
+
+	description := "Claude Code with neovim and tmux, on a network that reaches anthropic, github and npm and nothing else."
+	next, _ = m.Update(detailMsg{detail: cell.Detail{Name: "claude", Description: description}})
+	view := next.(model).View()
+
+	if !strings.Contains(view, "Claude Code with neovim") {
+		t.Errorf("the description is not shown:\n%s", view)
+	}
+	if !strings.Contains(view, "nothing else.") {
+		t.Errorf("the description is cut off rather than wrapped:\n%s", view)
+	}
+	for _, line := range strings.Split(view, "\n") {
+		if lipgloss.Width(line) > 100 {
+			t.Errorf("a description widened the screen to %d columns:\n%s", lipgloss.Width(line), view)
+		}
 	}
 }
