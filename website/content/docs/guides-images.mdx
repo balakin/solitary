@@ -32,6 +32,36 @@ Do not set both `image` and `build`; choose one source.
 
 `solitary up` reuses the existing image when the build context has not changed. Edit the `Containerfile` or its context and run `solitary up` again to rebuild. Replace the container when you want a new toolset without throwing away the cell's persistent home.
 
+## The user inside a cell
+
+Everything in a cell runs as root by default, and that is the right default. The machine is the boundary: the container is rootless, so its root is an unprivileged user in the machine, unable to touch the firewall, the resolver or the machine's own configuration. Root inside buys the cell nothing it should not have, and it means a global `npm install -g`, an `apt-get install` or a write to `/usr/local` inside a cell just works.
+
+So do not add a user out of habit. Add one when the image serves a login of its own — an `sshd` for VS Code Remote-SSH, an editor server — and someone arrives in the cell as that user rather than through `solitary shell`. Then two things have to be true, one on each side.
+
+The definition names the user, so `up` gives them the cell's home:
+
+```yaml
+build: ./Containerfile
+user: cell
+```
+
+The home is a directory in the machine mounted over `/home/cell`, so it belongs to the machine's user, and a rootless container maps that user onto its own root. Naming the user maps them onto the machine's user instead, and the home is theirs. Without it the home is root's, `~/.ssh` is unwritable, and everything that user does in the cell fails on a permission.
+
+The image gives them the toolset. A user who cannot write the directories the tools live in cannot install anything, and the fix is not a workaround — it is what the boundary being elsewhere means:
+
+```dockerfile
+RUN useradd --create-home --shell /bin/bash --uid 1000 cell \
+ && echo 'cell ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/cell \
+ && chmod 0440 /etc/sudoers.d/cell \
+ && chown -R cell:cell "$NVM_DIR"
+```
+
+`sudo` for the system — installing packages, writing `/usr/local` — and ownership of anything the user installs into daily, a node prefix above all: `npm install -g` writes to the directory node lives in, and a root-owned one is where the permission errors come from.
+
+Give the user id 1000 where you can. It is the machine user's own id, so the mapping is the identity and files keep the ownership they look like they have on both sides of the mount.
+
+What the container's command runs as does not change: the image's own user, which is the root an `sshd` needs. Only the login user is mapped, and `solitary shell` and `solitary exec` land on them too, so a file left behind by a session belongs to whoever works in the cell.
+
 ## Trust the source
 
 VM isolation prevents build instructions from executing directly on the host, but the resulting image still runs with the secrets and network permissions you grant. Review images, base images, and build definitions before using them.

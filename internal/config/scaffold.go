@@ -22,6 +22,15 @@ image: docker.io/library/ubuntu:24.04
 #
 # build: ./Containerfile
 
+# The user work happens as inside the cell. Leave it out and everything runs as
+# root, which is what almost every cell wants: the machine is the boundary, so
+# root inside the container is an unprivileged user in the machine, and giving
+# it up only costs you the ability to install things. Name a user here when the
+# image serves a login of its own — an sshd, an editor server — so that the
+# cell's home belongs to whoever arrives that way.
+#
+# user: cell
+
 # Environment variables this cell is allowed to see. Values are read from the
 # .env file next to this one and passed into the container at run time. Names
 # not listed here are never passed, even if .env defines them.
