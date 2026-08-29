@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/balakin/solitary/compare/v0.5.2...v0.6.0) (2026-08-29)
+
+
+### Features
+
+* **examples:** install gh and declare the token it uses ([92d5e60](https://github.com/balakin/solitary/commit/92d5e600073f46df02e13ff9802500653b873fd3))
+* let a cell name the user work happens as ([d1c6e5b](https://github.com/balakin/solitary/commit/d1c6e5bee591f514ccf49ccce6cbd181f0d38005))
+
 ## [0.5.2](https://github.com/balakin/solitary/compare/v0.5.1...v0.5.2) (2026-08-28)
 
 
