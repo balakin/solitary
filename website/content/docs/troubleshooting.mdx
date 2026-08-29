@@ -109,6 +109,20 @@ Warning: vm.provision for "claude" changed since its machine was provisioned.
 
 The dashboard reports the same thing in the cell's detail view. Editing the script is usually fine — the new one runs on top, and adding a package is not undone by anything. Removing or replacing what an earlier script did is what needs the rebuild. See [changing a cell](/docs/concepts#changing-a-cell).
 
+## Permission denied inside a cell
+
+A cell runs everything as root by default, and there a global `npm install -g`, an `apt-get install` and a write to `/usr/local` all work. Permission errors mean something in the cell is running as a user that is not root — the login user of an `sshd` or an editor server the image serves.
+
+That user needs two things, one from each side. The definition names them, so `up` gives them the cell's home rather than leaving it root's:
+
+```yaml
+user: cell
+```
+
+The image gives them the toolset: `sudo` for the system, and ownership of the directory node lives in, since `npm install -g` writes into it. Neither weakens the cell — the machine is the boundary, not the container. See [the user inside a cell](/docs/guides-images#the-user-inside-a-cell).
+
+Changing `user` replaces the container at the next `up`; nothing in the home is touched.
+
 ## Work that disappeared
 
 Work belongs in `/home/cell`, which lives on the machine's disk rather than in the container. It survives a new image, a stop and start, and anything a tool installs into the home directory.

@@ -69,6 +69,20 @@ Do not set both `image` and `build`.
 
 The command the container runs. It **must not exit** — it is the container's life, and shells opened by `up` or `shell` are separate from it. Defaults to `sleep infinity`.
 
+### `user`
+
+The user work happens as inside the cell: the one `shell` and `exec` land on, and the one the cell's home belongs to.
+
+```yaml
+user: cell
+```
+
+Leave it out and everything in the cell runs as root, which is what almost every cell wants: the machine is the boundary, and root inside a rootless container is an unprivileged user in the machine, so nothing is gained by giving up the ability to install a package.
+
+Set it when the image serves a login of its own — an `sshd`, an editor server — and hands someone a session as a user it created. Then `up` maps that user onto the machine's own, so the home the cell keeps its work in belongs to them; without it the home belongs to the container's root and everything that user does in it fails on a permission. The container's command still runs as whatever the image declared, since that is usually the root the server needs.
+
+The user has to exist in the image, and giving it what it needs is the image's half of this — see [the user inside a cell](/docs/guides-images#the-user-inside-a-cell).
+
 ## Authority
 
 ### `secrets`
