@@ -136,6 +136,22 @@ opposite of what a cell does`, not `fix: correct a description that says the opp
 does` — the branch commit underneath still carries the type, and it is the one that counts. This is
 the one place where what goes in the GitHub UI is load-bearing for what ships.
 
+The branch commit only counts if it is *after* the last release. release-please collects commits by
+walking back from `main` and stopping at the commit the last release was cut from, so a pull request
+whose branch was cut before that commit and merged after it is invisible: the walk stops at the
+release commit, which is the merge commit's first parent, and the branch commit hanging off the
+second parent is never reached. What is left is the merge commit alone, whose title does not parse —
+by design, see above — so release-please finds nothing to bump and writes no pull request at all.
+The change is on `main`, and no release will ever contain it until some later commit forces one.
+`v0.9.0` shipped without the scp fix for exactly this reason.
+
+The repository setting that prevents it is strict required status checks — "require branches to be
+up to date before merging" — which is on for `main`. A pull request must have the current `main` in
+it before it can merge, so its commits can never sit behind the last release. When one slips through
+anyway, the way out is a new commit with a parseable subject: the release it triggers carries
+everything already on `main`, and the subject should describe what is actually shipping rather than
+the commit's own diff.
+
 Squash merging is release-please's own recommendation and would collapse a pull request to a single
 line instead; it is disabled here, which is also why the squash-only commit overrides are
 unavailable and `release-as` is the only way to force a version.
