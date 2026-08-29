@@ -112,3 +112,19 @@ func TestRunArgsPassDevicesAndRecordThem(t *testing.T) {
 		t.Errorf("DeviceList() = %q", got)
 	}
 }
+
+// Shared memory follows the machine rather than podman's 64MiB default, and it
+// is recorded so that a machine whose memory moved gets a container whose
+// /dev/shm moved with it. A cell given /dev/kvm depends on this: a guest's
+// memory is a file on /dev/shm.
+func TestRunArgsSizeSharedMemoryToTheMachine(t *testing.T) {
+	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity", ShmSize: "6GiB"}, nil)
+
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--shm-size 6GiB") {
+		t.Errorf("the container was not given the machine's memory: %q", args)
+	}
+	if !strings.Contains(joined, shmLabel+"=6GiB") {
+		t.Errorf("the shared memory size was not recorded: %q", args)
+	}
+}

@@ -45,6 +45,10 @@ const userLabel = "solitary.user"
 // different container.
 const deviceLabel = "solitary.devices"
 
+// shmLabel records the size the container's shared memory was given, so that a
+// machine whose memory moved gets a container whose /dev/shm moved with it.
+const shmLabel = "solitary.shm"
+
 // DeviceList is how a set of devices is written down, both for the label and
 // for comparing what is running against what is asked for. Order is kept: it
 // is the order the definition wrote them in, and podman is given them that way.
@@ -85,13 +89,15 @@ type State struct {
 	// DeviceList writes it. Empty means the container reaches no device of
 	// the machine's own.
 	Devices string
+	// ShmSize is the size the container's /dev/shm was created with.
+	ShmSize string
 }
 
 // Inspect reports the state of a cell's container.
 func Inspect(instance string) (State, error) {
 	out, err := lima.Exec(instance,
 		"podman", "container", "inspect", Container,
-		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}\t{{index .Config.Labels \""+userLabel+"\"}}\t{{index .Config.Labels \""+deviceLabel+"\"}}",
+		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}\t{{index .Config.Labels \""+userLabel+"\"}}\t{{index .Config.Labels \""+deviceLabel+"\"}}\t{{index .Config.Labels \""+shmLabel+"\"}}",
 	)
 	if err != nil {
 		// podman exits non-zero when the container does not exist, which is
@@ -103,7 +109,7 @@ func Inspect(instance string) (State, error) {
 		return State{}, err
 	}
 
-	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 5)
+	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 6)
 	state := State{Exists: true, Running: fields[0] == "running"}
 	if len(fields) > 1 {
 		state.Image = fields[1]
@@ -116,6 +122,9 @@ func Inspect(instance string) (State, error) {
 	}
 	if len(fields) > 4 {
 		state.Devices = fields[4]
+	}
+	if len(fields) > 5 {
+		state.ShmSize = fields[5]
 	}
 
 	return state, nil
@@ -147,6 +156,11 @@ type RunOptions struct {
 	// They have to exist there and be openable by the machine's user, which
 	// is what the caller arranges before starting the container.
 	Devices []string
+	// ShmSize is how much shared memory the container gets, written the way
+	// the machine's memory is (4GiB). Podman's own default is 64MiB, which
+	// is not a size anything the machine can hold should be measured
+	// against.
+	ShmSize string
 }
 
 // Run creates and starts a cell's container, replacing any existing one.
@@ -183,6 +197,13 @@ func runArgs(opts RunOptions, mapping []string) []string {
 		"--label", envLabel + "=" + EnvDigest(opts.Env),
 		"--label", userLabel + "=" + opts.User,
 		"--label", deviceLabel + "=" + DeviceList(opts.Devices),
+		"--label", shmLabel + "=" + opts.ShmSize,
+		// Shared memory is bounded by the machine rather than by podman's
+		// 64MiB, which is a limit from a world where a container is a
+		// process on a shared host. Here the machine is already the bound,
+		// and a tmpfs costs nothing until it is written to. A cell given
+		// /dev/kvm needs this: a guest's memory is a file on /dev/shm.
+		"--shm-size", opts.ShmSize,
 		// The machine is the boundary, so the container shares its network
 		// rather than adding a second one to reason about.
 		"--network", "host",
