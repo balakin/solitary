@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -34,6 +35,10 @@ const imageLabel = "solitary.image"
 // digest rather than the values themselves, which anyone able to inspect the
 // container would otherwise be able to read back.
 const envLabel = "solitary.env"
+
+// userLabel records the user cell.yaml declared work happens as, so that
+// changing it replaces the container the way changing the image does.
+const userLabel = "solitary.user"
 
 // EnvDigest summarises a set of KEY=VALUE entries. Order does not matter.
 func EnvDigest(env []string) string {
@@ -61,13 +66,16 @@ type State struct {
 	Image string
 	// EnvDigest identifies the environment the container was started with.
 	EnvDigest string
+	// User is the cell's user, as cell.yaml declared it. Empty means the
+	// container runs everything as root, which is the ordinary case.
+	User string
 }
 
 // Inspect reports the state of a cell's container.
 func Inspect(instance string) (State, error) {
 	out, err := lima.Exec(instance,
 		"podman", "container", "inspect", Container,
-		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}",
+		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}\t{{index .Config.Labels \""+userLabel+"\"}}",
 	)
 	if err != nil {
 		// podman exits non-zero when the container does not exist, which is
@@ -79,13 +87,16 @@ func Inspect(instance string) (State, error) {
 		return State{}, err
 	}
 
-	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 3)
+	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 4)
 	state := State{Exists: true, Running: fields[0] == "running"}
 	if len(fields) > 1 {
 		state.Image = fields[1]
 	}
 	if len(fields) > 2 {
 		state.EnvDigest = fields[2]
+	}
+	if len(fields) > 3 {
+		state.User = fields[3]
 	}
 
 	return state, nil
@@ -109,12 +120,26 @@ type RunOptions struct {
 	// HostHome is the path inside the machine that is bind-mounted over the
 	// container's home, so that work survives the container being replaced.
 	HostHome string
+	// User is the user work happens as inside the cell, as cell.yaml
+	// declared it. Empty means the image's own, which is root for almost
+	// every image.
+	User string
 }
 
 // Run creates and starts a cell's container, replacing any existing one.
 func Run(instance string, opts RunOptions) error {
-	if _, err := lima.Exec(instance, "mkdir", "-p", opts.HostHome); err != nil {
+	// The mode is set rather than left to the machine's umask, which is 002
+	// on Ubuntu: a group-writable home is one an sshd refuses to read a key
+	// out of, and this is the home of every cell that has an sshd.
+	if _, err := lima.Exec(instance, "sh", "-c",
+		"mkdir -p "+opts.HostHome+" && chmod 0755 "+opts.HostHome,
+	); err != nil {
 		return fmt.Errorf("creating %s in the machine: %w", opts.HostHome, err)
+	}
+
+	mapping, err := homeMapping(instance, opts)
+	if err != nil {
+		return err
 	}
 
 	args := []string{
@@ -124,6 +149,7 @@ func Run(instance string, opts RunOptions) error {
 		"--name", Container,
 		"--label", imageLabel + "=" + opts.Identity,
 		"--label", envLabel + "=" + EnvDigest(opts.Env),
+		"--label", userLabel + "=" + opts.User,
 		// The machine is the boundary, so the container shares its network
 		// rather than adding a second one to reason about.
 		"--network", "host",
@@ -131,6 +157,7 @@ func Run(instance string, opts RunOptions) error {
 		"--workdir", HomeDir,
 		"--env", "HOME=" + HomeDir,
 	}
+	args = append(args, mapping...)
 	for _, kv := range opts.Env {
 		args = append(args, "--env", kv)
 	}
@@ -143,6 +170,110 @@ func Run(instance string, opts RunOptions) error {
 	}
 
 	return nil
+}
+
+// homeMapping gives a cell's user the home that is mounted into it.
+//
+// The home is a directory in the machine, so it belongs to the machine's user,
+// and a rootless container maps that user onto its own root. A cell that runs
+// everything as root — every cell that does not serve a login of its own —
+// therefore finds its home writable and needs nothing here.
+//
+// A cell with a user of its own does need something: the home would be root's,
+// and everything that user did in it would fail on a permission. So that user
+// is mapped onto the machine's user instead, which is what owns the directory
+// on the other side of the mount. A mapping rather than a chown, because the
+// machine keeps writing into that home from outside the container — fetch,
+// send and the artifact tool all do — and a home chowned away from the machine
+// user would take that with it.
+func homeMapping(instance string, opts RunOptions) ([]string, error) {
+	image, err := imageUser(instance, opts.Image)
+	if err != nil {
+		return nil, err
+	}
+
+	user := opts.User
+	if user == "" {
+		user = image
+	}
+	if isRoot(user) {
+		return nil, nil
+	}
+
+	uid, gid, err := lookupUser(instance, opts.Image, user)
+	if err != nil {
+		return nil, err
+	}
+
+	// keep-id runs the container as the mapped user as well, and the command
+	// of a cell that has a user is the one thing there that still wants root:
+	// it is an sshd, or an editor server, or whatever else hands that user
+	// their session. So the process stays whoever the image said it was.
+	process := image
+	if process == "" {
+		process = "0"
+	}
+
+	return []string{
+		"--userns", fmt.Sprintf("keep-id:uid=%d,gid=%d", uid, gid),
+		"--user", process,
+	}, nil
+}
+
+// imageUser reports the user an image declares, empty when it declares none.
+func imageUser(instance, image string) (string, error) {
+	out, err := lima.Exec(instance, "podman", "image", "inspect", image, "--format", "{{.Config.User}}")
+	if err != nil {
+		return "", fmt.Errorf("reading the user of %s: %w", image, err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+// isRoot reports whether a user specification means root, which is what an
+// image that names no user runs as.
+func isRoot(user string) bool {
+	name, _, _ := strings.Cut(user, ":")
+	switch name {
+	case "", "0", "root":
+		return true
+	}
+
+	return false
+}
+
+// plainName is what a user or group has to look like to be handed to a shell
+// in the image.
+var plainName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
+
+// lookupUser resolves a user specification against the image's own passwd
+// file, since a name is only a name inside the image that defines it.
+func lookupUser(instance, image, user string) (uid, gid int, err error) {
+	name, group, _ := strings.Cut(user, ":")
+	if group == "" {
+		group = name
+	}
+
+	// The name reaches a shell in the image, so it has to be a name and
+	// nothing else. A cell's own is checked when its definition is read; this
+	// is the one an image declared.
+	if !plainName.MatchString(name) || !plainName.MatchString(group) {
+		return 0, 0, fmt.Errorf("%s declares the user %q, which is not a name or an id", image, user)
+	}
+
+	// The image is asked rather than parsed: id knows about every source of
+	// users the image has, and a passwd file is not the only one.
+	out, err := lima.Exec(instance, "podman", "run", "--rm", "--entrypoint", "/bin/sh", image,
+		"-c", "id -u "+name+" && id -g "+group)
+	if err != nil {
+		return 0, 0, fmt.Errorf("the image runs no user %q, which the cell asks work to happen as: %w", user, err)
+	}
+
+	if _, err := fmt.Sscan(string(out), &uid, &gid); err != nil {
+		return 0, 0, fmt.Errorf("reading the id of %q in %s: %w", user, image, err)
+	}
+
+	return uid, gid, nil
 }
 
 // ImageExists reports whether an image is already present inside the machine.
@@ -174,32 +305,38 @@ var shellCommand = []string{
 	"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi",
 }
 
-// Shell opens an interactive shell in a cell's container.
-func Shell(instance string) error {
-	return Exec(instance, shellCommand)
+// Shell opens an interactive shell in a cell's container, as the cell's user.
+func Shell(instance, user string) error {
+	return Exec(instance, user, shellCommand)
 }
 
 // ShellCommand prepares the same shell session as Shell, without running it,
 // for a caller that runs the process itself. It always asks for a terminal:
 // there is no reason to open a shell that has none.
-func ShellCommand(instance string) (*exec.Cmd, error) {
-	return lima.Command(instance, execArgs(true, shellCommand)...)
+func ShellCommand(instance, user string) (*exec.Cmd, error) {
+	return lima.Command(instance, execArgs(true, user, shellCommand)...)
 }
 
 // Exec runs one command in a cell's container and returns when it is done. The
 // command's streams are the caller's, so it can be piped into and out of like
 // any other command.
-func Exec(instance string, command []string) error {
+func Exec(instance, user string, command []string) error {
 	// podman refuses --tty when there is no terminal to allocate, which is
 	// the case when solitary is driven from a script.
-	return lima.Attach(instance, execArgs(term.IsTerminal(int(os.Stdin.Fd())), command)...)
+	return lima.Attach(instance, execArgs(term.IsTerminal(int(os.Stdin.Fd())), user, command)...)
 }
 
 // execArgs builds the podman command line for one session. A session driven by
 // a person carries the terminal it is being watched from; one driven by a
 // script carries nothing and runs the command as given.
-func execArgs(tty bool, command []string) []string {
+func execArgs(tty bool, user string, command []string) []string {
 	args := []string{"podman", "exec", "--interactive"}
+	// A session belongs to whoever works in the cell, so that what it leaves
+	// in the home belongs to them too. Empty is the container's own user,
+	// which is the image's, which is root for almost every image.
+	if user != "" {
+		args = append(args, "--user", user)
+	}
 	if !tty {
 		args = append(args, "--workdir", HomeDir, Container)
 

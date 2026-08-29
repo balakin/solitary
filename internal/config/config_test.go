@@ -262,3 +262,35 @@ func TestNetworkAllowsWhatACellCanReach(t *testing.T) {
 		t.Errorf("validateResolvers() error = %v", err)
 	}
 }
+
+// A cell's user is handed to a shell inside the machine, so a definition can
+// only name a user, never something a shell would take apart.
+func TestCellUserHasToBeAName(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	for _, user := range []string{"cell", "1000", "dev_1.a-b"} {
+		if _, err := CheckCell([]byte("image: alpine\nuser: "+user+"\n"), t.TempDir()); err != nil {
+			t.Errorf("user: %s was refused: %v", user, err)
+		}
+	}
+	for _, user := range []string{"cell; rm -rf /", "$(id)", "a b", "-flag"} {
+		if _, err := CheckCell([]byte("image: alpine\nuser: \""+user+"\"\n"), t.TempDir()); err == nil {
+			t.Errorf("user: %q was accepted", user)
+		}
+	}
+}
+
+// Nothing declares a user, and the ordinary cell runs everything as root.
+func TestCellUserIsEmptyByDefault(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	cell, err := CheckCell([]byte("image: alpine\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if cell.User != "" {
+		t.Errorf("User = %q, want empty", cell.User)
+	}
+}

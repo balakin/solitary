@@ -290,7 +290,7 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 	}
 
 	digest := podman.EnvDigest(env)
-	if state.Running && state.Image == identity && state.EnvDigest == digest {
+	if state.Running && state.Image == identity && state.EnvDigest == digest && state.User == c.User {
 		return nil
 	}
 
@@ -301,6 +301,10 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 		// A container's environment is fixed once it is running, so secrets
 		// that changed only reach the cell by replacing it.
 		fmt.Fprintln(progress, "Secrets changed; restarting the container.")
+	case state.Running && state.User != c.User:
+		// The home is mapped for the cell's user when the container starts,
+		// so a different user is a different container.
+		fmt.Fprintln(progress, "User changed; replacing the container.")
 	}
 
 	home, err := machineHome(instance)
@@ -314,6 +318,7 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 		Command:  c.Command,
 		Env:      env,
 		HostHome: home,
+		User:     c.User,
 	})
 }
 
@@ -441,12 +446,12 @@ func machineHome(instance string) (string, error) {
 // Shell opens a shell inside a running cell. It never changes state: a cell
 // that is stopped or absent is an error rather than something to start.
 func Shell(name string) error {
-	instance, err := attachable(name)
+	instance, user, err := attachable(name)
 	if err != nil {
 		return err
 	}
 
-	return exitStatus(podman.Shell(instance))
+	return exitStatus(podman.Shell(instance, user))
 }
 
 // ShellCommand prepares the shell Shell would open, without opening it, for a
@@ -454,12 +459,12 @@ func Shell(name string) error {
 // terminal and takes it back when it exits. The cell has to be usable, checked
 // the same way as for Shell.
 func ShellCommand(name string) (*exec.Cmd, error) {
-	instance, err := attachable(name)
+	instance, user, err := attachable(name)
 	if err != nil {
 		return nil, err
 	}
 
-	return podman.ShellCommand(instance)
+	return podman.ShellCommand(instance, user)
 }
 
 // TrafficCommand prepares a command that follows what a cell's network is
@@ -665,12 +670,12 @@ func (e *ExitError) Error() string {
 // Exec runs one command inside a running cell. Like Shell it never changes
 // state: it is for asking a cell something, not for setting it up.
 func Exec(name string, command []string) error {
-	instance, err := attachable(name)
+	instance, user, err := attachable(name)
 	if err != nil {
 		return err
 	}
 
-	return exitStatus(podman.Exec(instance, command))
+	return exitStatus(podman.Exec(instance, user, command))
 }
 
 // exitStatus recognises a command that ran and failed. That is the command's
@@ -686,34 +691,39 @@ func exitStatus(err error) error {
 	return err
 }
 
-// attachable returns the machine to run in, or explains why the cell cannot be
-// attached to. It changes nothing: a cell that is not up stays that way.
-func attachable(name string) (string, error) {
+// attachable returns the machine to run in and the user to run there as, or
+// explains why the cell cannot be attached to. It changes nothing: a cell that
+// is not up stays that way.
+//
+// The user comes from the running container rather than from cell.yaml: it is
+// the one the home was mapped for, and a definition edited since the cell came
+// up has not reached the container yet.
+func attachable(name string) (instance, user string, err error) {
 	if _, err := config.LoadCell(name); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	instance := config.Instance(name)
+	instance = config.Instance(name)
 	inst, err := lima.Lookup(instance)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	switch {
 	case inst == nil:
-		return "", fmt.Errorf("cell %q does not exist yet: run 'solitary up %s'", name, name)
+		return "", "", fmt.Errorf("cell %q does not exist yet: run 'solitary up %s'", name, name)
 	case inst.Status != lima.StatusRunning:
-		return "", fmt.Errorf("%w: run 'solitary up %s'", ErrNotRunning, name)
+		return "", "", fmt.Errorf("%w: run 'solitary up %s'", ErrNotRunning, name)
 	}
 
 	state, err := podman.Inspect(instance)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !state.Running {
-		return "", fmt.Errorf("the container in %q is not running: run 'solitary up %s'", name, name)
+		return "", "", fmt.Errorf("the container in %q is not running: run 'solitary up %s'", name, name)
 	}
 
-	return instance, nil
+	return instance, state.User, nil
 }
 
 // createMachine builds a machine from a definition rendered for this call. The

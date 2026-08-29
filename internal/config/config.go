@@ -41,6 +41,18 @@ type Cell struct {
 	// passed, even when present in .env.
 	Secrets Secrets `yaml:"secrets"`
 
+	// User is the user work happens as inside the cell: the one a shell
+	// lands on, and the one the cell's home belongs to.
+	//
+	// Cells run as root inside the container, which is where the layering
+	// puts the boundary — the machine is what isolates a cell, and root
+	// inside a rootless container is an unprivileged user in the machine. So
+	// this is only needed by an image that serves a login of its own: an
+	// sshd, an editor server. Naming that user here is what makes the home
+	// theirs; without it the home belongs to the container's root and
+	// everything they do in it fails on a permission.
+	User string `yaml:"user"`
+
 	// Command is the shell command the container runs. It must not exit: the
 	// container lives as long as this process does, and shells opened with
 	// up or shell are separate from it. Defaults to DefaultCommand.
@@ -92,6 +104,10 @@ type Secret struct {
 // Secrets are the secrets a cell declares, in the order it declared them:
 // asking for values follows that order, and so does every listing.
 type Secrets []Secret
+
+// userName is what a cell's user has to look like: a name or a numeric id, and
+// nothing that would mean something else to a shell.
+var userName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 
 // envName is what a name has to look like to survive being passed to podman as
 // an environment variable.
@@ -558,6 +574,9 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 	}
 	if cell.Command == "" {
 		cell.Command = DefaultCommand
+	}
+	if cell.User != "" && !userName.MatchString(cell.User) {
+		return nil, fmt.Errorf("%s: user: %q is not a user name or id", path, cell.User)
 	}
 
 	user, err := LoadUserConfig()
