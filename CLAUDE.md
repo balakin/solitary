@@ -214,7 +214,7 @@ The layering runs host → machine → container, and each package owns one laye
 - `internal/host` — host memory checks, so `up` refuses a `vm.memory` the host cannot back.
 
 Which layer a setting belongs to decides what applying it costs, and code should preserve that:
-container settings (`image`, `build`, `command`, `secrets`, `git`) are applied by `up`; machine
+container settings (`image`, `build`, `command`, `secrets`, `devices`, `git`) are applied by `up`; machine
 settings (`vm`, `ports`, `network`) only take effect at the next boot — `up` warns on a running
 machine and applies them when the machine is stopped; anything `vm.provision` changed lives on the
 disk and only `rm` undoes it.

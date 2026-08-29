@@ -78,3 +78,37 @@ func TestIsRoot(t *testing.T) {
 		}
 	}
 }
+
+// A cell that names no device is run exactly as it was before devices
+// existed: nothing is passed through, and the label says so.
+func TestRunArgsWithoutDevicesPassNone(t *testing.T) {
+	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity"}, nil)
+
+	for _, got := range args {
+		if got == "--device" {
+			t.Errorf("a cell with no devices was given one: %q", args)
+		}
+	}
+	if !strings.Contains(strings.Join(args, " "), deviceLabel+"= ") {
+		t.Errorf("the device label was not written empty: %q", args)
+	}
+}
+
+// Devices reach podman in the order the definition wrote them, and the label
+// records the same list — that is what tells the next up whether the running
+// container still matches the file.
+func TestRunArgsPassDevicesAndRecordThem(t *testing.T) {
+	devices := []string{"/dev/kvm", "/dev/net/tun"}
+	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity", Devices: devices}, nil)
+
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--device /dev/kvm --device /dev/net/tun") {
+		t.Errorf("devices did not reach podman in order: %q", args)
+	}
+	if !strings.Contains(joined, deviceLabel+"=/dev/kvm /dev/net/tun") {
+		t.Errorf("devices were not recorded on the container: %q", args)
+	}
+	if got := DeviceList(devices); got != "/dev/kvm /dev/net/tun" {
+		t.Errorf("DeviceList() = %q", got)
+	}
+}

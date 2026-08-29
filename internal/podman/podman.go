@@ -40,6 +40,18 @@ const envLabel = "solitary.env"
 // changing it replaces the container the way changing the image does.
 const userLabel = "solitary.user"
 
+// deviceLabel records the devices cell.yaml passed in, for the same reason: a
+// device list is fixed once a container is created, so a changed one is a
+// different container.
+const deviceLabel = "solitary.devices"
+
+// DeviceList is how a set of devices is written down, both for the label and
+// for comparing what is running against what is asked for. Order is kept: it
+// is the order the definition wrote them in, and podman is given them that way.
+func DeviceList(devices []string) string {
+	return strings.Join(devices, " ")
+}
+
 // EnvDigest summarises a set of KEY=VALUE entries. Order does not matter.
 func EnvDigest(env []string) string {
 	sorted := append([]string(nil), env...)
@@ -69,13 +81,17 @@ type State struct {
 	// User is the cell's user, as cell.yaml declared it. Empty means the
 	// container runs everything as root, which is the ordinary case.
 	User string
+	// Devices is the device list the container was created with, as
+	// DeviceList writes it. Empty means the container reaches no device of
+	// the machine's own.
+	Devices string
 }
 
 // Inspect reports the state of a cell's container.
 func Inspect(instance string) (State, error) {
 	out, err := lima.Exec(instance,
 		"podman", "container", "inspect", Container,
-		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}\t{{index .Config.Labels \""+userLabel+"\"}}",
+		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}\t{{index .Config.Labels \""+userLabel+"\"}}\t{{index .Config.Labels \""+deviceLabel+"\"}}",
 	)
 	if err != nil {
 		// podman exits non-zero when the container does not exist, which is
@@ -87,7 +103,7 @@ func Inspect(instance string) (State, error) {
 		return State{}, err
 	}
 
-	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 4)
+	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 5)
 	state := State{Exists: true, Running: fields[0] == "running"}
 	if len(fields) > 1 {
 		state.Image = fields[1]
@@ -97,6 +113,9 @@ func Inspect(instance string) (State, error) {
 	}
 	if len(fields) > 3 {
 		state.User = fields[3]
+	}
+	if len(fields) > 4 {
+		state.Devices = fields[4]
 	}
 
 	return state, nil
@@ -124,6 +143,10 @@ type RunOptions struct {
 	// declared it. Empty means the image's own, which is root for almost
 	// every image.
 	User string
+	// Devices are device nodes in the machine to pass into the container.
+	// They have to exist there and be openable by the machine's user, which
+	// is what the caller arranges before starting the container.
+	Devices []string
 }
 
 // Run creates and starts a cell's container, replacing any existing one.
@@ -142,6 +165,15 @@ func Run(instance string, opts RunOptions) error {
 		return err
 	}
 
+	if _, err := lima.Exec(instance, runArgs(opts, mapping)...); err != nil {
+		return fmt.Errorf("starting the container: %w", err)
+	}
+
+	return nil
+}
+
+// runArgs is the podman invocation that creates a cell's container.
+func runArgs(opts RunOptions, mapping []string) []string {
 	args := []string{
 		"podman", "run",
 		"--detach",
@@ -150,6 +182,7 @@ func Run(instance string, opts RunOptions) error {
 		"--label", imageLabel + "=" + opts.Identity,
 		"--label", envLabel + "=" + EnvDigest(opts.Env),
 		"--label", userLabel + "=" + opts.User,
+		"--label", deviceLabel + "=" + DeviceList(opts.Devices),
 		// The machine is the boundary, so the container shares its network
 		// rather than adding a second one to reason about.
 		"--network", "host",
@@ -158,18 +191,16 @@ func Run(instance string, opts RunOptions) error {
 		"--env", "HOME=" + HomeDir,
 	}
 	args = append(args, mapping...)
+	for _, device := range opts.Devices {
+		args = append(args, "--device", device)
+	}
 	for _, kv := range opts.Env {
 		args = append(args, "--env", kv)
 	}
+
 	// A fixed entrypoint keeps behaviour the same across images, whatever
 	// ENTRYPOINT or CMD they happen to declare.
-	args = append(args, "--entrypoint", "/bin/sh", opts.Image, "-c", opts.Command)
-
-	if _, err := lima.Exec(instance, args...); err != nil {
-		return fmt.Errorf("starting the container: %w", err)
-	}
-
-	return nil
+	return append(args, "--entrypoint", "/bin/sh", opts.Image, "-c", opts.Command)
 }
 
 // homeMapping gives a cell's user the home that is mounted into it.

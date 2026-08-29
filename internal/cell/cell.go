@@ -290,7 +290,9 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 	}
 
 	digest := podman.EnvDigest(env)
-	if state.Running && state.Image == identity && state.EnvDigest == digest && state.User == c.User {
+	devices := podman.DeviceList(c.Devices)
+	if state.Running && state.Image == identity && state.EnvDigest == digest &&
+		state.User == c.User && state.Devices == devices {
 		return nil
 	}
 
@@ -305,6 +307,14 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 		// The home is mapped for the cell's user when the container starts,
 		// so a different user is a different container.
 		fmt.Fprintln(progress, "User changed; replacing the container.")
+	case state.Running && state.Devices != devices:
+		// Devices are handed to a container when it is created and cannot be
+		// added to it afterwards.
+		fmt.Fprintln(progress, "Devices changed; replacing the container.")
+	}
+
+	if err := ensureDevices(instance, c.Devices); err != nil {
+		return err
 	}
 
 	home, err := machineHome(instance)
@@ -319,7 +329,37 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 		Env:      env,
 		HostHome: home,
 		User:     c.User,
+		Devices:  c.Devices,
 	})
+}
+
+// ensureDevices makes the devices a cell declares openable from inside it.
+//
+// Passing a node through is only half of it: the container is rootless, so its
+// root is the machine's user on the other side, and a node the guest kernel
+// left to root — /dev/kvm is root:kvm and group-readable — is a node the cell
+// gets and cannot open. So each one is handed to that user.
+//
+// This runs on every up rather than once, because the nodes do not survive the
+// machine being rebooted: udev makes them again at boot, owned as the
+// distribution says. Ownership is the whole of it — the group is left alone,
+// and nothing is made world-readable.
+func ensureDevices(instance string, devices []string) error {
+	for _, device := range devices {
+		if _, err := lima.Exec(instance, "test", "-e", device); err != nil {
+			return fmt.Errorf("the machine has no %s: a cell can only be given a device its guest kernel has", device)
+		}
+		// The path is checked against config.devicePath when the definition
+		// is read, so it holds nothing a shell would take for more than a
+		// path.
+		if _, err := lima.Exec(instance, "sh", "-c",
+			`sudo chown "$(id -un)" `+device,
+		); err != nil {
+			return fmt.Errorf("handing %s to the machine's user: %w", device, err)
+		}
+	}
+
+	return nil
 }
 
 // ensureImage makes the cell's image available inside the machine, building it
@@ -601,6 +641,7 @@ type Detail struct {
 	Image       string
 	VM          config.VM
 	Ports       []int
+	Devices     []string
 	Network     config.Network
 	Secrets     []SecretState
 
@@ -624,6 +665,7 @@ func Describe(name string) (Detail, error) {
 		Image:       c.Image,
 		VM:          c.VM,
 		Ports:       c.Ports,
+		Devices:     c.Devices,
 		Network:     c.Network,
 	}
 	if c.Build != "" {
