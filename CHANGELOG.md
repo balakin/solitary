@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/balakin/solitary/compare/v0.11.1...v0.12.0) (2026-09-07)
+
+
+### Features
+
+* **send:** paste the host clipboard's image into a cell ([f46207d](https://github.com/balakin/solitary/commit/f46207db32aa068f3bb60772d1c5b36e2300c2a0))
+
 ## [0.11.1](https://github.com/balakin/solitary/compare/v0.11.0...v0.11.1) (2026-09-07)
 
 
