@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.1](https://github.com/balakin/solitary/compare/v0.11.0...v0.11.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **lima:** kill the whole tree when a command in a machine times out ([3d84e7f](https://github.com/balakin/solitary/commit/3d84e7fa0c14212ae50a3e5cc948e102e7821622))
+* **lima:** kill the whole tree when a command in a machine times out ([57bb8d4](https://github.com/balakin/solitary/commit/57bb8d47fa88e732e54d7cd3f2e5943bae19bc60))
+
 ## [0.11.0](https://github.com/balakin/solitary/compare/v0.10.0...v0.11.0) (2026-08-29)
 
 
