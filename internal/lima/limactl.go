@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -353,6 +354,21 @@ func Exec(name string, args ...string) ([]byte, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+
+	// The deadline is worth nothing unless it reaches the whole tree. limactl
+	// runs ssh, ssh inherits the pipe these buffers are read from, and killing
+	// limactl alone leaves ssh holding the write end open — Wait then blocks on
+	// a pipe that never closes, which is the hang the deadline exists to
+	// prevent. A guest that is merely busy is enough to reach this: a podman
+	// command waiting on a build's lock keeps ssh alive, and `solitary ls` and
+	// the dashboard read a container's state through exactly this call.
+	//
+	// So the child gets a process group of its own, cancelling kills the group,
+	// and WaitDelay gives up on the pipes for anything that somehow outlives
+	// that.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = time.Second
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
