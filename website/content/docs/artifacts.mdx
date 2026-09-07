@@ -16,6 +16,18 @@ solitary send claude patch.diff fixture.json
 
 Files arrive in the cell's inbox at `/home/cell/inbox`. Use this for prompts, patches, fixtures, or other inputs you intentionally choose to share. Directories are refused — send an archive instead.
 
+### Paste a screenshot
+
+```sh
+solitary send claude --clipboard
+```
+
+The image on this host's clipboard arrives in the inbox as `clipboard-<timestamp>.png`, and the agent is pointed at that path. Pasting twice leaves two files rather than replacing one.
+
+This is what a paste looks like from a cell, and it is host-initiated for the same reason everything else here is. A terminal carries characters, so an image cannot be pasted into a shell in a cell whatever the clipboard does; and the alternative — a cell reading the host's clipboard for itself — is the path back to the host that a cell exists not to have. Whatever is on your clipboard at any moment might be a password rather than a screenshot, and nothing inside a cell can ask for it.
+
+The reader is whatever the host session uses: `wl-paste` under Wayland, `xclip` under X11, and `osascript` on macOS, which ships with it. Only `image/png` is asked for, so text on the clipboard is refused rather than sent as a file.
+
 ## Publish work out
 
 Inside the cell, `artifact` publishes into the outbox:
