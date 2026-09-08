@@ -75,6 +75,9 @@ provision:
       fi
 
       systemctl disable --now wg-quick@vpn0 2>/dev/null || true
+      systemctl disable --now solitary-vpn-watchdog.timer 2>/dev/null || true
+      rm -f /etc/systemd/system/solitary-vpn-watchdog.service /etc/systemd/system/solitary-vpn-watchdog.timer
+      rm -f /usr/local/sbin/solitary-vpn-watchdog
       # The private key goes with it. A configuration the cell no longer names
       # has no reason to stay on a disk.
       rm -f /etc/wireguard/vpn0.conf

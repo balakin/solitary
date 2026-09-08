@@ -39,8 +39,13 @@ type TunnelState struct {
 }
 
 // Healthy reports a tunnel that is up and has been talking to its peer
-// recently. WireGuard rehandshakes every two minutes while there is traffic,
-// so anything much older than that means nothing is going through.
+// recently. The machine keeps a keepalive on the peer, so a tunnel handshakes
+// about every two minutes whether or not the cell is using it, and an older
+// handshake than that is silence rather than idleness.
+//
+// The threshold is longer than config.VPNStale on purpose: the machine's
+// watchdog reacts first, and this is what is left once it has had a couple of
+// tries at it.
 func (t TunnelState) Healthy() bool {
 	return t.Up && t.Handshook && t.Since < 5*time.Minute
 }
@@ -58,17 +63,28 @@ func TunnelStatus(name string) (TunnelState, error) {
 		return TunnelState{}, ErrNoTunnel
 	}
 
+	state, err := tunnelStatus(config.Instance(name), c.Network.Tunnel)
+	if err != nil {
+		return state, fmt.Errorf("reading the tunnel in %q: %w", name, err)
+	}
+
+	return state, nil
+}
+
+// tunnelStatus is TunnelStatus for a caller that already has the machine and
+// the tunnel it was configured with.
+func tunnelStatus(instance string, tunnel *config.Tunnel) (TunnelState, error) {
 	state := TunnelState{
-		Endpoint: c.Network.Tunnel.EndpointHost + ":" + c.Network.Tunnel.EndpointPort,
+		Endpoint: tunnel.EndpointHost + ":" + tunnel.EndpointPort,
 	}
 
 	// The first line of a dump is the interface, and it begins with the
 	// private key. It is dropped in the machine rather than here: a key has
 	// no reason to cross into this process, let alone onto a screen.
-	out, err := lima.Exec(config.Instance(name), "sh", "-c",
+	out, err := lima.Exec(instance, "sh", "-c",
 		"sudo wg show "+config.VPNInterface+" dump 2>/dev/null | tail -n +2")
 	if err != nil {
-		return state, fmt.Errorf("reading the tunnel in %q: %w", name, err)
+		return state, err
 	}
 
 	// An interface that is not there says nothing, and the pipeline still

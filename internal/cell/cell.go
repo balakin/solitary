@@ -524,6 +524,23 @@ func installTunnel(instance string, network config.Network, progress io.Writer) 
 	// decided by what came back, not by whether the command succeeded.
 	out, _ := lima.Exec(instance, "sudo", "sha256sum", config.VPNConfigFile)
 	if installed, _, _ := strings.Cut(strings.TrimSpace(string(out)), " "); installed == network.Tunnel.Digest {
+		// The configuration is the one this cell asks for, which does not
+		// make the tunnel it brought up a working one: wg-quick pins the
+		// peer's address when it comes up and never asks again, so a
+		// provider that moves it leaves the interface up and talking to
+		// nothing. The machine's own watchdog puts that right within a
+		// minute — but only on a machine that has booted since it was added,
+		// and an up is where someone asks for the cell to work now.
+		if !tunnelStopped(instance, network.Tunnel) {
+			return nil
+		}
+		fmt.Fprintf(progress, "The tunnel to %s has stopped answering; bringing it up again...\n",
+			network.Tunnel.EndpointHost)
+		if _, err := lima.Exec(instance, "sudo", "systemctl", "restart",
+			"wg-quick@"+config.VPNInterface); err != nil {
+			return fmt.Errorf("bringing up the tunnel: %w", err)
+		}
+
 		return nil
 	}
 
@@ -553,6 +570,18 @@ func installTunnel(instance string, network config.Network, progress io.Writer) 
 	}
 
 	return nil
+}
+
+// tunnelStopped reports a tunnel that is installed and no longer carrying
+// anything, which is the only case worth restarting one for.
+//
+// A machine that will not answer the question is not one of those: whatever is
+// wrong with it, a tunnel is not the part of it to restart, and the answer here
+// is the same as for a tunnel that is fine — leave it alone.
+func tunnelStopped(instance string, tunnel *config.Tunnel) bool {
+	state, err := tunnelStatus(instance, tunnel)
+
+	return err == nil && !state.Healthy()
 }
 
 // machineHome is the directory inside the machine that backs a cell's home.
