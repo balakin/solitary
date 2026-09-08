@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.1](https://github.com/balakin/solitary/compare/v0.12.0...v0.12.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **vpn:** keep a cell's tunnel connected ([6347e79](https://github.com/balakin/solitary/commit/6347e7969ac1ae80bc9247e08e9901253e89298a))
+* **vpn:** read the tunnel's state without discarding an error ([6c5c265](https://github.com/balakin/solitary/commit/6c5c265d35b61db0404192f14da2e9bd7eca348f))
+
 ## [0.12.0](https://github.com/balakin/solitary/compare/v0.11.1...v0.12.0) (2026-09-07)
 
 
