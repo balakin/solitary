@@ -90,7 +90,115 @@ provision:
       [Unit]
       After=dnsmasq.service nftables.service
       UNIT
+
+      # And a watchdog, because bringing the tunnel up is the last thing
+      # wg-quick does for it. It resolves the peer's name once, pins the
+      # address it got into the peer, and never asks again — so a provider
+      # that balances one name across servers, or retires the one this cell
+      # dialled, leaves the interface up and handshaking with an address that
+      # answers nothing. From inside the cell that is indistinguishable from
+      # the network being down, and it stays that way until someone notices.
+      cat > /usr/local/sbin/{{ vpnWatchdog }} <<'WATCHDOG'
+      #!/bin/bash
+      # Written by solitary. Edits are lost on the next boot.
+      set -u
+
+      iface={{ vpnInterface }}
+      conf={{ vpnConfig }}
+
+      # A configuration that is gone is a cell that no longer asks for a
+      # tunnel; the boot that removed it takes this with it.
+      [ -e "$conf" ] || exit 0
+
+      peer=$(wg show "$iface" dump 2>/dev/null | tail -n +2 | head -n 1)
+      if [ -z "$peer" ]; then
+        # No interface at all. wg-quick removes it when it fails — including
+        # when it fails to resolve the peer, which is exactly the moment this
+        # is here for — so a cell that lost its tunnel that way would never
+        # get it back on its own.
+        logger -t solitary "tunnel $iface is down; starting it"
+        systemctl restart wg-quick@"$iface"
+        exit 0
+      fi
+
+      # Fields of `wg show <if> dump`: public key, preshared key, endpoint,
+      # allowed ips, last handshake as a unix time, received, sent, keepalive.
+      public=$(printf '%s' "$peer" | cut -f1)
+      handshake=$(printf '%s' "$peer" | cut -f5)
+      # A peer that has never handshaken reports 0 rather than a time, and is
+      # the same problem as one that stopped: an interface that is up and has
+      # carried nothing.
+      if [ "$handshake" -gt 0 ]; then
+        since=$(( $(date +%s) - handshake ))
+        what="has had no handshake for ${since}s"
+      else
+        since=-1
+        what="has never handshaken"
+      fi
+
+      # WireGuard only rehandshakes when it has something to send, so an idle
+      # tunnel and a broken one look the same. A keepalive makes it talk every
+      # 25 seconds, which holds the machine's NAT mapping open and turns the
+      # age of the handshake into an answer that means what it says — here and
+      # in `solitary ls`. It is set on the interface rather than in the file
+      # because the file is the provider's, kept exactly as it was given.
+      wg set "$iface" peer "$public" persistent-keepalive 25
+
+      if [ "$since" -ge 0 ] && [ "$since" -lt {{ vpnStaleSeconds }} ]; then
+        exit 0
+      fi
+
+      # Long past the point where a keepalive should have been answered.
+      # Re-resolve the peer's name and re-point the tunnel at whatever it
+      # means now: cheaper than a restart, which would drop every route and
+      # rule the tunnel installed along with the connections through it.
+      endpoint=$(sed -n 's/^[[:space:]]*[Ee]ndpoint[[:space:]]*=[[:space:]]*//p' "$conf" | tail -n 1)
+      host=${endpoint%:*}
+      port=${endpoint##*:}
+
+      # Through the cell's own resolver, which is also what allows the answer
+      # through the firewall: the peer is reached from a set nothing but the
+      # resolver adds to, so an address that was never asked for is an address
+      # the tunnel may not dial.
+      address=$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR==1 {print $1}')
+      if [ -z "$address" ]; then
+        logger -t solitary "tunnel $iface $what and $host does not resolve"
+        exit 0
+      fi
+
+      logger -t solitary "tunnel $iface $what; re-pointing it at $address:$port"
+      # Toggled rather than set again: the kernel sends a keepalive when the
+      # interval goes from off to on, and that packet is what makes it start a
+      # handshake with the address it was just given. Setting the same value
+      # twice sends nothing, and a tunnel with nothing to say would sit on the
+      # new endpoint without ever trying it.
+      wg set "$iface" peer "$public" endpoint "$address:$port" persistent-keepalive 0
+      wg set "$iface" peer "$public" persistent-keepalive 25
+      WATCHDOG
+      chmod 755 /usr/local/sbin/{{ vpnWatchdog }}
+
+      cat > /etc/systemd/system/{{ vpnWatchdog }}.service <<'UNIT'
+      # Written by solitary. Edits are lost on the next boot.
+      [Unit]
+      Description=Keep a solitary cell's tunnel connected
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/{{ vpnWatchdog }}
+      UNIT
+
+      cat > /etc/systemd/system/{{ vpnWatchdog }}.timer <<'UNIT'
+      # Written by solitary. Edits are lost on the next boot.
+      [Unit]
+      Description=Check a solitary cell's tunnel every minute
+      [Timer]
+      OnBootSec=1min
+      OnUnitActiveSec=1min
+      [Install]
+      WantedBy=timers.target
+      UNIT
+
       systemctl daemon-reload
+      systemctl enable --now {{ vpnWatchdog }}.timer
 {{- else }}
 
   # network.vpn is not set, so this cell sends its traffic the way it came.
@@ -113,6 +221,9 @@ provision:
       fi
 
       systemctl disable --now wg-quick@{{ vpnInterface }} 2>/dev/null || true
+      systemctl disable --now {{ vpnWatchdog }}.timer 2>/dev/null || true
+      rm -f /etc/systemd/system/{{ vpnWatchdog }}.service /etc/systemd/system/{{ vpnWatchdog }}.timer
+      rm -f /usr/local/sbin/{{ vpnWatchdog }}
       # The private key goes with it. A configuration the cell no longer names
       # has no reason to stay on a disk.
       rm -f {{ vpnConfig }}

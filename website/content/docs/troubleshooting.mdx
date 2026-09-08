@@ -68,6 +68,18 @@ Three things a WireGuard configuration must not have, all refused when the cell 
 
 If the tunnel is configured and down, the cell reaches nothing at all — that is the kill switch working, not a separate fault. The dashboard's VPN row says so directly. See [routing a cell through a VPN](/docs/guides-vpn).
 
+## A tunnel that worked and then stopped
+
+`up, no recent handshake` in the dashboard, and a cell that reaches nothing — the kill switch doing its job on a tunnel that is no longer carrying anything. The usual cause is the peer's address moving out from under a tunnel that resolved it once at boot.
+
+The machine watches for this and re-points the tunnel within a minute, and `solitary up` brings up a tunnel that has stopped answering. A cell whose machine has not booted since that watchdog was added does not have it yet, so if it keeps happening, restart the cell once:
+
+```sh
+solitary down <cell> && solitary up <cell>
+```
+
+What it does is described under [staying connected](/docs/guides-vpn#staying-connected).
+
 ## A change to `vm`, `ports` or `network` that did not take
 
 Those three are read when the machine boots, and Lima cannot apply them to a running one, so `up` warns rather than silently ignoring them:

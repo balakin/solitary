@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 // VPNInterface is the interface a cell's tunnel comes up on, and VPNConfigFile
@@ -18,7 +19,18 @@ import (
 const (
 	VPNInterface  = "vpn0"
 	VPNConfigFile = "/etc/wireguard/" + VPNInterface + ".conf"
+
+	// VPNWatchdog is the script in the machine that keeps the tunnel
+	// connected, and the systemd units that run it: one name, because the
+	// units take theirs from the script.
+	VPNWatchdog = "solitary-vpn-watchdog"
 )
+
+// VPNStale is how long a tunnel may go without a handshake before the watchdog
+// treats it as broken and re-points it at its peer. The keepalive the watchdog
+// sets makes the tunnel handshake about every two minutes whether or not the
+// cell is using it, so anything past this is silence rather than idleness.
+const VPNStale = 3 * time.Minute
 
 // Tunnel is what solitary has to know about a WireGuard configuration. It is
 // deliberately not the configuration itself: the file holds a private key, so

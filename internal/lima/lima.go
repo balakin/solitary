@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/balakin/solitary/internal/config"
 )
@@ -59,6 +60,11 @@ var funcs = template.FuncMap{
 	// solitary later places in the machine cannot disagree.
 	"vpnInterface": func() string { return config.VPNInterface },
 	"vpnConfig":    func() string { return config.VPNConfigFile },
+	// vpnWatchdog names the unit and the script that keep the tunnel
+	// connected, and vpnStaleSeconds is how long without a handshake it takes
+	// for the tunnel to count as broken rather than quiet.
+	"vpnWatchdog":     func() string { return config.VPNWatchdog },
+	"vpnStaleSeconds": func() int { return int(config.VPNStale / time.Second) },
 	// cellParam and cellParamEnv name the parameter carrying the cell's name,
 	// and the environment variable Lima puts it in when it runs a provision
 	// script. Reading the parameter through the shell rather than through

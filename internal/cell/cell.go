@@ -524,6 +524,24 @@ func installTunnel(instance string, network config.Network, progress io.Writer) 
 	// decided by what came back, not by whether the command succeeded.
 	out, _ := lima.Exec(instance, "sudo", "sha256sum", config.VPNConfigFile)
 	if installed, _, _ := strings.Cut(strings.TrimSpace(string(out)), " "); installed == network.Tunnel.Digest {
+		// The configuration is the one this cell asks for, which does not
+		// make the tunnel it brought up a working one: wg-quick pins the
+		// peer's address when it comes up and never asks again, so a
+		// provider that moves it leaves the interface up and talking to
+		// nothing. The machine's own watchdog puts that right within a
+		// minute — but only on a machine that has booted since it was added,
+		// and an up is where someone asks for the cell to work now.
+		state, err := tunnelStatus(instance, network.Tunnel)
+		if err != nil || state.Healthy() {
+			return nil
+		}
+		fmt.Fprintf(progress, "The tunnel to %s has stopped answering; bringing it up again...\n",
+			network.Tunnel.EndpointHost)
+		if _, err := lima.Exec(instance, "sudo", "systemctl", "restart",
+			"wg-quick@"+config.VPNInterface); err != nil {
+			return fmt.Errorf("bringing up the tunnel: %w", err)
+		}
+
 		return nil
 	}
 
