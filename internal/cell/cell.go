@@ -531,8 +531,7 @@ func installTunnel(instance string, network config.Network, progress io.Writer) 
 		// nothing. The machine's own watchdog puts that right within a
 		// minute — but only on a machine that has booted since it was added,
 		// and an up is where someone asks for the cell to work now.
-		state, err := tunnelStatus(instance, network.Tunnel)
-		if err != nil || state.Healthy() {
+		if !tunnelStopped(instance, network.Tunnel) {
 			return nil
 		}
 		fmt.Fprintf(progress, "The tunnel to %s has stopped answering; bringing it up again...\n",
@@ -571,6 +570,18 @@ func installTunnel(instance string, network config.Network, progress io.Writer) 
 	}
 
 	return nil
+}
+
+// tunnelStopped reports a tunnel that is installed and no longer carrying
+// anything, which is the only case worth restarting one for.
+//
+// A machine that will not answer the question is not one of those: whatever is
+// wrong with it, a tunnel is not the part of it to restart, and the answer here
+// is the same as for a tunnel that is fine — leave it alone.
+func tunnelStopped(instance string, tunnel *config.Tunnel) bool {
+	state, err := tunnelStatus(instance, tunnel)
+
+	return err == nil && !state.Healthy()
 }
 
 // machineHome is the directory inside the machine that backs a cell's home.
