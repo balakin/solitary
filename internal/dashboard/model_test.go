@@ -226,6 +226,7 @@ func TestLifecycleKeysRunTheRightCommands(t *testing.T) {
 		{[]string{"u"}, []string{"up", "claude", "--detach"}},
 		{[]string{"s"}, []string{"down", "claude"}},
 		{[]string{"d", "y"}, []string{"rm", "claude", "--force"}},
+		{[]string{"b", "y"}, []string{"up", "claude", "--detach", "--rebuild"}},
 	} {
 		var rec recorder
 		m := listed(t)
@@ -246,13 +247,32 @@ func TestLifecycleKeysRunTheRightCommands(t *testing.T) {
 
 // Answering no must not run anything at all.
 func TestCancelledRemoveRunsNothing(t *testing.T) {
-	var rec recorder
-	m := listed(t)
-	m.run = rec.runner()
+	for _, key := range []string{"d", "b"} {
+		var rec recorder
+		m := listed(t)
+		m.run = rec.runner()
 
-	m, _ = press(t, m, "d")
-	if _, _ = press(t, m, "n"); len(rec.calls) != 0 {
-		t.Errorf("cancelling ran %q", rec.calls)
+		m, _ = press(t, m, key)
+		if _, _ = press(t, m, "n"); len(rec.calls) != 0 {
+			t.Errorf("cancelling %s ran %q", key, rec.calls)
+		}
+	}
+}
+
+// A rebuild ends every session in the cell, so it is asked about first, and
+// the question says what survives as well as what does not.
+func TestRebuildAsksFirst(t *testing.T) {
+	m := listed(t)
+
+	m, cmd := press(t, m, "b")
+	if m.mode != confirming || cmd != nil {
+		t.Fatalf("b left mode = %v with a command = %v, want a question and nothing run", m.mode, cmd != nil)
+	}
+	view := m.View()
+	for _, want := range []string{"Everything running in it stops", "its home is kept", "y rebuild"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the question does not say %q:\n%s", want, view)
+		}
 	}
 }
 

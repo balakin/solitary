@@ -243,7 +243,15 @@ func statusOf(inst lima.Instance) Status {
 
 // Up brings a cell's machine up, creating it first if it does not exist.
 // It is safe to call repeatedly: a running cell is left alone.
-func Up(name string, progress io.Writer) error {
+//
+// rebuild is the one way to replace a container that nothing about the cell
+// says has to be: its image is built again without a cache, or pulled again,
+// and the container started over from it. That is how the tools in a cell are
+// updated. They live in the image, so an update made inside the container —
+// a self-updating agent, a package installed by hand — lasts only until the
+// container is replaced, which every boot of the machine does. The home is
+// kept either way.
+func Up(name string, rebuild bool, progress io.Writer) error {
 	c, err := config.LoadCell(name)
 	if err != nil {
 		return err
@@ -325,7 +333,7 @@ func Up(name string, progress io.Writer) error {
 	// say — has nowhere else to read it from.
 	env = append(env, "SOLITARY_CELL="+name)
 
-	if err := ensureContainer(name, instance, c, env, progress); err != nil {
+	if err := ensureContainer(name, instance, c, env, rebuild, progress); err != nil {
 		return err
 	}
 
@@ -402,8 +410,8 @@ func fields(declared config.Secrets, only []string) []secrets.Field {
 // requested image. Work lives in a directory on the machine that is mounted
 // over the container's home, so replacing the container keeps files, caches and
 // anything an editor installed into the home directory.
-func ensureContainer(name, instance string, c *config.Cell, env []string, progress io.Writer) error {
-	ref, identity, err := ensureImage(name, instance, c, progress)
+func ensureContainer(name, instance string, c *config.Cell, env []string, rebuild bool, progress io.Writer) error {
+	ref, identity, err := ensureImage(name, instance, c, rebuild, progress)
 	if err != nil {
 		return err
 	}
@@ -415,12 +423,16 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 
 	digest := podman.EnvDigest(env)
 	devices := podman.DeviceList(c.Devices)
-	if state.Running && state.Image == identity && state.EnvDigest == digest &&
+	if !rebuild && state.Running && state.Image == identity && state.EnvDigest == digest &&
 		state.User == c.User && state.Devices == devices && state.ShmSize == c.VM.Memory {
 		return nil
 	}
 
 	switch {
+	case state.Running && rebuild:
+		// The identity of a rebuilt image is the same as before: it is the
+		// context that is digested, and the context did not move.
+		fmt.Fprintln(progress, "Rebuilt; replacing the container.")
 	case state.Running && state.Image != identity:
 		fmt.Fprintln(progress, "Image changed; replacing the container.")
 	case state.Running && state.EnvDigest != digest:
@@ -450,7 +462,7 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 		return err
 	}
 
-	return podman.Run(instance, podman.RunOptions{
+	if err := podman.Run(instance, podman.RunOptions{
 		Image:    ref,
 		Identity: identity,
 		Command:  c.Command,
@@ -459,7 +471,16 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, progre
 		User:     c.User,
 		Devices:  c.Devices,
 		ShmSize:  c.VM.Memory,
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Only now, with the old container gone: until it was replaced it still
+	// held the image a rebuild moved the tag off.
+	if rebuild {
+		return podman.Prune(instance)
+	}
+	return nil
 }
 
 // ensureDevices makes the devices a cell declares openable from inside it.
@@ -498,13 +519,13 @@ func ensureDevices(instance string, devices []string) error {
 // a running container is compared against: for a built image it covers the
 // build context, so editing a Containerfile is noticed even though the tag
 // never changes.
-func ensureImage(name, instance string, c *config.Cell, progress io.Writer) (ref, identity string, err error) {
+func ensureImage(name, instance string, c *config.Cell, rebuild bool, progress io.Writer) (ref, identity string, err error) {
 	if c.Build == "" {
 		exists, err := podman.ImageExists(instance, c.Image)
 		if err != nil {
 			return "", "", err
 		}
-		if !exists {
+		if !exists || rebuild {
 			fmt.Fprintf(progress, "Pulling %s...\n", c.Image)
 			if err := podman.Pull(instance, c.Image); err != nil {
 				return "", "", err
@@ -524,9 +545,14 @@ func ensureImage(name, instance string, c *config.Cell, progress io.Writer) (ref
 	if err != nil {
 		return "", "", err
 	}
-	if built != digest {
+	switch {
+	case rebuild:
+		fmt.Fprintf(progress, "Rebuilding %s from %s without a cache...\n", tag, c.Build)
+	case built != digest:
 		fmt.Fprintf(progress, "Building %s from %s...\n", tag, c.Build)
-		if err := podman.Build(instance, c.BuildPath, tag, digest); err != nil {
+	}
+	if built != digest || rebuild {
+		if err := podman.Build(instance, c.BuildPath, tag, digest, rebuild); err != nil {
 			return "", "", err
 		}
 	}

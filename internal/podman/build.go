@@ -147,7 +147,12 @@ func BuiltDigest(instance, tag string) (string, error) {
 // Build copies a build context into the machine and builds it there. The host
 // never runs the build, so a Containerfile cannot execute anything outside the
 // cell it is for.
-func Build(instance, containerfile, tag, digest string) error {
+//
+// fresh builds as though nothing had been built before: no cached layer, and
+// the base image pulled again. A Containerfile is rarely a pure function of its
+// context — an unpinned package, a `latest` anything — and a cached layer is
+// the build remembering what that resolved to the first time.
+func Build(instance, containerfile, tag, digest string, fresh bool) error {
 	root := filepath.Dir(containerfile)
 
 	files, err := contextFiles(root)
@@ -179,13 +184,16 @@ func Build(instance, containerfile, tag, digest string) error {
 		return fmt.Errorf("copying the build context into the machine: %w", err)
 	}
 
-	buildErr := lima.Attach(instance,
+	args := []string{
 		"podman", "build",
 		"--tag", tag,
-		"--label", buildLabel+"="+digest,
-		"--file", buildDir+"/"+filepath.Base(containerfile),
-		buildDir,
-	)
+		"--label", buildLabel + "=" + digest,
+		"--file", buildDir + "/" + filepath.Base(containerfile),
+	}
+	if fresh {
+		args = append(args, "--no-cache", "--pull=always")
+	}
+	buildErr := lima.Attach(instance, append(args, buildDir)...)
 
 	// Clear the context whether or not the build worked, rather than leaving
 	// a copy of it in the machine.

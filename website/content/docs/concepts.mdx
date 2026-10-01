@@ -43,6 +43,22 @@ Removing a setting is applied like adding one. A machine that was restricted or 
 
 `vm.provision` is the exception, and the reason the third row exists. The script runs in the machine and changes its disk; the disk survives every change short of `rm`. A new script runs at the next start, but nothing undoes what the old one did, so a machine built by the current script alone is a machine created again from scratch. Both `up` and the dashboard say so when the script changes.
 
+## Updating the tools in a cell
+
+The container is started over from its image every time the machine boots. The home is the one thing that carries over, because it is a directory on the machine's disk rather than in the container. So a tool that updates itself inside the cell — an agent downloading its next release, a package installed by hand outside the home — has its update until the next `down` and `up`, and then downloads it again.
+
+Tools are updated in the image instead, by rebuilding it:
+
+```sh
+solitary up --rebuild claude
+```
+
+For a cell with `build:`, that builds the `Containerfile` again with no cached layers and the base image pulled again, so whatever it does not pin arrives at its latest; for a cell with `image:`, it pulls the image again. Either way the container is replaced with one started from the result, even though nothing in `cell.yaml` changed, and the images it replaced are removed from the machine's disk. In the [dashboard](/docs/dashboard) it is `b`.
+
+Replacing the container ends whatever is running in it. Anything in the home — sign-ins, editor plugins, work — is untouched.
+
+The [examples](/docs/guides-examples) turn the self-updaters off in their images for this reason: an update that does not survive a reboot is only a download repeated at every start.
+
 ## How it works
 
 `up` renders an embedded Lima template into a machine definition, creates the machine, and starts one rootless podman container inside it. Both are driven by shelling out — `limactl` on the host, `podman` through `limactl shell` in the machine — so there is nothing to install beyond Lima.

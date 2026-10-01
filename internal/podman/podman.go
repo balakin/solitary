@@ -351,6 +351,16 @@ func Pull(instance, image string) error {
 	return lima.Attach(instance, "podman", "pull", image)
 }
 
+// Prune removes the images nothing refers to any more: the ones a rebuilt or
+// re-pulled tag moved off, and the layers a build left behind. Each is the
+// size of a toolset, and the machine's disk is all a cell has.
+func Prune(instance string) error {
+	if _, err := lima.Exec(instance, "podman", "image", "prune", "--force"); err != nil {
+		return fmt.Errorf("removing unused images: %w", err)
+	}
+	return nil
+}
+
 // shellCommand is the command a shell session runs: bash where the image has
 // it, sh everywhere else.
 var shellCommand = []string{
