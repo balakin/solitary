@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/balakin/solitary/compare/v0.12.1...v0.13.0) (2026-10-01)
+
+
+### Features
+
+* **dashboard:** show cells at once and load each container's state on its own ([5e9c581](https://github.com/balakin/solitary/commit/5e9c581214c06016e755925094ea3e70864e80d2))
+
+
+### Bug Fixes
+
+* **cell:** report a slow machine as busy rather than unreachable ([27c7397](https://github.com/balakin/solitary/commit/27c7397b2381fcfc0b53d1d1be4f74242b367fcf))
+
 ## [0.12.1](https://github.com/balakin/solitary/compare/v0.12.0...v0.12.1) (2026-09-08)
 
 
