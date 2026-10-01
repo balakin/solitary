@@ -392,6 +392,9 @@ func trafficStyle(kind cell.TrafficKind) lipgloss.Style {
 }
 
 func (m model) handoffLines() []string {
+	if m.selected().Status == statusLoading {
+		return []string{field("handoff", labelStyle.Render("asking the machine…"))}
+	}
 	if m.selected().Status != cell.StatusRunning {
 		return []string{field("handoff", labelStyle.Render("machine not running"))}
 	}

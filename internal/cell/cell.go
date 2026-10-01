@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/balakin/solitary/internal/config"
 	"github.com/balakin/solitary/internal/host"
@@ -63,6 +64,36 @@ type Info struct {
 // List returns every defined cell with its current state, alongside the
 // machines left behind by cells that no longer have one.
 func List() ([]Info, error) {
+	infos, err := Survey()
+	if err != nil {
+		return nil, err
+	}
+
+	// Each probe is a round trip into a machine and one that is busy holds
+	// it for the whole deadline, so they are asked together: the listing then
+	// takes as long as its slowest machine rather than the sum of them.
+	var wg sync.WaitGroup
+	for i := range infos {
+		if infos[i].Status != StatusRunning {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			infos[i].Status = Probe(infos[i].Name)
+		}()
+	}
+	wg.Wait()
+
+	return infos, nil
+}
+
+// Survey is List without asking any machine what its container is doing: it
+// reads the definitions and what Lima says about each machine, which takes no
+// time at all, where a probe can take as long as the machine does to answer.
+// StatusRunning here means only that the machine is up; Probe says what that
+// is worth.
+func Survey() ([]Info, error) {
 	names, err := config.ListCells()
 	if err != nil {
 		return nil, err
@@ -98,19 +129,6 @@ func List() ([]Info, error) {
 
 		if inst, ok := byName[config.Instance(name)]; ok {
 			info.Status = statusOf(inst)
-			// A machine can be up while the container inside it is not,
-			// which is not the same thing as the cell being usable — and it
-			// can be up while the guest itself has stopped answering.
-			if info.Status == StatusRunning {
-				switch state, err := podman.Inspect(inst.Name); {
-				case errors.Is(err, lima.ErrUnreachable):
-					info.Status = StatusUnreachable
-				case errors.Is(err, lima.ErrBusy):
-					info.Status = StatusBusy
-				case err == nil && !state.Running:
-					info.Status = StatusDegraded
-				}
-			}
 		}
 
 		infos = append(infos, info)
@@ -129,6 +147,23 @@ func List() ([]Info, error) {
 	sort.Slice(infos, func(i, j int) bool { return infos[i].Name < infos[j].Name })
 
 	return infos, nil
+}
+
+// Probe asks the running machine behind a cell what its container is doing.
+// A machine can be up while the container inside it is not, which is not the
+// same thing as the cell being usable — and it can be up while the guest itself
+// has stopped answering.
+func Probe(name string) Status {
+	switch state, err := podman.Inspect(config.Instance(name)); {
+	case errors.Is(err, lima.ErrUnreachable):
+		return StatusUnreachable
+	case errors.Is(err, lima.ErrBusy):
+		return StatusBusy
+	case err == nil && !state.Running:
+		return StatusDegraded
+	default:
+		return StatusRunning
+	}
 }
 
 // Orphan is a machine that outlived the definition it was created from.

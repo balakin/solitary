@@ -26,6 +26,14 @@ import (
 // or be started from another terminal, and none of that announces itself.
 const refreshEvery = 5 * time.Second
 
+// statusLoading is a cell whose machine is up but whose container has not
+// answered yet. The list is shown from what Lima says, which is instant, and
+// each running machine is asked about its container on its own: one that is
+// busy or hung can hold that question for the better part of a minute, and the
+// rest of the list should not wait on it. Until the answer arrives the cell can
+// be looked at but not acted on, since what an action would do depends on it.
+const statusLoading cell.Status = "loading"
+
 // mode is what the dashboard is currently asking of the person using it.
 type mode int
 
@@ -56,6 +64,15 @@ type model struct {
 	run    runner
 	cells  []cell.Info
 	cursor int
+
+	// probed is the last thing each running machine said about its
+	// container. A listing only knows the machine is up, and every few
+	// seconds a cell flashing back to loading would be worse than one
+	// showing what was true a moment ago.
+	probed map[string]cell.Status
+	// probing is the cells with a probe still in flight, so that a machine
+	// slow to answer is not asked again on every tick while it thinks.
+	probing map[string]bool
 
 	detail    cell.Detail
 	detailErr error
@@ -113,6 +130,11 @@ type (
 		name  string
 		state *cell.Handoff
 	}
+	// probedMsg is what one running machine said about its container.
+	probedMsg struct {
+		name   string
+		status cell.Status
+	}
 )
 
 func newModel() model {
@@ -127,7 +149,13 @@ func newModel() model {
 	filter.Placeholder = "name or address"
 	filter.CharLimit = 64
 
-	return model{run: run, input: input, filter: filter}
+	return model{
+		run:     run,
+		input:   input,
+		filter:  filter,
+		probed:  map[string]cell.Status{},
+		probing: map[string]bool{},
+	}
 }
 
 func (m model) Init() tea.Cmd {
@@ -156,6 +184,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case cellsMsg:
 		return m.withCells(msg.cells)
+
+	case probedMsg:
+		return m.withProbe(msg.name, msg.status)
 
 	case detailMsg:
 		if msg.detail.Name != m.detail.Name {
@@ -246,8 +277,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // withCells takes a fresh listing, keeping the selection on the same cell where
 // it can rather than on the same row.
-func (m model) withCells(cells []cell.Info) (tea.Model, tea.Cmd) {
+//
+// The listing says only which machines are up. Each of those shows what its
+// container last said, or loading when nothing has been heard since it came
+// up, and is asked again unless it is still answering the last question.
+func (m model) withCells(listed []cell.Info) (tea.Model, tea.Cmd) {
 	previous := m.selected().Name
+	cells := make([]cell.Info, len(listed))
+	var probes []tea.Cmd
+	for i, c := range listed {
+		if c.Status == cell.StatusRunning {
+			c.Status = statusLoading
+			if status, ok := m.probed[c.Name]; ok {
+				c.Status = status
+			}
+			if !m.probing[c.Name] {
+				m.probing[c.Name] = true
+				probes = append(probes, probe(c.Name))
+			}
+		} else {
+			// What a machine said before it stopped says nothing about
+			// it once it starts again.
+			delete(m.probed, c.Name)
+		}
+		cells[i] = c
+	}
 	m.cells, m.loaded = cells, true
 
 	m.cursor = 0
@@ -265,10 +319,42 @@ func (m model) withCells(cells []cell.Info) (tea.Model, tea.Cmd) {
 	// Only re-read the definition when the selection actually moved: it is
 	// a file read, but this runs every few seconds.
 	if previous != m.selected().Name {
-		return m, describe(m.selected().Name)
+		probes = append(probes, describe(m.selected().Name))
+	}
+
+	return m, tea.Batch(probes...)
+}
+
+// withProbe records what a machine said about its container. The listing may
+// have moved on while it was answering, so the answer only lands on a cell
+// whose machine is still up.
+func (m model) withProbe(name string, status cell.Status) (tea.Model, tea.Cmd) {
+	delete(m.probing, name)
+
+	for i, c := range m.cells {
+		if c.Name != name || !machineUp(c.Status) {
+			continue
+		}
+		m.probed[name] = status
+		m.cells[i].Status = status
+		// The tunnel and the hand-off are only read from a running cell,
+		// so the selected one becoming running is the moment to start.
+		if i == m.cursor && status == cell.StatusRunning && c.Status != status {
+			return m, tea.Batch(m.watchTunnel(), m.watchHandoff())
+		}
 	}
 
 	return m, nil
+}
+
+// machineUp reports the states only a cell whose machine is running can be in.
+func machineUp(status cell.Status) bool {
+	switch status {
+	case statusLoading, cell.StatusRunning, cell.StatusDegraded, cell.StatusBusy, cell.StatusUnreachable:
+		return true
+	default:
+		return false
+	}
 }
 
 // watchTunnel re-reads what the selected cell's tunnel is doing, or nothing
@@ -322,6 +408,14 @@ func (m model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	name := m.selected().Name
+
+	switch msg.String() {
+	case "enter", "u", "s", "d", "e", "t":
+		if m.selected().Status == statusLoading {
+			m.failure = fmt.Errorf("cell %q is still being asked what it is doing; it can be acted on once it answers", name)
+			return m, nil
+		}
+	}
 
 	switch msg.String() {
 	case "q", "ctrl+c", "esc":
@@ -644,7 +738,7 @@ func (m model) clear() model {
 
 func refresh() tea.Cmd {
 	return func() tea.Msg {
-		cells, err := cell.List()
+		cells, err := cell.Survey()
 		if err != nil {
 			return failMsg{err}
 		}
@@ -661,6 +755,15 @@ func describe(name string) tea.Cmd {
 		}
 
 		return detailMsg{detail}
+	}
+}
+
+// probe asks one running machine what its container is doing. It is its own
+// command so that every machine is asked at once and each answer lands as it
+// arrives.
+func probe(name string) tea.Cmd {
+	return func() tea.Msg {
+		return probedMsg{name: name, status: cell.Probe(name)}
 	}
 }
 
