@@ -37,7 +37,8 @@ func press(t *testing.T, m model, key string) (model, tea.Cmd) {
 	return next.(model), cmd
 }
 
-// listed is a model showing two cells, as it would be after the first refresh.
+// listed is a model showing two cells, as it would be after the first refresh
+// and the running one's machine answering.
 func listed(t *testing.T) model {
 	t.Helper()
 
@@ -46,6 +47,7 @@ func listed(t *testing.T) model {
 		{Name: "claude", Status: cell.StatusRunning, Image: "build:./Containerfile"},
 		{Name: "scratch", Status: cell.StatusUninitialized, Image: "ubuntu:24.04"},
 	}})
+	next, _ = next.Update(probedMsg{name: "claude", status: cell.StatusRunning})
 
 	return next.(model)
 }
@@ -694,5 +696,99 @@ func TestDescriptionIsShownWrapped(t *testing.T) {
 		if lipgloss.Width(line) > 100 {
 			t.Errorf("a description widened the screen to %d columns:\n%s", lipgloss.Width(line), view)
 		}
+	}
+}
+
+// The list is shown as soon as Lima says which machines are up; a running one
+// is loading until its container answers, and can be looked at but not acted
+// on until then.
+func TestARunningCellIsLoadingUntilItAnswers(t *testing.T) {
+	var rec recorder
+	m := newModel()
+	m.run = rec.runner()
+	next, _ := m.Update(cellsMsg{cells: []cell.Info{
+		{Name: "claude", Status: cell.StatusRunning},
+		{Name: "scratch", Status: cell.StatusStopped},
+	}})
+	m = next.(model)
+
+	if got := m.cells[0].Status; got != statusLoading {
+		t.Fatalf("a running machine nobody has asked yet is %q, want loading", got)
+	}
+	if !m.probing["claude"] || m.probing["scratch"] {
+		t.Errorf("probing = %v, want only the running machine asked", m.probing)
+	}
+	if !strings.Contains(m.View(), "loading") {
+		t.Error("the list does not say the cell is loading")
+	}
+
+	for _, key := range []string{"enter", "u", "s", "d", "e", "t"} {
+		after, cmd := press(t, m, key)
+		if cmd != nil || after.mode != browsing {
+			t.Errorf("%s acted on a cell that is still loading", key)
+		}
+		if after.failure == nil {
+			t.Errorf("%s said nothing about why nothing happened", key)
+		}
+	}
+	if len(rec.calls) != 0 {
+		t.Errorf("ran %q on a cell that is still loading", rec.calls)
+	}
+	// Reading the definition asks nothing of the machine.
+	if after, _ := press(t, m, "n"); after.mode != viewingNetwork {
+		t.Error("the allow list of a loading cell cannot be read")
+	}
+
+	next, _ = m.Update(probedMsg{name: "claude", status: cell.StatusBusy})
+	m = next.(model)
+	if got := m.cells[0].Status; got != cell.StatusBusy {
+		t.Errorf("after the machine answered, status = %q, want busy", got)
+	}
+	if m.probing["claude"] {
+		t.Error("a machine that answered is still counted as being asked")
+	}
+	// Busy is an answer, and stopping a machine that is stuck is the point.
+	if press(t, m, "s"); len(rec.calls) != 1 {
+		t.Error("a busy cell cannot be stopped")
+	}
+}
+
+// Every refresh asks again, but shows what was last heard rather than flashing
+// back to loading, and never asks a machine that has not answered yet.
+func TestRefreshKeepsWhatTheMachineLastSaid(t *testing.T) {
+	m := listed(t)
+
+	next, _ := m.Update(cellsMsg{cells: []cell.Info{{Name: "claude", Status: cell.StatusRunning}}})
+	m = next.(model)
+	if got := m.cells[0].Status; got != cell.StatusRunning {
+		t.Errorf("a refresh turned a running cell into %q", got)
+	}
+	if !m.probing["claude"] {
+		t.Fatal("a refresh did not ask the machine again")
+	}
+
+	// A slow machine is not asked again while it is still thinking.
+	next, cmd := m.Update(cellsMsg{cells: []cell.Info{{Name: "claude", Status: cell.StatusRunning}}})
+	m = next.(model)
+	if cmd != nil {
+		t.Error("asked a machine again before it answered the last time")
+	}
+}
+
+// An answer that arrives after its machine stopped is about a container that is
+// gone, and what a machine said before stopping says nothing once it boots again.
+func TestAStoppedMachineForgetsWhatItSaid(t *testing.T) {
+	m := listed(t)
+
+	next, _ := m.Update(cellsMsg{cells: []cell.Info{{Name: "claude", Status: cell.StatusStopped}}})
+	next, _ = next.Update(probedMsg{name: "claude", status: cell.StatusRunning})
+	m = next.(model)
+	if got := m.cells[0].Status; got != cell.StatusStopped {
+		t.Errorf("a late answer turned a stopped cell into %q", got)
+	}
+
+	next, _ = m.Update(cellsMsg{cells: []cell.Info{{Name: "claude", Status: cell.StatusRunning}}})
+	if got := next.(model).cells[0].Status; got != statusLoading {
+		t.Errorf("a machine that just booted is %q, want loading", got)
 	}
 }

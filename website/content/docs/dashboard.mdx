@@ -40,6 +40,8 @@ It does nothing the commands cannot, and the slow ones it runs _as_ those comman
 | `r`               | Refresh                                   |
 | `q`               | Quit                                      |
 
+The list appears as soon as Lima says which machines are up. A running machine is then asked what its container is doing, each on its own, and shows `loading` until it answers — a machine that is [busy or unreachable](/docs/troubleshooting) can take the better part of a minute to, and the rest of the list does not wait on it. A loading cell can be looked at, its allow list included, but not acted on: what `u`, `s` or `⏎` would do depends on the answer. After that, every refresh shows what the machine last said while it is asked again.
+
 ## The provision row
 
 A cell whose `vm.provision` changed since its machine was provisioned says so in its detail view. It is the one setting stopping and starting the cell does not apply: the old script has already run, and only `d` then `u` — destroying the machine and its disk — gets one built by the current script alone. Every other change to `vm`, `ports` or `network` is applied by a restart, so the dashboard leaves those to `up`.

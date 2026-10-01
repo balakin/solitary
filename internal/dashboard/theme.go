@@ -62,6 +62,8 @@ func statusMark(status cell.Status) string {
 		return "◔"
 	case cell.StatusOrphaned:
 		return "?"
+	case statusLoading:
+		return "…"
 	case cell.StatusUnreachable, cell.StatusBroken:
 		return "!"
 	default:
