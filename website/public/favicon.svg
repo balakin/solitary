@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    g { fill: #0a0a0a; stroke: #0a0a0a; }
+    @media (prefers-color-scheme: dark) { g { fill: #fafafa; stroke: #fafafa; } }
+  </style>
+  <g>
+    <polygon points="16,4.453 26,10.227 26,21.773 16,27.547 6,21.773 6,10.227" fill="none" stroke-width="4" stroke-linejoin="round"/>
+    <polygon points="16,11.381 20,13.691 20,18.309 16,20.619 12,18.309 12,13.691" stroke="none"/>
+  </g>
+</svg>

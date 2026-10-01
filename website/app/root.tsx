@@ -33,9 +33,11 @@ export const links: Route.LinksFunction = () => [
     href: '/fonts/JetBrainsMono-Regular.woff2',
     crossOrigin: 'anonymous',
   },
-  // Declared rather than left to the browser's default guess: that guess is
-  // /favicon.ico at the domain root, which is not where this site lives.
-  { rel: 'icon', href: '/favicon.ico', type: 'image/x-icon' },
+  // The SVG follows the theme; the .ico is for browsers that cannot use it, and
+  // says 32x32 because Chrome otherwise prefers it over the SVG.
+  { rel: 'icon', href: '/favicon.ico', sizes: '32x32' },
+  { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+  { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
