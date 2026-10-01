@@ -335,18 +335,49 @@ func dirOf(name string) (string, error) {
 // state surfaces as an error instead of a hang.
 var ErrUnreachable = errors.New("machine is not responding")
 
+// ErrBusy means a command outlived its deadline on a machine that still
+// answers.
+//
+// A deadline alone cannot tell a hung guest from a slow one, and a slow one is
+// ordinary: a machine fresh from boot can keep its disk busy for minutes, and a
+// podman command waiting on a build's lock waits as long as the build. Calling
+// that unreachable sends someone to restart a machine that only needed time,
+// so a command that runs out of time is followed by one that cannot be slow,
+// and only a machine that does not answer that either is unreachable.
+var ErrBusy = errors.New("machine is busy")
+
 // execTimeout bounds a single command inside a machine.
 var execTimeout = 30 * time.Second
+
+// probeTimeout bounds the trivial command that asks whether a machine answers
+// at all. It is shorter than execTimeout because nothing it runs can be slow:
+// all it waits on is ssh and a shell.
+var probeTimeout = 10 * time.Second
 
 // Exec runs a command inside a machine, without a terminal, and returns its
 // standard output.
 func Exec(name string, args ...string) ([]byte, error) {
+	out, err := execWithin(execTimeout, name, args...)
+	if errors.Is(err, context.DeadlineExceeded) {
+		if _, probeErr := execWithin(probeTimeout, name, "true"); probeErr == nil {
+			return out, fmt.Errorf("%s: %w: %s did not finish within %s", name, ErrBusy, strings.Join(args, " "), execTimeout)
+		}
+		return out, fmt.Errorf("%s: %w after %s", name, ErrUnreachable, execTimeout)
+	}
+	return out, err
+}
+
+// execWithin runs a command inside a machine under a deadline. A command that runs out
+// of time is reported as context.DeadlineExceeded and nothing else, so that it
+// is never mistaken for the command failing: what the timeout means is for Exec
+// to decide.
+func execWithin(timeout time.Duration, name string, args ...string) ([]byte, error) {
 	bin, err := limactl()
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	full := append([]string{"shell", "--workdir=/", name}, args...)
@@ -372,7 +403,7 @@ func Exec(name string, args ...string) ([]byte, error) {
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return stdout.Bytes(), fmt.Errorf("%s: %w after %s", name, ErrUnreachable, execTimeout)
+			return stdout.Bytes(), ctx.Err()
 		}
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
@@ -386,7 +417,7 @@ func Exec(name string, args ...string) ([]byte, error) {
 
 // Reachable reports whether a running machine answers a trivial command.
 func Reachable(name string) bool {
-	_, err := Exec(name, "true")
+	_, err := execWithin(probeTimeout, name, "true")
 	return err == nil
 }
 

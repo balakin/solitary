@@ -37,6 +37,11 @@ const (
 	// StatusUnreachable means Lima considers the machine running but nothing
 	// inside it answers.
 	StatusUnreachable Status = "unreachable"
+	// StatusBusy means the machine answers, but the container's state could
+	// not be read in time — usually a machine still settling after boot, or
+	// podman waiting on a lock. It clears on its own, which is what sets it
+	// apart from unreachable.
+	StatusBusy Status = "busy"
 	// StatusBroken means Lima reports the machine as broken.
 	StatusBroken Status = "broken"
 	// StatusOrphaned means a machine solitary created is still on the host
@@ -100,6 +105,8 @@ func List() ([]Info, error) {
 				switch state, err := podman.Inspect(inst.Name); {
 				case errors.Is(err, lima.ErrUnreachable):
 					info.Status = StatusUnreachable
+				case errors.Is(err, lima.ErrBusy):
+					info.Status = StatusBusy
 				case err == nil && !state.Running:
 					info.Status = StatusDegraded
 				}

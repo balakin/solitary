@@ -39,7 +39,7 @@ func statusStyle(status cell.Status) lipgloss.Style {
 	switch status {
 	case cell.StatusRunning:
 		return style.Foreground(green)
-	case cell.StatusDegraded, cell.StatusOrphaned:
+	case cell.StatusDegraded, cell.StatusOrphaned, cell.StatusBusy:
 		return style.Foreground(yellow)
 	case cell.StatusUnreachable, cell.StatusBroken:
 		return style.Foreground(red)
@@ -58,6 +58,8 @@ func statusMark(status cell.Status) string {
 		return "○"
 	case cell.StatusDegraded:
 		return "◐"
+	case cell.StatusBusy:
+		return "◔"
 	case cell.StatusOrphaned:
 		return "?"
 	case cell.StatusUnreachable, cell.StatusBroken:
