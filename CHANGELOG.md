@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.0](https://github.com/balakin/solitary/compare/v0.13.0...v0.14.0) (2026-10-01)
+
+
+### Features
+
+* **examples:** turn off self-updaters in the example images ([6946dd7](https://github.com/balakin/solitary/commit/6946dd715b1d0d72929c8815d39a0e9d6a97931a))
+* rebuild a cell's image and container with up --rebuild ([8258e94](https://github.com/balakin/solitary/commit/8258e9490996303f5fae18cc3e7906caa786b397))
+
 ## [0.13.0](https://github.com/balakin/solitary/compare/v0.12.1...v0.13.0) (2026-10-01)
 
 
