@@ -16,6 +16,18 @@ ENV NVM_DIR=/opt/nvm
 # sources nvm's shell function.
 ENV PATH=/opt/nvm/current/bin:/usr/local/bin:$PATH
 
+# Nothing in here updates itself. The container is started over from this image
+# every time the machine boots, so an update an agent downloads into it is gone
+# by the next one and fetched again after it — and an update that is not in the
+# image is one nobody chose. Tools are updated by rebuilding instead:
+# `solitary up --rebuild`, or b in the dashboard, builds this file again without
+# a cache, so what is pinned above stays pinned and what is not comes in at its
+# latest. gh and npm only announce updates, but there is nothing they could
+# announce that the cell can act on.
+ENV DISABLE_AUTOUPDATER=1 \
+    GH_NO_UPDATE_NOTIFIER=1 \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
+
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       bash-completion \
