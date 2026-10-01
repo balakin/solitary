@@ -41,7 +41,8 @@ const (
 	// browsing is the resting state: a list, a selection, and keys that act
 	// on it.
 	browsing mode = iota
-	// confirming is waiting for an answer before destroying a machine.
+	// confirming is waiting for an answer before doing something that cannot
+	// be taken back: the question is in model.asking.
 	confirming
 	// viewingNetwork is the full list of what the selected cell may reach.
 	viewingNetwork
@@ -54,6 +55,17 @@ const (
 	// typing is entering a value for one secret, hidden as it is typed.
 	typing
 )
+
+// question is an action that is asked about before it is run.
+type question struct {
+	// prompt is what is asked, saying what is lost.
+	prompt string
+	// verb is what answering yes does, for the help line.
+	verb    string
+	command string
+	args    []string
+	notice  string
+}
 
 // runner starts one of solitary's own commands with the terminal to itself.
 // The model holds it as a field so that a test can see what would be run
@@ -96,7 +108,8 @@ type model struct {
 	filter      textinput.Model
 
 	mode    mode
-	secret  int // index into detail.Secrets, in the secrets views
+	asking  question // in confirming
+	secret  int      // index into detail.Secrets, in the secrets views
 	input   textinput.Model
 	notice  string
 	failure error
@@ -410,7 +423,7 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	name := m.selected().Name
 
 	switch msg.String() {
-	case "enter", "u", "s", "d", "e", "t":
+	case "enter", "u", "b", "s", "d", "e", "t":
 		if m.selected().Status == statusLoading {
 			m.failure = fmt.Errorf("cell %q is still being asked what it is doing; it can be acted on once it answers", name)
 			return m, nil
@@ -451,6 +464,23 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// for. Attaching is what enter is for.
 		return m.clear(), m.run(name, "up", fmt.Sprintf("Cell %q is up.", name), "--detach")
 
+	case "b":
+		if name == "" {
+			return m, nil
+		}
+		// Asked, because replacing the container ends whatever is running
+		// in it — an agent halfway through a task included — and a build
+		// without a cache is not a quick thing to have started by mistake.
+		m.mode = confirming
+		m.asking = question{
+			prompt:  fmt.Sprintf("Rebuild %q from scratch? Everything running in it stops; its home is kept. [y/N]", name),
+			verb:    "rebuild",
+			command: "up",
+			args:    []string{"--detach", "--rebuild"},
+			notice:  fmt.Sprintf("Cell %q is rebuilt.", name),
+		}
+		return m.clear(), nil
+
 	case "s":
 		if name == "" || m.selected().Status == cell.StatusUninitialized {
 			return m, nil
@@ -463,6 +493,15 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.mode = confirming
+		// --force because the dashboard has already asked, so the command
+		// must not ask again from behind a suspended screen.
+		m.asking = question{
+			prompt:  fmt.Sprintf("Destroy the machine behind %q? Everything inside it is lost. [y/N]", name),
+			verb:    "destroy",
+			command: "rm",
+			args:    []string{"--force"},
+			notice:  fmt.Sprintf("The machine behind %q is gone.", name),
+		}
 		return m.clear(), nil
 
 	case "e":
@@ -502,9 +541,7 @@ func (m model) confirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y":
 		m.mode = browsing
-		// The dashboard has already asked, so the command must not ask
-		// again from behind a suspended screen.
-		return m, m.run(name, "rm", fmt.Sprintf("The machine behind %q is gone.", name), "--force")
+		return m, m.run(name, m.asking.command, m.asking.notice, m.asking.args...)
 	default:
 		m.mode = browsing
 		m.notice = "Cancelled."

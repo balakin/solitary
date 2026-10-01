@@ -492,8 +492,7 @@ func (m model) secretsBody() string {
 func (m model) message() string {
 	switch {
 	case m.mode == confirming:
-		return errorStyle.Render(fmt.Sprintf(
-			"Destroy the machine behind %q? Everything inside it is lost. [y/N]", m.selected().Name))
+		return errorStyle.Render(m.asking.prompt)
 	case m.failure != nil:
 		return errorStyle.Render(m.failure.Error())
 	case m.notice != "":
@@ -506,7 +505,7 @@ func (m model) message() string {
 func (m model) help() string {
 	switch m.mode {
 	case confirming:
-		return "y destroy · any other key cancel"
+		return "y " + m.asking.verb + " · any other key cancel"
 	case typing:
 		return "enter save · esc cancel"
 	case viewingNetwork:
@@ -518,7 +517,7 @@ func (m model) help() string {
 	case managingSecrets:
 		return "↑↓ move · enter set value · esc back"
 	default:
-		return "↑↓ move · ⏎ shell · u up · s stop · e secrets · n network · t traffic · d rm · q quit"
+		return "↑↓ move · ⏎ shell · u up · b rebuild · s stop · e secrets · n network · t traffic · d rm · q quit"
 	}
 }
 

@@ -32,6 +32,8 @@ Do not set both `image` and `build`; choose one source.
 
 `solitary up` reuses the existing image when the build context has not changed. Edit the `Containerfile` or its context and run `solitary up` again to rebuild. Replace the container when you want a new toolset without throwing away the cell's persistent home.
 
+A context that has not changed can still describe a newer toolset: an unpinned package, a `latest` tag, a base image that moved. `solitary up --rebuild` builds it again without the cache that remembers what those resolved to last time, and replaces the container. That is how tools are updated, rather than by letting them update themselves inside the container, which is started over from the image at every boot. See [updating the tools in a cell](/docs/concepts#updating-the-tools-in-a-cell).
+
 ## The user inside a cell
 
 Everything in a cell runs as root by default, and that is the right default. The machine is the boundary: the container is rootless, so its root is an unprivileged user in the machine, unable to touch the firewall, the resolver or the machine's own configuration. Root inside buys the cell nothing it should not have, and it means a global `npm install -g`, an `apt-get install` or a write to `/usr/local` inside a cell just works.
