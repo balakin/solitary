@@ -1,4 +1,22 @@
-# solitary
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.svg">
+    <img src=".github/assets/logo.svg" alt="" width="72" height="72">
+  </picture>
+  <br>
+  Solitary
+</h1>
+
+<p align="center">
+  <a href="https://solitary.balakin.io/docs"><img alt="Documentation" src="https://img.shields.io/badge/docs-solitary.balakin.io-blue"></a>
+  <a href="https://github.com/balakin/solitary/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/balakin/solitary?sort=semver"></a>
+  <a href="https://github.com/balakin/homebrew-solitary"><img alt="Homebrew" src="https://img.shields.io/badge/brew-balakin%2Fsolitary-orange"></a>
+  <br>
+  <a href="https://github.com/balakin/solitary/actions/workflows/verify.yml"><img alt="Verify" src="https://img.shields.io/github/actions/workflow/status/balakin/solitary/verify.yml?branch=main&label=verify"></a>
+  <a href="https://github.com/balakin/solitary/actions/workflows/pages.yml"><img alt="Docs deploy" src="https://img.shields.io/github/actions/workflow/status/balakin/solitary/pages.yml?branch=main&label=docs%20deploy"></a>
+  <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/balakin/solitary"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/balakin/solitary"></a>
+</p>
 
 **Run coding agents on a VM, not on your machine.**
 
