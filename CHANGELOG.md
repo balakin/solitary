@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.1](https://github.com/balakin/solitary/compare/v0.14.0...v0.14.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* keep a rebuilt cell up when its old images cannot be removed ([a29b842](https://github.com/balakin/solitary/commit/a29b8429f3a51da00b5f24874ba9272bf50d61a6))
+* remove what unfinished builds left behind before building ([a06f137](https://github.com/balakin/solitary/commit/a06f1373dcbd784c55ab5f939966c4dafebd42f0))
+
 ## [0.14.0](https://github.com/balakin/solitary/compare/v0.13.0...v0.14.0) (2026-10-01)
 
 
