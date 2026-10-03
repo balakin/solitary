@@ -128,3 +128,28 @@ func TestRunArgsSizeSharedMemoryToTheMachine(t *testing.T) {
 		t.Errorf("the shared memory size was not recorded: %q", args)
 	}
 }
+
+// Only what podman finds in storage without managing is a build's leftover. The
+// cell's own container is listed alongside them, in whatever state it is in,
+// and removing it with them would take down the cell.
+func TestStorageOnlyPicksBuildLeftovers(t *testing.T) {
+	listing := strings.Join([]string{
+		"41fda55fbc0c storage",
+		"3ec0d15c8df3 running",
+		"69cab21a3384 storage",
+		"9b1e2f0c7a44 exited",
+		"",
+	}, "\n")
+
+	if got, want := storageOnly(listing), []string{"41fda55fbc0c", "69cab21a3384"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("storageOnly() = %q, want %q", got, want)
+	}
+}
+
+// A machine with no leftovers has nothing to remove, and podman must not be
+// asked to remove nothing.
+func TestStorageOnlyWithNoLeftovers(t *testing.T) {
+	if got := storageOnly("3ec0d15c8df3 running\n"); got != nil {
+		t.Errorf("storageOnly() = %q, want nothing", got)
+	}
+}

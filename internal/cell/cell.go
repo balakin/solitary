@@ -477,8 +477,14 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, rebuil
 
 	// Only now, with the old container gone: until it was replaced it still
 	// held the image a rebuild moved the tag off.
+	//
+	// A prune that fails costs disk and nothing else — the image is built and
+	// the container is running on it — so it is reported and the rest of up
+	// goes on, rather than a working cell being called a failed one.
 	if rebuild {
-		return podman.Prune(instance)
+		if err := podman.Prune(instance); err != nil {
+			fmt.Fprintf(progress, "Warning: could not remove every unused image: %v\n", err)
+		}
 	}
 	return nil
 }
@@ -552,6 +558,16 @@ func ensureImage(name, instance string, c *config.Cell, rebuild bool, progress i
 		fmt.Fprintf(progress, "Building %s from %s...\n", tag, c.Build)
 	}
 	if built != digest || rebuild {
+		// Leftovers hold images the prune after a rebuild would remove, so
+		// they go first. Like that prune, failing to clear them costs disk
+		// and not the build.
+		removed, err := podman.RemoveBuildLeftovers(instance)
+		switch {
+		case err != nil:
+			fmt.Fprintf(progress, "Warning: could not remove what unfinished builds left behind: %v\n", err)
+		case removed > 0:
+			fmt.Fprintf(progress, "Removed %d containers left behind by unfinished builds.\n", removed)
+		}
 		if err := podman.Build(instance, c.BuildPath, tag, digest, rebuild); err != nil {
 			return "", "", err
 		}

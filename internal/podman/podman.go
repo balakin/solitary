@@ -361,6 +361,50 @@ func Prune(instance string) error {
 	return nil
 }
 
+// RemoveBuildLeftovers removes the working containers of builds that never
+// finished, and reports how many there were.
+//
+// A build runs each step in a working container and removes it when the build
+// ends, either way — unless the build never gets to end: the guest dies under
+// it, or podman is killed. Then they stay, one for every step that had run,
+// and each holds the image that step started from. Prune cannot remove an
+// image a container holds, and says so as an error, so a machine that ever had
+// a build cut short failed every prune after it and kept every one of those
+// images on its disk.
+//
+// Podman lists them only with --external, as containers it finds in storage but
+// does not manage, which is what tells them apart from the cell's own. Called
+// before a build, every one of them is from a build that is over: two cannot
+// run in one machine at once, since they share the build directory.
+func RemoveBuildLeftovers(instance string) (int, error) {
+	out, err := lima.Exec(instance, "podman", "ps", "--all", "--external", "--format", "{{.ID}} {{.State}}")
+	if err != nil {
+		return 0, fmt.Errorf("listing build containers: %w", err)
+	}
+
+	ids := storageOnly(string(out))
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	if _, err := lima.Exec(instance, append([]string{"podman", "rm", "--force"}, ids...)...); err != nil {
+		return 0, fmt.Errorf("removing build containers: %w", err)
+	}
+	return len(ids), nil
+}
+
+// storageOnly picks the containers podman has in storage and nothing else out
+// of `podman ps --external`, one "ID State" line each.
+func storageOnly(listing string) []string {
+	var ids []string
+	for _, line := range strings.Split(listing, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[1] == "storage" {
+			ids = append(ids, fields[0])
+		}
+	}
+	return ids
+}
+
 // shellCommand is the command a shell session runs: bash where the image has
 // it, sh everywhere else.
 var shellCommand = []string{
