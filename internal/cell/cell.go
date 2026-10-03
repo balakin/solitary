@@ -477,8 +477,14 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, rebuil
 
 	// Only now, with the old container gone: until it was replaced it still
 	// held the image a rebuild moved the tag off.
+	//
+	// A prune that fails costs disk and nothing else — the image is built and
+	// the container is running on it — so it is reported and the rest of up
+	// goes on, rather than a working cell being called a failed one.
 	if rebuild {
-		return podman.Prune(instance)
+		if err := podman.Prune(instance); err != nil {
+			fmt.Fprintf(progress, "Warning: could not remove every unused image: %v\n", err)
+		}
 	}
 	return nil
 }
