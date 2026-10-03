@@ -558,6 +558,16 @@ func ensureImage(name, instance string, c *config.Cell, rebuild bool, progress i
 		fmt.Fprintf(progress, "Building %s from %s...\n", tag, c.Build)
 	}
 	if built != digest || rebuild {
+		// Leftovers hold images the prune after a rebuild would remove, so
+		// they go first. Like that prune, failing to clear them costs disk
+		// and not the build.
+		removed, err := podman.RemoveBuildLeftovers(instance)
+		switch {
+		case err != nil:
+			fmt.Fprintf(progress, "Warning: could not remove what unfinished builds left behind: %v\n", err)
+		case removed > 0:
+			fmt.Fprintf(progress, "Removed %d containers left behind by unfinished builds.\n", removed)
+		}
 		if err := podman.Build(instance, c.BuildPath, tag, digest, rebuild); err != nil {
 			return "", "", err
 		}
