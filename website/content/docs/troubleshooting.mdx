@@ -75,7 +75,7 @@ If the tunnel is configured and down, the cell reaches nothing at all — that i
 
 `up, no recent handshake` in the dashboard, and a cell that reaches nothing — the kill switch doing its job on a tunnel that is no longer carrying anything. The usual cause is the peer's address moving out from under a tunnel that resolved it once at boot.
 
-The machine watches for this and re-points the tunnel within a minute, and `solitary up` brings up a tunnel that has stopped answering. A cell whose machine has not booted since that watchdog was added does not have it yet, so if it keeps happening, restart the cell once:
+The machine watches for this and restarts the tunnel after three minutes of silence, and `solitary up` brings up a tunnel that has stopped answering. A cell whose machine has not booted since that watchdog was added does not have it yet, so if it keeps happening, restart the cell once:
 
 ```sh
 solitary down <cell> && solitary up <cell>
