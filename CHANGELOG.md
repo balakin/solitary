@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/balakin/solitary/compare/v0.14.1...v0.14.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **vpn:** bring back a tunnel that lost its peer ([20204a5](https://github.com/balakin/solitary/commit/20204a52ad2e7c613ded426e17fa15f4df83acbe))
+
 ## [0.14.1](https://github.com/balakin/solitary/compare/v0.14.0...v0.14.1) (2026-10-03)
 
 
