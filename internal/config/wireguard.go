@@ -27,7 +27,7 @@ const (
 )
 
 // VPNStale is how long a tunnel may go without a handshake before the watchdog
-// treats it as broken and re-points it at its peer. The keepalive the watchdog
+// treats it as broken and restarts it. The keepalive the watchdog
 // sets makes the tunnel handshake about every two minutes whether or not the
 // cell is using it, so anything past this is silence rather than idleness.
 const VPNStale = 3 * time.Minute

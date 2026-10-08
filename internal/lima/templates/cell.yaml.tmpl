@@ -110,70 +110,73 @@ provision:
       # tunnel; the boot that removed it takes this with it.
       [ -e "$conf" ] || exit 0
 
+      # WireGuard only rehandshakes when it has something to send, so an idle
+      # tunnel and a broken one look the same. A keepalive makes it talk every
+      # 25 seconds, which holds the machine's NAT mapping open and turns the
+      # age of the handshake into an answer that means what it says — here and
+      # in `solitary ls`. It is set on the interface rather than in the file
+      # because the file is the provider's, kept exactly as it was given, and
+      # it goes with the interface — so it is set again after every restart.
+      keepalive() {
+        local public
+        public=$(wg show "$iface" peers 2>/dev/null | head -n 1)
+        [ -n "$public" ] && wg set "$iface" peer "$public" persistent-keepalive 25
+      }
+
+      # Restarted rather than re-pointed at the peer, because a restart is the
+      # one thing that works whatever broke. While the interface is up every
+      # route leads into it, the resolver's own queries included, so the
+      # peer's name cannot be asked again through a tunnel that is not
+      # answering — only once wg-quick has taken its routes down, which is
+      # the first half of a restart. The second half resolves it from scratch,
+      # which is also what puts the answer back in the firewall set the tunnel
+      # is dialled from, and dials from a new port, past any NAT mapping on
+      # the way that went stale. Nothing is lost that was not already: a
+      # tunnel this quiet has outlived its keys, and the interface comes back
+      # with the same address, so a connection through it carries on.
+      restart() {
+        logger -t solitary "tunnel $iface $1; restarting it"
+        systemctl restart wg-quick@"$iface" && keepalive
+      }
+
       peer=$(wg show "$iface" dump 2>/dev/null | tail -n +2 | head -n 1)
       if [ -z "$peer" ]; then
         # No interface at all. wg-quick removes it when it fails — including
         # when it fails to resolve the peer, which is exactly the moment this
         # is here for — so a cell that lost its tunnel that way would never
         # get it back on its own.
-        logger -t solitary "tunnel $iface is down; starting it"
-        systemctl restart wg-quick@"$iface"
+        restart "is down"
         exit 0
       fi
+
+      # Setting the value the interface already has sends nothing; going from
+      # none to 25 sends a keepalive at once, which starts a handshake.
+      keepalive
 
       # Fields of `wg show <if> dump`: public key, preshared key, endpoint,
       # allowed ips, last handshake as a unix time, received, sent, keepalive.
-      public=$(printf '%s' "$peer" | cut -f1)
+      # A peer that has never handshaken reports 0 rather than a time.
       handshake=$(printf '%s' "$peer" | cut -f5)
-      # A peer that has never handshaken reports 0 rather than a time, and is
-      # the same problem as one that stopped: an interface that is up and has
-      # carried nothing.
+      now=$(date +%s)
+
+      # Silence is counted from whichever came last, the handshake or the
+      # tunnel starting. A tunnel that was just started has not handshaken
+      # yet and is not broken for it — and one that has never handshaken in
+      # all the time since it started is as broken as one that stopped.
+      started=0
+      at=$(systemctl show -P ActiveEnterTimestamp wg-quick@"$iface" 2>/dev/null)
+      [ -n "$at" ] && started=$(date -d "$at" +%s 2>/dev/null || echo 0)
+      last=$(( handshake > started ? handshake : started ))
+      since=$(( now - last ))
+      if [ "$since" -lt {{ vpnStaleSeconds }} ]; then
+        exit 0
+      fi
+
       if [ "$handshake" -gt 0 ]; then
-        since=$(( $(date +%s) - handshake ))
-        what="has had no handshake for ${since}s"
+        restart "has had no handshake for $(( now - handshake ))s"
       else
-        since=-1
-        what="has never handshaken"
+        restart "has not handshaken in ${since}s"
       fi
-
-      # WireGuard only rehandshakes when it has something to send, so an idle
-      # tunnel and a broken one look the same. A keepalive makes it talk every
-      # 25 seconds, which holds the machine's NAT mapping open and turns the
-      # age of the handshake into an answer that means what it says — here and
-      # in `solitary ls`. It is set on the interface rather than in the file
-      # because the file is the provider's, kept exactly as it was given.
-      wg set "$iface" peer "$public" persistent-keepalive 25
-
-      if [ "$since" -ge 0 ] && [ "$since" -lt {{ vpnStaleSeconds }} ]; then
-        exit 0
-      fi
-
-      # Long past the point where a keepalive should have been answered.
-      # Re-resolve the peer's name and re-point the tunnel at whatever it
-      # means now: cheaper than a restart, which would drop every route and
-      # rule the tunnel installed along with the connections through it.
-      endpoint=$(sed -n 's/^[[:space:]]*[Ee]ndpoint[[:space:]]*=[[:space:]]*//p' "$conf" | tail -n 1)
-      host=${endpoint%:*}
-      port=${endpoint##*:}
-
-      # Through the cell's own resolver, which is also what allows the answer
-      # through the firewall: the peer is reached from a set nothing but the
-      # resolver adds to, so an address that was never asked for is an address
-      # the tunnel may not dial.
-      address=$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR==1 {print $1}')
-      if [ -z "$address" ]; then
-        logger -t solitary "tunnel $iface $what and $host does not resolve"
-        exit 0
-      fi
-
-      logger -t solitary "tunnel $iface $what; re-pointing it at $address:$port"
-      # Toggled rather than set again: the kernel sends a keepalive when the
-      # interval goes from off to on, and that packet is what makes it start a
-      # handshake with the address it was just given. Setting the same value
-      # twice sends nothing, and a tunnel with nothing to say would sit on the
-      # new endpoint without ever trying it.
-      wg set "$iface" peer "$public" endpoint "$address:$port" persistent-keepalive 0
-      wg set "$iface" peer "$public" persistent-keepalive 25
       WATCHDOG
       chmod 755 /usr/local/sbin/{{ vpnWatchdog }}
 
@@ -431,6 +434,17 @@ provision:
       # and only the resolver refills it. Restarted so they ask again, under
       # the allow list this time.
       systemctl try-restart chrony 2>/dev/null || true
+{{- if .Network.Tunnel }}
+
+      # The tunnel above all. It comes up at boot alongside this script rather
+      # than after it, and wg-quick resolves its peer once and never asks
+      # again — so the address it dials is gone from the firewall's set while
+      # the tunnel goes on working through the one connection the firewall
+      # still remembers. The first time that is forgotten too, after a host
+      # sleeps or the tunnel falls quiet, every handshake is refused, and
+      # nothing in the cell can say why.
+      systemctl try-restart wg-quick@{{ vpnInterface }} 2>/dev/null || true
+{{- end }}
 {{- else }}
 
   # network.allow was not set, so this cell reaches whatever the host reaches.

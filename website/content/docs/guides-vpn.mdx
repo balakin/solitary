@@ -40,8 +40,10 @@ If the tunnel is down, nothing leaves — the same traffic does not quietly go o
 So the machine keeps a watchdog on the tunnel, once a minute:
 
 - It sets a **persistent keepalive** on the peer, so the tunnel handshakes about every two minutes whether or not the cell is using it. That holds the machine's NAT mapping open, and it makes the age of the last handshake mean something: silence is a fault rather than an idle cell.
-- After three minutes without a handshake it **re-resolves the peer's name** — through the cell's own resolver, which is also what allows the answer through the firewall — and re-points the tunnel at whatever the name means now.
+- After three minutes without a handshake — or three minutes after the tunnel started without one at all — it **restarts the tunnel**. That resolves the peer's name again, through the cell's own resolver, which is also what allows the answer through the firewall, and dials from a fresh port. It has to be a restart: while the interface is up, every route leads into it, the resolver's own queries included, so the name cannot be asked again through a tunnel that is not answering. Nothing is lost that was not already — a tunnel that quiet has outlived its keys, and it comes back with the same address, so connections through it carry on.
 - If the interface is gone entirely, which is what `wg-quick` leaves behind when it fails, it **starts it again**.
+
+The tunnel is also restarted once at every boot, after the firewall is loaded. It comes up alongside the firewall rather than after it, and the firewall forgets the peer's address when it loads; restarting it means the peer is resolved — and allowed — again.
 
 The keepalive is set on the running interface, not written into your file: the `.conf` stays exactly as the provider gave it. The machine logs what it does to the journal under the `solitary` tag.
 
