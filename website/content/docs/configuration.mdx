@@ -14,7 +14,7 @@ description: Every field in cell.yaml and config.yaml.
 
 A cell's name is the name of its **directory**, never a field inside the file, so the two can never disagree. `solitary init <name>` creates the directory and a commented `cell.yaml`.
 
-`config.yaml` holds `vm:`, `git:` and `network:` blocks used as the defaults for every cell. A cell that sets `network.allow` **replaces** the user-wide list rather than adding to it: what a cell may reach should be readable in one place.
+`config.yaml` holds `vm:`, `git:` and `network:` blocks used as the defaults for every cell, and `gpu:`, which says which of the host's GPUs a cell that asks for one renders with — see [`gpu`](#gpu). A cell that sets `network.allow` **replaces** the user-wide list rather than adding to it: what a cell may reach should be readable in one place.
 
 ## A complete cell
 
@@ -38,6 +38,8 @@ ports: # omit and every listening port reaches host localhost;
 
 devices: # optional; device nodes in the machine to pass into the cell
   - /dev/kvm
+
+gpu: true # optional; render OpenGL and Vulkan on the host's GPU
 
 network: # omit and the cell reaches whatever the host reaches;
   allow: # set and it reaches these and nothing else
@@ -158,6 +160,28 @@ A cell that runs a guest of its own needs two more things beside the node. Its s
 
 A device is authority, in the way a secret is. The machine stays the boundary — a cell given `/dev/kvm` can run a guest of its own, not read the host's disks — but this is the one setting that reaches past the container into the machine, so `clone` shows it before a definition is installed. Name only the nodes a cell needs.
 
+### `gpu`
+
+Gives the cell a GPU to render with. The machine gets a virtual GPU, and the host does its work on a real one: OpenGL through virgl, Vulkan through Venus. The host keeps its GPU, and any number of cells can share it. Only rendering crosses over — CUDA, a video encoder, or anything else that needs the vendor's own stack does not.
+
+```yaml
+gpu: true
+```
+
+It is a yes or no, not a device, because which GPU is a fact about the host rather than the cell. solitary picks one: a discrete card before an integrated one, named by its `/dev/dri/by-path` entry so that it is the same card after a reboot. `solitary doctor` says which it would use. A host with more than one GPU, where the guess is wrong, names its choice in `config.yaml`:
+
+```yaml
+gpu: /dev/dri/by-path/pci-0000:01:00.0-render # ls -l /dev/dri/by-path lists them
+```
+
+A host that cannot give a GPU — no render node, a node this user cannot open, a qemu without Venus, or not Linux — starts the cell anyway, says so, and the cell renders on the CPU. The same definition starts on every host.
+
+The machine sees one GPU and makes `/dev/dri/renderD128` for it, and the container is given that node without it being listed under [`devices`](#devices). The image needs Mesa's drivers to use it — on Ubuntu, `mesa-vulkan-drivers`, `libgl1-mesa-dri` and `libegl-mesa0`; `vulkaninfo --summary` in the cell then names the host's card as `Virtio-GPU Venus (…)`, and `eglinfo -B` as `virgl (…)`.
+
+The GPU is part of the machine, so turning it on or off takes effect at the next boot, like [`vm`](#vm). Lima has no setting for it, so solitary passes the qemu arguments through `QEMU_SYSTEM_<ARCH>` at every start — Lima logs a warning that this is a debugging aid each time — and a machine started with `limactl start` directly boots without one.
+
+A GPU is authority in the way a device is, and more of it: what the cell renders is run on the host, by the host's GPU driver, inside qemu. `clone` shows it before a definition is installed. See [security](/docs/security).
+
 ### `network`
 
 | Field       | Meaning                                                                                                                                                                                         |
@@ -183,7 +207,6 @@ Every field is optional and falls back to `config.yaml`, then to the defaults bu
 | `memory`    | `4GiB`       | On Linux this must fit `/dev/shm`; see [troubleshooting](/docs/troubleshooting).                                                            |
 | `disk`      | `20GiB`      | Grows at the next boot. It cannot shrink: a value below what the machine already has is refused, naming both ways out.                      |
 | `provision` | —            | A shell script run once, as root, after the built-in podman setup. A value here **replaces** the user-wide one rather than appending to it. |
-| `gpu`       | —            | A render node on the host, under `/dev/dri`, that the machine renders OpenGL and Vulkan with. Linux hosts only. See [below](#vmgpu).        |
 
 ```yaml
 vm:
@@ -192,28 +215,6 @@ vm:
   provision: |
     apt-get install -y build-essential
 ```
-
-#### `vm.gpu`
-
-Gives the machine a virtual GPU whose work the host does on a real one. The machine gets OpenGL through virgl and Vulkan through Venus; the host keeps its GPU, and any number of cells can share it. Only rendering crosses over — CUDA, a video encoder, or anything else that needs the vendor's own stack does not.
-
-```yaml
-vm:
-  gpu: /dev/dri/by-path/pci-0000:01:00.0-render
-
-devices:
-  - /dev/dri/renderD128
-```
-
-Name the node by its `/dev/dri/by-path` entry, which `ls -l /dev/dri/by-path` lists with the card behind each one. `renderD128` and `renderD129` are numbered in the order the host's drivers loaded, so on a host with two GPUs the short name can mean the other card after a reboot. `up` refuses a node the host does not have or cannot open.
-
-The guest sees one GPU and makes its own `/dev/dri/renderD128` for it, which [`devices`](#devices) hands to the container like any other node. The image needs Mesa's drivers to use it — on Ubuntu, `mesa-vulkan-drivers`, `libgl1-mesa-dri` and `libegl-mesa0`; `vulkaninfo --summary` in the cell then names the host's card as `Virtio-GPU Venus (…)`.
-
-The host needs qemu with `virtio-gpu-gl-pci` and a virglrenderer built with Venus. Lima has no setting for either, so solitary passes the qemu arguments through `QEMU_SYSTEM_<ARCH>` at every start — Lima logs a warning that this is a debugging aid each time — and a machine started with `limactl start` directly boots without its GPU.
-
-A GPU is authority in the way a device is, and more of it: what the cell renders is run on the host, by the host's GPU driver, inside qemu. `clone` shows it before a definition is installed.
-
-`memory` sizes one thing inside the cell as well: the container's `/dev/shm`. Podman would give it 64MiB, which is a limit from a world where a container shares a host with others — here the machine is already the bound, and a `tmpfs` costs nothing until it is written to. A cell given `/dev/kvm` depends on this, because a guest's memory is a file on `/dev/shm`. Changing `memory` therefore replaces the container as well as restarting the machine.
 
 The `vm` block describes settings a machine reads at boot. Change it while a cell is running and `up` warns that the running cell still uses the old ones; `down` then `up` applies them without touching the disk.
 

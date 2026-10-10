@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -381,27 +383,82 @@ func TestCellDevicesHaveToBeDeviceNodes(t *testing.T) {
 	}
 }
 
-// vm.gpu reaches qemu through a variable Lima splits like a shell would, so it
-// has to be a node under /dev/dri and nothing that splitting would read as
-// more than one word.
-func TestCellGPUHasToBeARenderNode(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-
+// config.yaml's gpu reaches qemu through a variable Lima splits like a shell
+// would, so it has to be a node under /dev/dri and nothing that splitting
+// would read as more than one word.
+func TestValidGPU(t *testing.T) {
 	for _, gpu := range []string{"/dev/dri/renderD128", "/dev/dri/by-path/pci-0000:01:00.0-render"} {
-		cell, err := CheckCell([]byte("image: alpine\nvm:\n  gpu: \""+gpu+"\"\n"), t.TempDir())
-		if err != nil {
-			t.Errorf("vm.gpu: %s was refused: %v", gpu, err)
-			continue
-		}
-		if cell.VM.GPU != gpu {
-			t.Errorf("VM.GPU = %q, want %q", cell.VM.GPU, gpu)
+		if !ValidGPU(gpu) {
+			t.Errorf("ValidGPU(%q) = false", gpu)
 		}
 	}
 	for _, gpu := range []string{"/dev/kvm", "/dev/dri/renderD128 -device x", "/dev/dri/../kvm", "renderD128", "/dev/dri/'x'", "/dev/dri/"} {
-		if _, err := CheckCell([]byte("image: alpine\nvm:\n  gpu: \""+gpu+"\"\n"), t.TempDir()); err == nil {
-			t.Errorf("vm.gpu: %q was accepted", gpu)
+		if ValidGPU(gpu) {
+			t.Errorf("ValidGPU(%q) = true", gpu)
 		}
+	}
+}
+
+func TestUserConfigRefusesAGPUThatIsNotARenderNode(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeUserConfig(t, "gpu: \"/dev/dri/x; id\"\n")
+
+	if _, err := LoadUserConfig(); err == nil {
+		t.Error("LoadUserConfig() accepted a gpu that is not a render node")
+	}
+}
+
+// A cell says only that it wants a GPU. Which one is the host's to say, so it
+// comes from config.yaml — and only to a cell that asked.
+func TestCellGPUTakesTheHostsChoice(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeUserConfig(t, "gpu: /dev/dri/by-path/pci-0000:01:00.0-render\n")
+
+	cell, err := CheckCell([]byte("image: alpine\ngpu: true\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if !cell.GPU || cell.VM.GPU != "/dev/dri/by-path/pci-0000:01:00.0-render" {
+		t.Errorf("GPU = %v, VM.GPU = %q; want true and the host's node", cell.GPU, cell.VM.GPU)
+	}
+
+	cell, err = CheckCell([]byte("image: alpine\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if cell.GPU || cell.VM.GPU != "" {
+		t.Errorf("GPU = %v, VM.GPU = %q for a cell that did not ask; want none", cell.GPU, cell.VM.GPU)
+	}
+}
+
+// A cell cannot name the host's GPU itself: vm.gpu is not a field, so a
+// definition that names one does not make the machine use it.
+func TestCellCannotNameAHostGPU(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	cell, err := CheckCell([]byte("image: alpine\ngpu: true\nvm:\n  gpu: /dev/dri/renderD129\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if cell.VM.GPU != "" {
+		t.Errorf("VM.GPU = %q, want it left to the host", cell.VM.GPU)
+	}
+}
+
+func writeUserConfig(t *testing.T, content string) {
+	t.Helper()
+	path, err := UserConfigFile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -3,6 +3,7 @@ package lima
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 )
@@ -32,6 +33,55 @@ func GPUArgs(render string) []string {
 	}
 }
 
+// qemuCommand is the variable Lima reads the qemu binary from on this host,
+// and what is in it: the user's own value when there is one, or the binary
+// Lima would otherwise look up on PATH.
+func qemuCommand() (key, command string, err error) {
+	if runtime.GOOS != "linux" {
+		return "", "", fmt.Errorf("a GPU needs a Linux host: on %s Lima does not run machines with qemu", runtime.GOOS)
+	}
+	arch, ok := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[runtime.GOARCH]
+	if !ok {
+		return "", "", fmt.Errorf("a GPU is not supported on %s", runtime.GOARCH)
+	}
+
+	key = "QEMU_SYSTEM_" + strings.ToUpper(arch)
+	// Someone pointing Lima at a qemu of their own keeps it, with the GPU's
+	// arguments after whatever they gave.
+	command = os.Getenv(key)
+	if command == "" {
+		command = "qemu-system-" + arch
+	}
+	return key, command, nil
+}
+
+// GPUSupport reports why this host's qemu cannot give a machine a GPU, or nil
+// when it can.
+//
+// Both halves are build options of qemu rather than anything a machine
+// definition can ask for: Venus is there only when qemu was built against a
+// virglrenderer that has it, and egl-headless only with OpenGL. A qemu missing
+// either refuses to start the machine at all, and says why only in Lima's log
+// — so this is asked first, and a cell that wanted a GPU starts without one.
+func GPUSupport() error {
+	_, command, err := qemuCommand()
+	if err != nil {
+		return err
+	}
+	bin := strings.Fields(command)[0]
+
+	device, err := exec.Command(bin, "-device", "virtio-gpu-gl-pci,help").CombinedOutput()
+	if err != nil || !strings.Contains(string(device), "venus=") {
+		return fmt.Errorf("%s has no virtio-gpu-gl-pci with Venus; it needs a qemu built against a virglrenderer that has it", bin)
+	}
+	display, err := exec.Command(bin, "-display", "help").CombinedOutput()
+	if err != nil || !strings.Contains(string(display), "egl-headless") {
+		return fmt.Errorf("%s has no egl-headless display; it needs a qemu built with OpenGL", bin)
+	}
+
+	return nil
+}
+
 // gpuEnv is the environment limactl start needs for a machine with a GPU, or
 // nil for one without.
 //
@@ -50,24 +100,12 @@ func gpuEnv(render string) ([]string, error) {
 	if render == "" {
 		return nil, nil
 	}
-	if runtime.GOOS != "linux" {
-		return nil, fmt.Errorf("vm.gpu needs a Linux host: on %s Lima does not run machines with qemu", runtime.GOOS)
+	key, command, err := qemuCommand()
+	if err != nil {
+		return nil, err
 	}
 
-	arch, ok := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[runtime.GOARCH]
-	if !ok {
-		return nil, fmt.Errorf("vm.gpu is not supported on %s", runtime.GOARCH)
-	}
-	key := "QEMU_SYSTEM_" + strings.ToUpper(arch)
-
-	// Someone pointing Lima at a qemu of their own keeps it, with these
-	// arguments after whatever they gave.
-	qemu := os.Getenv(key)
-	if qemu == "" {
-		qemu = "qemu-system-" + arch
-	}
-
-	// No quoting: render is checked against config.gpuPath when the cell is
-	// read, so it holds nothing Lima's splitting would take apart.
-	return []string{key + "=" + strings.Join(append([]string{qemu}, GPUArgs(render)...), " ")}, nil
+	// No quoting: render is checked against config.ValidGPU before it gets
+	// here, so it holds nothing Lima's splitting would take apart.
+	return []string{key + "=" + strings.Join(append([]string{command}, GPUArgs(render)...), " ")}, nil
 }

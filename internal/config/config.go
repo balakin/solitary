@@ -90,6 +90,21 @@ type Cell struct {
 	// worth naming.
 	Devices []string `yaml:"devices"`
 
+	// GPU asks for a GPU to render with: OpenGL and Vulkan, done by the
+	// host's own GPU, which the host keeps and any number of cells share.
+	// Rendering is all that crosses over — not CUDA, not a video encoder.
+	//
+	// It is a yes or no rather than a device, because which GPU is a fact
+	// about the host and not about the cell: a definition that named one
+	// would start on one machine only. The host picks — the gpu in
+	// config.yaml, or else the one solitary finds — and a host with none, or
+	// with a qemu that cannot do it, starts the cell without a GPU and says
+	// so, so that it renders on the CPU rather than not starting at all.
+	//
+	// The container is given the machine's render node by this alone; it
+	// does not go in Devices.
+	GPU bool `yaml:"gpu"`
+
 	// VM overrides the machine the container runs in.
 	VM VM `yaml:"vm"`
 
@@ -146,11 +161,19 @@ var userName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 // interpolate these, and this is what keeps that safe.
 var devicePath = regexp.MustCompile(`^/dev/[A-Za-z0-9_][A-Za-z0-9_./-]*$`)
 
-// gpuPath is what vm.gpu has to look like: a node under /dev/dri, including the
-// colons a /dev/dri/by-path name carries. It ends up in an environment
-// variable Lima splits like a shell would, so nothing a shell gives meaning to
-// is allowed in it.
+// gpuPath is what config.yaml's gpu has to look like: a node under /dev/dri,
+// including the colons a /dev/dri/by-path name carries. It ends up in an
+// environment variable Lima splits like a shell would, so nothing a shell
+// gives meaning to is allowed in it.
 var gpuPath = regexp.MustCompile(`^/dev/dri/[A-Za-z0-9_][A-Za-z0-9_.:/-]*$`)
+
+// ValidGPU reports whether a render node is safe to hand to qemu: a node under
+// /dev/dri, named in nothing but the characters gpuPath allows, and not
+// walking out of it with "..". config.yaml's gpu is checked with it, and so is
+// a node solitary found on its own, since that name came from the host.
+func ValidGPU(path string) bool {
+	return gpuPath.MatchString(path) && filepath.Clean(path) == path
+}
 
 // envName is what a name has to look like to survive being passed to podman as
 // an environment variable.
@@ -242,20 +265,12 @@ type VM struct {
 	// appending to it.
 	Provision string `yaml:"provision,omitempty"`
 
-	// GPU is a render node on the host, under /dev/dri, that the machine
-	// renders with.
-	//
-	// The machine is given a virtual GPU rather than the host's: OpenGL
-	// through virgl and Vulkan through Venus, both run by the host on the
-	// card this names. So the host keeps its GPU, and any number of cells can
-	// share it — at the price of anything that is not rendering, such as
-	// CUDA or a video encoder, which a virtual GPU does not carry.
-	//
-	// The guest sees one GPU and makes its own render node for it, which is
-	// what devices: then hands to the container. A /dev/dri/by-path name is
-	// the one to give here: renderD128 and renderD129 are numbered in the
-	// order the host's drivers loaded, and two GPUs can swap them.
-	GPU string `yaml:"gpu,omitempty"`
+	// GPU is the host render node this machine renders with, or empty for a
+	// machine with no GPU. It is never read from a file: a cell says only
+	// that it wants a GPU, and which of the host's it gets is the host's
+	// business — config.yaml's gpu, or else what solitary finds — so it is
+	// filled in when the cell starts.
+	GPU string `yaml:"-"`
 }
 
 // Network says what a cell is allowed to reach.
@@ -483,6 +498,14 @@ type UserConfig struct {
 	VM      VM      `yaml:"vm"`
 	Git     Git     `yaml:"git"`
 	Network Network `yaml:"network"`
+
+	// GPU is the render node a cell that asks for a GPU renders with, under
+	// /dev/dri. It is here rather than in any cell because it names this
+	// host's hardware. Empty leaves the choice to solitary, which is right
+	// for a host with one GPU; this is for a host whose second one is the
+	// one to use. A /dev/dri/by-path name is the one to give: renderD128 and
+	// renderD129 are numbered in the order the drivers loaded.
+	GPU string `yaml:"gpu"`
 }
 
 // DefaultCommand keeps a container alive without assuming anything about the
@@ -526,7 +549,6 @@ func Resolve(cell, user, defaults VM) VM {
 		Memory:    str(cell.Memory, user.Memory, defaults.Memory),
 		Disk:      str(cell.Disk, user.Disk, defaults.Disk),
 		Provision: str(cell.Provision, user.Provision, defaults.Provision),
-		GPU:       str(cell.GPU, user.GPU, defaults.GPU),
 	}
 }
 
@@ -659,10 +681,10 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 		return nil, err
 	}
 	cell.VM = Resolve(cell.VM, user.VM, Defaults())
-	// Checked once resolved, since config.yaml can set it for every cell, and
-	// cleaned for the same reason as a device: .. would walk out of /dev/dri.
-	if gpu := cell.VM.GPU; gpu != "" && (!gpuPath.MatchString(gpu) || filepath.Clean(gpu) != gpu) {
-		return nil, fmt.Errorf("%s: vm.gpu: %q is not a render node under /dev/dri", path, gpu)
+	if cell.GPU {
+		// Only a preference, and possibly an empty one: whether the host
+		// has a GPU to give is answered when the cell starts.
+		cell.VM.GPU = user.GPU
 	}
 	cell.Git = ResolveGit(cell.Git, user.Git)
 	cell.Network = ResolveNetwork(cell.Network, user.Network)
@@ -703,6 +725,9 @@ func LoadUserConfig() (*UserConfig, error) {
 	var cfg UserConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	if gpu := cfg.GPU; gpu != "" && !ValidGPU(gpu) {
+		return nil, fmt.Errorf("%s: gpu: %q is not a render node under /dev/dri", path, gpu)
 	}
 	return &cfg, nil
 }
