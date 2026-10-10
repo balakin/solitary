@@ -1,0 +1,149 @@
+### Lima machine definition for a solitary cell.
+###
+### Rendered from this template by internal/lima; not written by users.
+
+minimumLimaVersion: 2.0.0
+
+base:
+  - template:_images/ubuntu-lts
+
+cpus: 2
+memory: "4GiB"
+disk: "20GiB"
+
+# vm.gpu: rendered with /dev/dri/by-path/pci-0000:01:00.0-render on the host.
+#
+# Lima has no field for this, so nothing here gives the machine its GPU:
+# solitary passes the qemu arguments at every start instead, and a machine
+# started without solitary boots without one. This comment is what makes a
+# change to vm.gpu a change to the definition, the way any other machine
+# setting is, so that it reaches the machine at the next boot rather than
+# going unnoticed.
+
+# Load-bearing, not stylistic. A cell exists so that code an agent wrote is
+# never interpreted by a process on the host; a mount here would hand it a
+# path back to files the host executes (git hooks, package scripts, .envrc).
+# Do not add mounts.
+mounts: []
+
+# Host proxy configuration can name internal hosts and carry credentials.
+propagateProxyEnv: false
+
+# The cell this machine was created for. Lima has no field for metadata, and
+# rejects a parameter that no provision, probe, copyToHost or portForward
+# reads — so this one is read by the first script below, which is where it
+# earns its keep anyway. limactl list --json reports it back, so a machine can
+# still name its cell once the definition it came from is deleted.
+param:
+  solitary_cell: "probe"
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      mkdir -p "$(dirname /etc/solitary/cell)"
+      # Lima puts every param in the environment of the scripts it runs, and
+      # reading one here is what makes the param above legal: Lima refuses a
+      # param that nothing reads.
+      echo "$PARAM_solitary_cell" > /etc/solitary/cell
+
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      command -v podman >/dev/null 2>&1 && exit 0
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y podman uidmap slirp4netns fuse-overlayfs
+
+  # network.vpn is not set, so this cell sends its traffic the way it came.
+  #
+  # A machine keeps its disk across a change to the cell that describes it, and
+  # a tunnel installed by an earlier definition would otherwise still be
+  # enabled: the interface would come up at every boot from a configuration
+  # nothing here mentions any more. So the machine is put back the way an
+  # untunnelled one starts out, rather than left carrying a tunnel the cell no
+  # longer asks for.
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # Nothing to undo on a machine that never had a tunnel, which is the
+      # ordinary case: this runs on every boot of every untunnelled cell.
+      if [ ! -e /etc/wireguard/vpn0.conf ]; then
+        exit 0
+      fi
+
+      systemctl disable --now wg-quick@vpn0 2>/dev/null || true
+      systemctl disable --now solitary-vpn-watchdog.timer 2>/dev/null || true
+      rm -f /etc/systemd/system/solitary-vpn-watchdog.service /etc/systemd/system/solitary-vpn-watchdog.timer
+      rm -f /usr/local/sbin/solitary-vpn-watchdog
+      # The private key goes with it. A configuration the cell no longer names
+      # has no reason to stay on a disk.
+      rm -f /etc/wireguard/vpn0.conf
+      rm -f /etc/systemd/system/wg-quick@vpn0.service.d/solitary.conf
+      rmdir /etc/systemd/system/wg-quick@vpn0.service.d 2>/dev/null || true
+      systemctl daemon-reload
+
+  # network.allow was not set, so this cell reaches whatever the host reaches.
+  #
+  # The counterpart of the block above, and the reason it can be removed at all.
+  # A restriction is not only a rule in a definition: applying it writes a
+  # resolver configuration, a firewall and an immutable resolv.conf into the
+  # machine, and those live on the machine's disk, which survives every change
+  # to the cell short of destroying it. Taking network.allow out of cell.yaml
+  # would otherwise leave the cell enforcing an allow list nothing describes any
+  # more — reachable names that are not listed anywhere, refusals with no rule
+  # behind them.
+  #
+  # So this undoes it, on every boot, and the guest matches the definition
+  # whichever way the setting was last changed.
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # Nothing to undo on a machine that was never restricted, which is the
+      # ordinary case: this runs on every boot of every unrestricted cell.
+      if [ ! -e /etc/dnsmasq.d/solitary.conf ] && ! nft list table inet solitary >/dev/null 2>&1; then
+        exit 0
+      fi
+
+      # The firewall. The table goes first so that nothing is refused while the
+      # rest of this runs.
+      nft delete table inet solitary 2>/dev/null || true
+      if [ -e /etc/nftables.conf ] && grep -q "Written by solitary" /etc/nftables.conf; then
+        rm -f /etc/nftables.conf
+        # Left enabled it would fail at the next boot on the file just removed.
+        systemctl disable --now nftables 2>/dev/null || true
+      fi
+
+      # The resolver. Only solitary's own configuration is removed; dnsmasq is
+      # stopped because solitary is what started it.
+      rm -f /etc/dnsmasq.d/solitary.conf
+      systemctl disable --now dnsmasq 2>/dev/null || true
+
+      # And resolv.conf, handed back to the resolver the image ships with. The
+      # immutable flag is what the restriction used to keep anything in the
+      # machine from writing over it, so it has to be cleared before the file
+      # can be replaced.
+      chattr -i /etc/resolv.conf 2>/dev/null || true
+      rm -f /etc/resolv.conf
+      systemctl enable --now systemd-resolved
+      ln -sf ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+
+      # Anything holding an address it resolved through the old resolver asks
+      # again, the same way the restriction restarts them when it goes on.
+      systemctl try-restart chrony 2>/dev/null || true
+
+probes:
+  - script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      if ! timeout 30s bash -c "until command -v podman >/dev/null 2>&1; do sleep 3; done"; then
+        echo >&2 "podman is not installed yet"
+        exit 1
+      fi
+    hint: See "/var/log/cloud-init-output.log" in the guest

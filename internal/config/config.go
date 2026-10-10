@@ -146,6 +146,12 @@ var userName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 // interpolate these, and this is what keeps that safe.
 var devicePath = regexp.MustCompile(`^/dev/[A-Za-z0-9_][A-Za-z0-9_./-]*$`)
 
+// gpuPath is what vm.gpu has to look like: a node under /dev/dri, including the
+// colons a /dev/dri/by-path name carries. It ends up in an environment
+// variable Lima splits like a shell would, so nothing a shell gives meaning to
+// is allowed in it.
+var gpuPath = regexp.MustCompile(`^/dev/dri/[A-Za-z0-9_][A-Za-z0-9_.:/-]*$`)
+
 // envName is what a name has to look like to survive being passed to podman as
 // an environment variable.
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -235,6 +241,21 @@ type VM struct {
 	// podman setup. A value here replaces the user-wide one rather than
 	// appending to it.
 	Provision string `yaml:"provision,omitempty"`
+
+	// GPU is a render node on the host, under /dev/dri, that the machine
+	// renders with.
+	//
+	// The machine is given a virtual GPU rather than the host's: OpenGL
+	// through virgl and Vulkan through Venus, both run by the host on the
+	// card this names. So the host keeps its GPU, and any number of cells can
+	// share it — at the price of anything that is not rendering, such as
+	// CUDA or a video encoder, which a virtual GPU does not carry.
+	//
+	// The guest sees one GPU and makes its own render node for it, which is
+	// what devices: then hands to the container. A /dev/dri/by-path name is
+	// the one to give here: renderD128 and renderD129 are numbered in the
+	// order the host's drivers loaded, and two GPUs can swap them.
+	GPU string `yaml:"gpu,omitempty"`
 }
 
 // Network says what a cell is allowed to reach.
@@ -505,6 +526,7 @@ func Resolve(cell, user, defaults VM) VM {
 		Memory:    str(cell.Memory, user.Memory, defaults.Memory),
 		Disk:      str(cell.Disk, user.Disk, defaults.Disk),
 		Provision: str(cell.Provision, user.Provision, defaults.Provision),
+		GPU:       str(cell.GPU, user.GPU, defaults.GPU),
 	}
 }
 
@@ -637,6 +659,11 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 		return nil, err
 	}
 	cell.VM = Resolve(cell.VM, user.VM, Defaults())
+	// Checked once resolved, since config.yaml can set it for every cell, and
+	// cleaned for the same reason as a device: .. would walk out of /dev/dri.
+	if gpu := cell.VM.GPU; gpu != "" && (!gpuPath.MatchString(gpu) || filepath.Clean(gpu) != gpu) {
+		return nil, fmt.Errorf("%s: vm.gpu: %q is not a render node under /dev/dri", path, gpu)
+	}
 	cell.Git = ResolveGit(cell.Git, user.Git)
 	cell.Network = ResolveNetwork(cell.Network, user.Network)
 	if err := cell.Network.validateResolvers(); err != nil {

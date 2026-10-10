@@ -195,6 +195,12 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 		fmt.Fprintf(out, "  devices  %s\n", strings.Join(c.Devices, ", "))
 	}
 
+	// And a GPU reaches further still: what the cell renders is run on the
+	// host, by qemu, on the card named here.
+	if c.VM.GPU != "" {
+		fmt.Fprintf(out, "  gpu      %s on the host\n", c.VM.GPU)
+	}
+
 	if c.Network.Restricted() {
 		fmt.Fprintf(out, "  network  %d allowed\n", len(c.Network.Allow))
 		for _, entry := range c.Network.Allow {

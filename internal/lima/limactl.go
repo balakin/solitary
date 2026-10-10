@@ -80,12 +80,20 @@ func run(args ...string) error {
 // runVerbose executes limactl with its output attached to the terminal, for
 // commands where progress matters.
 func runVerbose(args ...string) error {
+	return runVerboseEnv(nil, args...)
+}
+
+// runVerboseEnv is runVerbose with env added to solitary's own environment.
+func runVerboseEnv(env []string, args ...string) error {
 	bin, err := limactl()
 	if err != nil {
 		return err
 	}
 
 	cmd := exec.Command(bin, args...)
+	if env != nil {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdout = os.Stderr // progress is not output; keep stdout clean
 	cmd.Stderr = os.Stderr
 
@@ -144,9 +152,14 @@ func Lookup(name string) (*Instance, error) {
 	return nil, nil
 }
 
-// Create builds a machine from a definition file and starts it.
-func Create(name, definitionPath string) error {
-	return runVerbose("start", "--tty=false", "--name="+name, definitionPath)
+// Create builds a machine from a definition file and starts it. gpu is the
+// host render node the machine renders with, or empty for none.
+func Create(name, definitionPath, gpu string) error {
+	env, err := gpuEnv(gpu)
+	if err != nil {
+		return err
+	}
+	return runVerboseEnv(env, "start", "--tty=false", "--name="+name, definitionPath)
 }
 
 // startAttempts is how many times Start retries. limactl stop can return
@@ -157,11 +170,15 @@ const startAttempts = 3
 // startRetryDelay is how long to wait between attempts.
 var startRetryDelay = 3 * time.Second
 
-// Start boots an existing machine.
-func Start(name string) error {
-	var err error
+// Start boots an existing machine. gpu is the host render node the machine
+// renders with, or empty for none.
+func Start(name, gpu string) error {
+	env, err := gpuEnv(gpu)
+	if err != nil {
+		return err
+	}
 	for attempt := 1; attempt <= startAttempts; attempt++ {
-		if err = runVerbose("start", "--tty=false", name); err == nil {
+		if err = runVerboseEnv(env, "start", "--tty=false", name); err == nil {
 			return nil
 		}
 		if attempt < startAttempts {

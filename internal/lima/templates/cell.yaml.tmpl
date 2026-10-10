@@ -10,6 +10,17 @@ base:
 cpus: {{ .VM.CPUs }}
 memory: "{{ .VM.Memory }}"
 disk: "{{ .VM.Disk }}"
+{{- if .VM.GPU }}
+
+# vm.gpu: rendered with {{ .VM.GPU }} on the host.
+#
+# Lima has no field for this, so nothing here gives the machine its GPU:
+# solitary passes the qemu arguments at every start instead, and a machine
+# started without solitary boots without one. This comment is what makes a
+# change to vm.gpu a change to the definition, the way any other machine
+# setting is, so that it reaches the machine at the next boot rather than
+# going unnoticed.
+{{- end }}
 
 # Load-bearing, not stylistic. A cell exists so that code an agent wrote is
 # never interpreted by a process on the host; a mount here would hand it a

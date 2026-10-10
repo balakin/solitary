@@ -381,6 +381,30 @@ func TestCellDevicesHaveToBeDeviceNodes(t *testing.T) {
 	}
 }
 
+// vm.gpu reaches qemu through a variable Lima splits like a shell would, so it
+// has to be a node under /dev/dri and nothing that splitting would read as
+// more than one word.
+func TestCellGPUHasToBeARenderNode(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	for _, gpu := range []string{"/dev/dri/renderD128", "/dev/dri/by-path/pci-0000:01:00.0-render"} {
+		cell, err := CheckCell([]byte("image: alpine\nvm:\n  gpu: \""+gpu+"\"\n"), t.TempDir())
+		if err != nil {
+			t.Errorf("vm.gpu: %s was refused: %v", gpu, err)
+			continue
+		}
+		if cell.VM.GPU != gpu {
+			t.Errorf("VM.GPU = %q, want %q", cell.VM.GPU, gpu)
+		}
+	}
+	for _, gpu := range []string{"/dev/kvm", "/dev/dri/renderD128 -device x", "/dev/dri/../kvm", "renderD128", "/dev/dri/'x'", "/dev/dri/"} {
+		if _, err := CheckCell([]byte("image: alpine\nvm:\n  gpu: \""+gpu+"\"\n"), t.TempDir()); err == nil {
+			t.Errorf("vm.gpu: %q was accepted", gpu)
+		}
+	}
+}
+
 // Nothing declares a device, and the ordinary cell reaches none of the
 // machine's own.
 func TestCellDevicesAreEmptyByDefault(t *testing.T) {
