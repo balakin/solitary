@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.1](https://github.com/balakin/solitary/compare/v0.16.0...v0.16.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **gpu:** let Lima probe the Venus QEMU launcher ([1919e9b](https://github.com/balakin/solitary/commit/1919e9b09f133b1af8b35518bf9a2d3daaed5b18))
+* **gpu:** make the QEMU launcher probeable by Lima ([508c9ad](https://github.com/balakin/solitary/commit/508c9adbc2f5145eaf1b3fba885b99588bea1ab1))
+
 ## [0.16.0](https://github.com/balakin/solitary/compare/v0.15.0...v0.16.0) (2026-10-10)
 
 
