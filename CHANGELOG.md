@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.16.0](https://github.com/balakin/solitary/compare/v0.15.0...v0.16.0) (2026-10-10)
+
+
+### Features
+
+* **dashboard:** show Venus devices for GPU cells ([411718e](https://github.com/balakin/solitary/commit/411718e7d2068be91f3bacf0a70a80c669ea2d76))
+
+
+### Bug Fixes
+
+* **gpu:** honor guest PAT for Venus on QEMU 11 ([c00b3b9](https://github.com/balakin/solitary/commit/c00b3b991ad5c24858fbc3d1d2a734848e107df6))
+
 ## [0.15.0](https://github.com/balakin/solitary/compare/v0.14.2...v0.15.0) (2026-10-10)
 
 
