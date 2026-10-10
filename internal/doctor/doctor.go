@@ -62,6 +62,7 @@ func Host() []Check {
 		checkMemory(),
 		checkDisk(),
 		checkMachines(),
+		checkGPU(),
 		checkConfig(),
 		checkProxy(),
 	}
@@ -290,6 +291,70 @@ func checkConfig() Check {
 	return Check{Name: "config", Status: OK, Detail: fmt.Sprintf("%s, %s defined", root, cells(len(names)))}
 }
 
+// checkGPU says which of the host's GPUs a cell that asks for one renders
+// with, or why it would render on the CPU instead.
+func checkGPU() Check {
+	machines, _ := definedMachines()
+	var asking []string
+	for _, m := range machines {
+		if m.gpu {
+			asking = append(asking, m.name)
+		}
+	}
+
+	named := ""
+	if user, err := config.LoadUserConfig(); err == nil {
+		named = user.GPU
+	}
+	support := lima.GPUSupport()
+	var node host.RenderNode
+	var pick error
+	if support == nil {
+		node, pick = host.PickRenderNode(named)
+	}
+
+	return gpuStatus(asking, support, node, pick)
+}
+
+// gpuStatus is checkGPU's verdict on what it found. A host without a GPU to
+// give is only worth a warning when some cell asks for one, and even then not
+// a failure: that cell starts anyway and renders on the CPU.
+func gpuStatus(asking []string, support error, node host.RenderNode, pick error) Check {
+	problem := support
+	if problem == nil {
+		problem = pick
+	}
+
+	if problem != nil {
+		if len(asking) == 0 {
+			return Check{Name: "gpu", Status: OK, Detail: "none to give a cell: " + problem.Error()}
+		}
+		fix := "Those cells start without one and render on the CPU. To choose a GPU by hand,\n" +
+			"set gpu: in config.yaml to a node from 'ls -l /dev/dri/by-path'."
+		if support != nil {
+			fix = "Those cells start without one and render on the CPU until this host has a qemu\n" +
+				"that can render on its GPU."
+		}
+		return Check{
+			Name:   "gpu",
+			Status: Warn,
+			Detail: fmt.Sprintf("%s asks for a GPU, and %s", strings.Join(asking, ", "), problem.Error()),
+			Fix:    fix,
+		}
+	}
+
+	detail := node.Path
+	if node.Driver != "" {
+		detail += " (" + node.Driver + ")"
+	}
+	if len(asking) == 0 {
+		detail += ", for a cell that sets gpu: true"
+	} else {
+		detail += ", for " + strings.Join(asking, ", ")
+	}
+	return Check{Name: "gpu", Status: OK, Detail: detail}
+}
+
 // proxyVars are the variables a shell sets to put a proxy in front of
 // everything. Lima can propagate them into a machine; solitary turns that off,
 // because a proxy configuration names internal hosts and often carries
@@ -430,6 +495,7 @@ type machine struct {
 	name   string
 	memory string
 	disk   string
+	gpu    bool
 }
 
 // definedMachines reads every cell definition, reporting how many could not be
@@ -448,7 +514,7 @@ func definedMachines() (machines []machine, unreadable int) {
 			unreadable++
 			continue
 		}
-		machines = append(machines, machine{name: name, memory: c.VM.Memory, disk: c.VM.Disk})
+		machines = append(machines, machine{name: name, memory: c.VM.Memory, disk: c.VM.Disk, gpu: c.GPU})
 	}
 
 	return machines, unreadable

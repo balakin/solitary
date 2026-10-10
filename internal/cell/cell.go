@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -258,6 +257,9 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		return err
 	}
 
+	// Before the definition is rendered, since the GPU is part of it.
+	c.VM.GPU = chooseGPU(name, c, progress)
+
 	rendered, err := lima.Render(name, c.VM, c.Ports, c.Network)
 	if err != nil {
 		return err
@@ -272,9 +274,6 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 	switch {
 	case inst == nil:
 		if err := verifyMemory(c.VM.Memory, progress); err != nil {
-			return err
-		}
-		if err := verifyGPU(c.VM.GPU); err != nil {
 			return err
 		}
 		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
@@ -315,9 +314,6 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		if err := verifyMemory(c.VM.Memory, progress); err != nil {
 			return err
 		}
-		if err := verifyGPU(c.VM.GPU); err != nil {
-			return err
-		}
 		fmt.Fprintf(progress, "Starting cell %q...\n", name)
 		if err := lima.Start(instance, c.VM.GPU); err != nil {
 			return err
@@ -326,6 +322,10 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 
 	if err := installTunnel(instance, c.Network, progress); err != nil {
 		return err
+	}
+
+	if c.VM.GPU != "" {
+		c.Devices = withGuestGPU(instance, name, c.Devices, progress)
 	}
 
 	env, err := resolveSecrets(name, c, progress)
@@ -1013,24 +1013,64 @@ func createMachine(instance, rendered, gpu string) error {
 	return lima.Create(instance, path, gpu)
 }
 
-// verifyGPU refuses a vm.gpu the host cannot render with, before the machine
-// is started on it. qemu opens the node itself and fails the start when it
-// cannot, but what that failure says goes to Lima's log, and the start itself
-// only reports that the machine never came up.
-func verifyGPU(render string) error {
-	if render == "" {
-		return nil
+// guestRenderNode is the render node a machine makes for its GPU. The machine
+// has that one GPU and no other, so it is always the first.
+const guestRenderNode = "/dev/dri/renderD128"
+
+// chooseGPU picks the host render node a cell that asked for a GPU renders
+// with, or returns empty for a cell that did not ask or a host that cannot
+// give one.
+//
+// A host that cannot is said so and not refused. The cell still starts, and
+// renders on the CPU: what a cell that asks for a GPU needs is to render, and
+// a definition that started only on hosts with the right card would be the
+// fragile thing the yes-or-no in cell.yaml exists to avoid.
+func chooseGPU(name string, c *config.Cell, progress io.Writer) string {
+	if !c.GPU {
+		return ""
+	}
+	without := func(why string) string {
+		fmt.Fprintf(progress, "Warning: %q asks for a GPU, and %s.\n", name, why)
+		fmt.Fprintf(progress, "         It starts without one and renders on the CPU; 'solitary doctor' says more.\n")
+		return ""
 	}
 
-	f, err := os.OpenFile(render, os.O_RDWR, 0)
+	if err := lima.GPUSupport(); err != nil {
+		return without(err.Error())
+	}
+
+	node, err := host.PickRenderNode(c.VM.GPU)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("vm.gpu: this host has no %s; ls /dev/dri/by-path lists the render nodes it has", render)
-		}
-		return fmt.Errorf("vm.gpu: opening %s: %w", render, err)
+		return without(err.Error())
 	}
+	// The name came from config.yaml, which is checked when it is read, or
+	// from the host's own /dev/dri; it is checked again either way, since it
+	// is about to be split like a shell command line.
+	if !config.ValidGPU(node.Path) {
+		return without(fmt.Sprintf("%s is not a name qemu can be given safely", node.Path))
+	}
+	return node.Path
+}
 
-	return f.Close()
+// withGuestGPU adds the machine's render node to the devices the container is
+// given, when the machine has one.
+//
+// A running machine started before the cell asked for a GPU has none: the GPU
+// is a machine setting, read at boot, and the drift warning has already said
+// so. The container is not refused for it — it starts as it would have, and
+// gets the node once the machine is restarted.
+func withGuestGPU(instance, name string, devices []string, progress io.Writer) []string {
+	for _, device := range devices {
+		if device == guestRenderNode {
+			return devices
+		}
+	}
+	if _, err := lima.Exec(instance, "test", "-e", guestRenderNode); err != nil {
+		fmt.Fprintf(progress, "Warning: the machine for %q has no GPU yet; it gets one at the next boot:\n", name)
+		fmt.Fprintf(progress, "           solitary down %s && solitary up %s\n", name, name)
+		return devices
+	}
+	return append(append([]string(nil), devices...), guestRenderNode)
 }
 
 // verifyMemory refuses a machine the host cannot back, and warns about one it

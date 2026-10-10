@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -410,5 +411,37 @@ func TestMachinesStatusFixesBoth(t *testing.T) {
 		if !strings.Contains(got.Fix, want) {
 			t.Errorf("machinesStatus() fix = %q, want it to name %q", got.Fix, want)
 		}
+	}
+}
+
+func TestGPUStatus(t *testing.T) {
+	nvidia := host.RenderNode{Path: "/dev/dri/by-path/pci-0000:01:00.0-render", Driver: "nvidia"}
+	noVenus := errors.New("qemu-system-x86_64 has no virtio-gpu-gl-pci with Venus")
+
+	cases := []struct {
+		name    string
+		asking  []string
+		support error
+		node    host.RenderNode
+		pick    error
+		status  Status
+		detail  string
+	}{
+		{name: "found, nobody asks", node: nvidia, status: OK, detail: "(nvidia), for a cell that sets gpu: true"},
+		{name: "found, asked for", asking: []string{"soundor"}, node: nvidia, status: OK, detail: "(nvidia), for soundor"},
+		// Nobody wanted one, so there is nothing to warn about.
+		{name: "unsupported, nobody asks", support: noVenus, status: OK, detail: "none to give a cell"},
+		// A cell wanted one and starts without it: worth saying, not failing.
+		{name: "unsupported, asked for", asking: []string{"soundor"}, support: noVenus, status: Warn, detail: "soundor asks for a GPU"},
+		{name: "no node, asked for", asking: []string{"a", "b"}, pick: errors.New("this host has no render node"), status: Warn, detail: "a, b asks for a GPU, and this host has no render node"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := gpuStatus(tc.asking, tc.support, tc.node, tc.pick)
+			if got.Status != tc.status || !strings.Contains(got.Detail, tc.detail) {
+				t.Errorf("gpuStatus() = %s %q, want %s containing %q", got.Status, got.Detail, tc.status, tc.detail)
+			}
+		})
 	}
 }

@@ -196,9 +196,9 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 	}
 
 	// And a GPU reaches further still: what the cell renders is run on the
-	// host, by qemu, on the card named here.
-	if c.VM.GPU != "" {
-		fmt.Fprintf(out, "  gpu      %s on the host\n", c.VM.GPU)
+	// host, by qemu, on the host's own card.
+	if c.GPU {
+		fmt.Fprintln(out, "  gpu      renders on this host's GPU")
 	}
 
 	if c.Network.Restricted() {
