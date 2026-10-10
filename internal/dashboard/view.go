@@ -110,6 +110,9 @@ func (m model) detailPane() string {
 	lines = append(lines,
 		field("image", m.detail.Image),
 		field("machine", machine),
+	)
+	lines = append(lines, m.gpuLines()...)
+	lines = append(lines,
 		field("ports", ports),
 	)
 	if len(m.detail.Devices) > 0 {
@@ -129,6 +132,29 @@ func (m model) detailPane() string {
 	lines = append(lines, field("secrets", m.secretsSummary()))
 
 	return pane(m.detail.Name, strings.Join(lines, "\n"))
+}
+
+func (m model) gpuLines() []string {
+	if !m.detail.GPU {
+		return []string{field("gpu", labelStyle.Render("disabled"))}
+	}
+	if m.selected().Status != cell.StatusRunning {
+		return []string{field("gpu", labelStyle.Render("enabled · start to list Venus devices"))}
+	}
+	if m.gpuErr != nil {
+		return []string{field("gpu", warnStyle.Render("could not list Venus devices (check vulkaninfo)"))}
+	}
+	if m.gpus == nil {
+		return []string{field("gpu", labelStyle.Render("checking Venus devices…"))}
+	}
+	if len(m.gpus) == 0 {
+		return []string{field("gpu", warnStyle.Render("no Venus devices detected"))}
+	}
+	lines := []string{field("gpu", fmt.Sprintf("%d Venus devices", len(m.gpus)))}
+	for _, name := range m.gpus {
+		lines = append(lines, field("", valueStyle.Render(name)))
+	}
+	return lines
 }
 
 // descriptionWidth is what a cell's own summary is wrapped to. It is the widest

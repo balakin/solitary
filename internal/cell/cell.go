@@ -846,6 +846,7 @@ type Detail struct {
 	Name        string
 	Description string
 	Image       string
+	GPU         bool
 	VM          config.VM
 	Ports       []int
 	Devices     []string
@@ -888,6 +889,7 @@ func Describe(name string) (Detail, error) {
 		Name:        name,
 		Description: c.Description,
 		Image:       c.Image,
+		GPU:         c.GPU,
 		VM:          c.VM,
 		Ports:       c.Ports,
 		Devices:     c.Devices,

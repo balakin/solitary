@@ -94,6 +94,10 @@ type model struct {
 	tunnel *cell.TunnelState
 	// handoff is the live inbox/outbox count for the selected running cell.
 	handoff *cell.Handoff
+	// gpus is what Venus actually exposes inside the selected running cell.
+	// A stopped cell cannot be queried, even when its definition asks for a GPU.
+	gpus   []string
+	gpuErr error
 
 	traffic []trafficRow
 	stream  *stream
@@ -142,6 +146,11 @@ type (
 	handoffMsg struct {
 		name  string
 		state *cell.Handoff
+	}
+	venusMsg struct {
+		name    string
+		devices []string
+		err     error
 	}
 	// probedMsg is what one running machine said about its container.
 	probedMsg struct {
@@ -209,12 +218,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.detail, m.detailErr = msg.detail, nil
 		m.handoff = nil
-		tunnelCmd, handoffCmd := m.watchTunnel(), m.watchHandoff()
+		m.gpus, m.gpuErr = nil, nil
+		tunnelCmd, handoffCmd, venusCmd := m.watchTunnel(), m.watchHandoff(), m.watchVenus()
 		if tunnelCmd != nil {
-			return m, tea.Batch(tunnelCmd, handoffCmd)
+			return m, tea.Batch(tunnelCmd, handoffCmd, venusCmd)
 		}
 		m.tunnel = nil
-		return m, handoffCmd
+		return m, tea.Batch(handoffCmd, venusCmd)
 
 	case tunnelMsg:
 		// The selection may have moved while the machine was answering.
@@ -226,6 +236,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case handoffMsg:
 		if msg.name == m.detail.Name {
 			m.handoff = msg.state
+		}
+		return m, nil
+
+	case venusMsg:
+		if msg.name == m.detail.Name && m.selected().Status == cell.StatusRunning {
+			m.gpus, m.gpuErr = msg.devices, msg.err
+			if m.gpus == nil && msg.err == nil {
+				m.gpus = []string{}
+			}
 		}
 		return m, nil
 
@@ -350,10 +369,11 @@ func (m model) withProbe(name string, status cell.Status) (tea.Model, tea.Cmd) {
 		}
 		m.probed[name] = status
 		m.cells[i].Status = status
-		// The tunnel and the hand-off are only read from a running cell,
+		// The tunnel, hand-off, and Venus devices are only read from a running cell,
 		// so the selected one becoming running is the moment to start.
 		if i == m.cursor && status == cell.StatusRunning && c.Status != status {
-			return m, tea.Batch(m.watchTunnel(), m.watchHandoff())
+			m.gpus, m.gpuErr = nil, nil
+			return m, tea.Batch(m.watchTunnel(), m.watchHandoff(), m.watchVenus())
 		}
 	}
 
@@ -390,6 +410,13 @@ func (m model) watchHandoff() tea.Cmd {
 		return nil
 	}
 	return handoffStatus(m.detail.Name)
+}
+
+func (m model) watchVenus() tea.Cmd {
+	if !m.detail.GPU || m.selected().Status != cell.StatusRunning {
+		return nil
+	}
+	return venusDevices(m.detail.Name)
 }
 
 func (m model) selected() cell.Info {
@@ -792,6 +819,13 @@ func describe(name string) tea.Cmd {
 		}
 
 		return detailMsg{detail}
+	}
+}
+
+func venusDevices(name string) tea.Cmd {
+	return func() tea.Msg {
+		devices, err := cell.VenusDevices(name)
+		return venusMsg{name: name, devices: devices, err: err}
 	}
 }
 

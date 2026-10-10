@@ -346,6 +346,46 @@ func TestOrphanPaneSaysWhatIsLeft(t *testing.T) {
 	}
 }
 
+func TestDashboardShowsVenusDevicesForGPUCell(t *testing.T) {
+	m := listed(t)
+	next, cmd := m.Update(detailMsg{detail: cell.Detail{Name: "claude", GPU: true}})
+	m = next.(model)
+	if cmd == nil || !strings.Contains(m.View(), "checking Venus devices") {
+		t.Fatalf("a running GPU cell is not queried for Venus devices:\n%s", m.View())
+	}
+
+	next, _ = m.Update(venusMsg{name: "claude", devices: []string{
+		"NVIDIA GeForce RTX 4050 Laptop GPU", "Intel(R) Graphics (RPL-P)", "llvmpipe (LLVM 22.1.8, 256 bits)",
+	}})
+	m = next.(model)
+	view := m.View()
+	for _, want := range []string{"3 Venus devices", "NVIDIA GeForce", "Intel(R) Graphics", "llvmpipe (LLVM 22"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("dashboard is missing %q:\n%s", want, view)
+		}
+	}
+
+	next, _ = m.Update(venusMsg{name: "scratch", devices: []string{"wrong cell"}})
+	if strings.Contains(next.(model).View(), "wrong cell") {
+		t.Error("a Venus response from another cell replaced the selected cell's GPUs")
+	}
+}
+
+func TestDashboardGPUDisabledAndStopped(t *testing.T) {
+	m := listed(t)
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude"}})
+	if view := next.(model).View(); !strings.Contains(view, "disabled") {
+		t.Errorf("gpu: false is not shown as disabled:\n%s", view)
+	}
+
+	m, _ = press(t, m, "down")
+	next, cmd := m.Update(detailMsg{detail: cell.Detail{Name: "scratch", GPU: true}})
+	view := next.(model).View()
+	if cmd != nil || !strings.Contains(view, "enabled · start to list Venus devices") {
+		t.Errorf("a stopped GPU cell should describe its setting without querying it:\n%s", view)
+	}
+}
+
 // The preview is a preview; the whole list has to be readable somewhere, and
 // the dashboard is where someone is already looking.
 func TestNetworkViewShowsEveryEntry(t *testing.T) {
