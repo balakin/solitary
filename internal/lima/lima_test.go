@@ -72,6 +72,11 @@ func TestRenderGolden(t *testing.T) {
 			},
 			golden: "network-vpn.yaml",
 		},
+		{
+			name:   "gpu",
+			vm:     config.VM{Base: "ubuntu-lts", CPUs: 2, Memory: "4GiB", Disk: "20GiB", GPU: "/dev/dri/by-path/pci-0000:01:00.0-render"},
+			golden: "gpu.yaml",
+		},
 	}
 
 	for _, tc := range cases {

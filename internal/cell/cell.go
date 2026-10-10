@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -273,8 +274,11 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		if err := verifyMemory(c.VM.Memory, progress); err != nil {
 			return err
 		}
+		if err := verifyGPU(c.VM.GPU); err != nil {
+			return err
+		}
 		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
-		if err := createMachine(instance, rendered); err != nil {
+		if err := createMachine(instance, rendered, c.VM.GPU); err != nil {
 			return err
 		}
 		if err := config.WriteApplied(name, config.NewApplied(rendered, c.VM.Provision)); err != nil {
@@ -311,8 +315,11 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		if err := verifyMemory(c.VM.Memory, progress); err != nil {
 			return err
 		}
+		if err := verifyGPU(c.VM.GPU); err != nil {
+			return err
+		}
 		fmt.Fprintf(progress, "Starting cell %q...\n", name)
-		if err := lima.Start(instance); err != nil {
+		if err := lima.Start(instance, c.VM.GPU); err != nil {
 			return err
 		}
 	}
@@ -991,7 +998,7 @@ func attachable(name string) (instance, user string, err error) {
 // createMachine builds a machine from a definition rendered for this call. The
 // definition is a temporary file: it is derived from cell.yaml and the defaults
 // compiled in, so keeping a copy would only invite someone to edit the copy.
-func createMachine(instance, rendered string) error {
+func createMachine(instance, rendered, gpu string) error {
 	dir, err := os.MkdirTemp("", "solitary-")
 	if err != nil {
 		return fmt.Errorf("creating a temporary directory: %w", err)
@@ -1003,7 +1010,27 @@ func createMachine(instance, rendered string) error {
 		return fmt.Errorf("writing the machine definition: %w", err)
 	}
 
-	return lima.Create(instance, path)
+	return lima.Create(instance, path, gpu)
+}
+
+// verifyGPU refuses a vm.gpu the host cannot render with, before the machine
+// is started on it. qemu opens the node itself and fails the start when it
+// cannot, but what that failure says goes to Lima's log, and the start itself
+// only reports that the machine never came up.
+func verifyGPU(render string) error {
+	if render == "" {
+		return nil
+	}
+
+	f, err := os.OpenFile(render, os.O_RDWR, 0)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("vm.gpu: this host has no %s; ls /dev/dri/by-path lists the render nodes it has", render)
+		}
+		return fmt.Errorf("vm.gpu: opening %s: %w", render, err)
+	}
+
+	return f.Close()
 }
 
 // verifyMemory refuses a machine the host cannot back, and warns about one it

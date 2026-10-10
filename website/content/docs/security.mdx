@@ -17,6 +17,8 @@ Solitary is designed to stop a compromised coding agent from modifying or execut
 
 The boundary is only as useful as the permissions around it. Keep `secrets` lists narrow, allow only the domains required by the task, and expose only the ports you intend to open. A cell with no network allow list follows the host's network by default, so use an allow list when egress matters.
 
+`vm.gpu` is the one setting that widens the boundary itself. The OpenGL and Vulkan commands a cell sends are carried out on the host, by virglrenderer inside qemu and by the host's GPU driver beneath it, so a flaw in either is reachable from inside the cell. Give a GPU only to a cell that renders.
+
 ## Secrets lifecycle
 
 Secret values live on the host and are passed into the container as environment variables. The `.env` file itself does not enter the VM, but the values do. Podman may record a container environment in the VM's metadata. Destroying the cell removes that metadata with the cell; rotate credentials if they may have been exposed.
