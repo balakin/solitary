@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.0](https://github.com/balakin/solitary/compare/v0.14.2...v0.15.0) (2026-10-10)
+
+
+### Features
+
+* give a cell's machine a GPU to render with ([c58f183](https://github.com/balakin/solitary/commit/c58f183bc4028b3260ba27c814ce9b0f4836da9c))
+* let a cell ask for a GPU instead of naming the host's ([77cb681](https://github.com/balakin/solitary/commit/77cb681b6c845cede0057c077097c27b7869b07e))
+
 ## [0.14.2](https://github.com/balakin/solitary/compare/v0.14.1...v0.14.2) (2026-10-08)
 
 
