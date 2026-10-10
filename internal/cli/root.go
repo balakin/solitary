@@ -13,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/lima"
 	"github.com/balakin/solitary/internal/update"
 )
 
@@ -69,6 +70,14 @@ func confirm(cmd *cobra.Command, prompt string) (bool, error) {
 
 // Main runs the CLI and exits with a non-zero status on failure.
 func Main() {
+	if len(os.Args) > 1 && os.Args[1] == lima.GPUQEMULaunch {
+		if err := lima.ExecGPUQEMU(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "solitary:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	cmd, err := newRootCmd().ExecuteC()
 	if err == nil {
 		notify(cmd)

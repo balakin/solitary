@@ -9,6 +9,7 @@ Solitary is on its `0.x` line: the configuration shape can still change between 
 
 - **macOS or Linux**
 - **[Lima](https://lima-vm.io) 2.0 or newer** — solitary drives `limactl` on the host and `podman` through it in the machine, so there is nothing else to install
+- **QEMU 11 or newer for [`gpu: true`](/docs/configuration#gpu) on Linux** — built with OpenGL and Venus support in virglrenderer
 - **git**, only for [`solitary clone`](/docs/sharing), which shells out to it so that your existing credentials and SSH agent apply
 - **Go**, only if you build from source
 

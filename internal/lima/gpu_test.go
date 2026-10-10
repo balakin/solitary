@@ -1,6 +1,9 @@
 package lima
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -28,7 +31,11 @@ func TestGPUEnvNamesQemuAndItsArguments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gpuEnv() error = %v", err)
 	}
-	want := "QEMU_SYSTEM_X86_64=qemu-system-x86_64" +
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "QEMU_SYSTEM_X86_64=" + self + " __qemu-gpu qemu-system-x86_64" +
 		" -device virtio-gpu-gl-pci,venus=on,blob=on,hostmem=4G" +
 		" -display egl-headless,rendernode=/dev/dri/by-path/pci-0000:01:00.0-render"
 	if len(env) != 1 || env[0] != want {
@@ -48,7 +55,71 @@ func TestGPUEnvKeepsAQemuAlreadyChosen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gpuEnv() error = %v", err)
 	}
-	if len(env) != 1 || !strings.HasPrefix(env[0], "QEMU_SYSTEM_X86_64=/opt/qemu/bin/qemu-system-x86_64 -smp sockets=1 -device ") {
+	if len(env) != 1 || !strings.Contains(env[0], " __qemu-gpu /opt/qemu/bin/qemu-system-x86_64 -smp sockets=1 -device ") {
 		t.Errorf("gpuEnv() = %q, want the existing qemu first", env)
+	}
+}
+
+func TestQEMUMajorVersion(t *testing.T) {
+	for _, tc := range []struct {
+		output string
+		want   int
+	}{
+		{"QEMU emulator version 11.0.5\nCopyright ...", 11},
+		{"QEMU emulator version 11.1.0-rc2\n", 11},
+		{"QEMU emulator version 10.2.2 (qemu-10.2.2)\n", 10},
+		{"unrecognized output", 0},
+	} {
+		got, err := qemuMajorVersion(tc.output)
+		if tc.want == 0 {
+			if err == nil {
+				t.Errorf("qemuMajorVersion(%q) = %d, want an error", tc.output, got)
+			}
+			continue
+		}
+		if err != nil || got != tc.want {
+			t.Errorf("qemuMajorVersion(%q) = %d, %v; want %d", tc.output, got, err, tc.want)
+		}
+	}
+}
+
+func TestGPUSupportRequiresQEMU11(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("QEMU GPU mode is tested on Linux x86_64")
+	}
+	bin := filepath.Join(t.TempDir(), "qemu-system-x86_64")
+	script := "#!/bin/sh\nprintf 'QEMU emulator version 10.2.2\\n'\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("QEMU_SYSTEM_X86_64", bin)
+	if err := GPUSupport(); err == nil || !strings.Contains(err.Error(), "QEMU 11 or newer") {
+		t.Errorf("GPUSupport() = %v, want the QEMU 11 requirement", err)
+	}
+}
+
+func TestGPUSupportAcceptsQEMU11WithVenus(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("QEMU GPU mode is tested on Linux x86_64")
+	}
+	bin := filepath.Join(t.TempDir(), "qemu-system-x86_64")
+	script := "#!/bin/sh\n" +
+		"if [ \"$3\" = -version ]; then printf 'QEMU emulator version 11.0.5\\n'; " +
+		"elif [ \"$1\" = -device ]; then printf 'venus=<bool>\\n'; " +
+		"else printf 'egl-headless\\n'; fi\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("QEMU_SYSTEM_X86_64", bin)
+	if err := GPUSupport(); err != nil {
+		t.Errorf("GPUSupport() = %v, want QEMU 11 with Venus to pass", err)
+	}
+}
+
+func TestGPUQEMUArgsMovesLimasAccelerator(t *testing.T) {
+	args := []string{"-device", "virtio-gpu-gl-pci,venus=on", "-machine", "q35,accel=kvm,usb=off", "-smp", "4"}
+	want := []string{"-accel", "kvm,honor-guest-pat=on", "-device", "virtio-gpu-gl-pci,venus=on", "-machine", "q35,usb=off", "-smp", "4"}
+	if got := gpuQEMUArgs(args); !reflect.DeepEqual(got, want) {
+		t.Errorf("gpuQEMUArgs() = %q, want %q", got, want)
 	}
 }

@@ -94,6 +94,7 @@ Requirements:
 
 - [Lima](https://lima-vm.io) 2.0 or newer
 - macOS or Linux
+- QEMU 11 or newer with Venus and OpenGL support for `gpu: true` on Linux
 
 ## Quick start
 
