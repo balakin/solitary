@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 )
 
 // gpuHostMem is how much of the machine's address space is set aside for
@@ -14,6 +16,9 @@ import (
 // out of vm.memory or the /dev/shm that backs it. 4GiB holds the textures and
 // buffers a rendered UI or a browser makes.
 const gpuHostMem = "4G"
+
+// GPUQEMULaunch is the internal entry point Lima uses to start QEMU for a GPU VM.
+const GPUQEMULaunch = "__qemu-gpu"
 
 // GPUArgs are the qemu arguments that give a machine a virtual GPU rendered by
 // the host's render node.
@@ -58,17 +63,31 @@ func qemuCommand() (key, command string, err error) {
 // GPUSupport reports why this host's qemu cannot give a machine a GPU, or nil
 // when it can.
 //
-// Both halves are build options of qemu rather than anything a machine
-// definition can ask for: Venus is there only when qemu was built against a
-// virglrenderer that has it, and egl-headless only with OpenGL. A qemu missing
-// either refuses to start the machine at all, and says why only in Lima's log
-// — so this is asked first, and a cell that wanted a GPU starts without one.
+// Venus and egl-headless are build options of QEMU rather than anything a
+// machine definition can ask for. An older QEMU also lacks the KVM guest PAT
+// option Venus needs on Intel hosts. Ask before starting so a cell that wanted
+// a GPU can start without one instead of dying in Lima's log.
 func GPUSupport() error {
 	_, command, err := qemuCommand()
 	if err != nil {
 		return err
 	}
-	bin := strings.Fields(command)[0]
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return fmt.Errorf("QEMU_SYSTEM_X86_64 does not name a QEMU binary")
+	}
+	bin := fields[0]
+	version, err := exec.Command(bin, "-device", "virtio-gpu-gl-pci,venus=on", "-version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("checking %s version for GPU support: %w", bin, err)
+	}
+	major, err := qemuMajorVersion(string(version))
+	if err != nil {
+		return fmt.Errorf("checking %s version for GPU support: %w", bin, err)
+	}
+	if major < 11 {
+		return fmt.Errorf("%s is QEMU %d; a GPU needs QEMU 11 or newer", bin, major)
+	}
 
 	device, err := exec.Command(bin, "-device", "virtio-gpu-gl-pci,help").CombinedOutput()
 	if err != nil || !strings.Contains(string(device), "venus=") {
@@ -80,6 +99,61 @@ func GPUSupport() error {
 	}
 
 	return nil
+}
+
+func qemuMajorVersion(output string) (int, error) {
+	const prefix = "QEMU emulator version "
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		version := strings.Fields(strings.TrimPrefix(line, prefix))
+		if len(version) == 0 {
+			break
+		}
+		major, err := strconv.Atoi(strings.SplitN(version[0], ".", 2)[0])
+		if err == nil {
+			return major, nil
+		}
+		break
+	}
+	return 0, fmt.Errorf("could not read QEMU version from %q", strings.TrimSpace(output))
+}
+
+// ExecGPUQEMU runs the selected qemu after moving Lima's accelerator setting
+// to -accel, where QEMU exposes honor-guest-pat. It replaces this process so
+// Lima still manages and observes qemu as its direct child.
+func ExecGPUQEMU(command []string) error {
+	if len(command) == 0 {
+		return fmt.Errorf("missing QEMU command for GPU")
+	}
+	bin, err := exec.LookPath(command[0])
+	if err != nil {
+		return fmt.Errorf("finding %s for GPU: %w", command[0], err)
+	}
+	args := append([]string{command[0]}, gpuQEMUArgs(command[1:])...)
+	if err := syscall.Exec(bin, args, os.Environ()); err != nil {
+		return fmt.Errorf("starting %s for GPU: %w", command[0], err)
+	}
+	return nil
+}
+
+func gpuQEMUArgs(args []string) []string {
+	out := []string{"-accel", "kvm,honor-guest-pat=on"}
+	for i, arg := range args {
+		if i > 0 && args[i-1] == "-machine" {
+			parts := strings.Split(arg, ",")
+			kept := parts[:0]
+			for _, part := range parts {
+				if !strings.HasPrefix(part, "accel=") {
+					kept = append(kept, part)
+				}
+			}
+			arg = strings.Join(kept, ",")
+		}
+		out = append(out, arg)
+	}
+	return out
 }
 
 // gpuEnv is the environment limactl start needs for a machine with a GPU, or
@@ -95,7 +169,8 @@ func GPUSupport() error {
 // It reaches qemu because limactl start forks the process that runs qemu, and
 // that process inherits this environment. It has to be given at every start:
 // Lima keeps no record of it, and a machine started without it boots with no
-// GPU at all.
+// GPU at all. On x86-64, solitary is the executable Lima starts so it can move
+// Lima's accelerator setting to -accel and enable guest PAT before execing QEMU.
 func gpuEnv(render string) ([]string, error) {
 	if render == "" {
 		return nil, nil
@@ -103,6 +178,16 @@ func gpuEnv(render string) ([]string, error) {
 	key, command, err := qemuCommand()
 	if err != nil {
 		return nil, err
+	}
+	if runtime.GOARCH == "amd64" {
+		self, err := os.Executable()
+		if err != nil {
+			return nil, fmt.Errorf("finding solitary for GPU launch: %w", err)
+		}
+		if strings.ContainsAny(self, " \t\n") {
+			return nil, fmt.Errorf("solitary path %q has whitespace Lima cannot pass to QEMU", self)
+		}
+		command = self + " " + GPUQEMULaunch + " " + command
 	}
 
 	// No quoting: render is checked against config.ValidGPU before it gets

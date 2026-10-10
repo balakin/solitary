@@ -174,11 +174,13 @@ It is a yes or no, not a device, because which GPU is a fact about the host rath
 gpu: /dev/dri/by-path/pci-0000:01:00.0-render # ls -l /dev/dri/by-path lists them
 ```
 
-A host that cannot give a GPU — no render node, a node this user cannot open, a qemu without Venus, or not Linux — starts the cell anyway, says so, and the cell renders on the CPU. The same definition starts on every host.
+A host that cannot give a GPU — no render node, a node this user cannot open, QEMU older than 11 or without Venus, or not Linux — starts the cell anyway, says so, and the cell renders on the CPU. The same definition starts on every host.
+
+On Linux, GPU mode needs QEMU 11 or newer built with OpenGL and virglrenderer Venus support. On x86-64, solitary enables KVM's guest PAT setting so Venus can read GPU-written memory through the guest mapping. With an Intel host CPU and a discrete GPU, this also needs a Linux host kernel of 6.16 or newer; see [Mesa's Venus requirements](https://docs.mesa3d.org/drivers/venus.html). If the QEMU on your PATH is older, set `QEMU_SYSTEM_X86_64` to the path of a suitable binary before running `solitary up`.
 
 The machine sees one GPU and makes `/dev/dri/renderD128` for it, and the container is given that node without it being listed under [`devices`](#devices). The image needs Mesa's drivers to use it — on Ubuntu, `mesa-vulkan-drivers`, `libgl1-mesa-dri` and `libegl-mesa0`; `vulkaninfo --summary` in the cell then names the host's card as `Virtio-GPU Venus (…)`, and `eglinfo -B` as `virgl (…)`.
 
-The GPU is part of the machine, so turning it on or off takes effect at the next boot, like [`vm`](#vm). Lima has no setting for it, so solitary passes the qemu arguments through `QEMU_SYSTEM_<ARCH>` at every start — Lima logs a warning that this is a debugging aid each time — and a machine started with `limactl start` directly boots without one.
+The GPU is part of the machine, so turning it on or off takes effect at the next boot, like [`vm`](#vm). Lima has no setting for it, so solitary passes the QEMU arguments through `QEMU_SYSTEM_<ARCH>` at every start — Lima logs a warning that this is a debugging aid each time — and a machine started with `limactl start` directly boots without one.
 
 A GPU is authority in the way a device is, and more of it: what the cell renders is run on the host, by the host's GPU driver, inside qemu. `clone` shows it before a definition is installed. See [security](/docs/security).
 
