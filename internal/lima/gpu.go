@@ -1,9 +1,11 @@
 package lima
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -139,6 +141,19 @@ func ExecGPUQEMU(command []string) error {
 }
 
 func gpuQEMUArgs(args []string) []string {
+	// Lima probes the binary named by QEMU_SYSTEM_X86_64 without passing the
+	// extra arguments from that variable. Keep those probes as ordinary QEMU.
+	venus := false
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "virtio-gpu-gl-pci,") && strings.Contains(arg, "venus=on") {
+			venus = true
+			break
+		}
+	}
+	if !venus {
+		return args
+	}
+
 	out := []string{"-accel", "kvm,honor-guest-pat=on"}
 	for i, arg := range args {
 		if i > 0 && args[i-1] == "-machine" {
@@ -154,6 +169,61 @@ func gpuQEMUArgs(args []string) []string {
 		out = append(out, arg)
 	}
 	return out
+}
+
+// gpuQEMUWrapper gives Lima a real executable to probe. Lima calls only the
+// first word of QEMU_SYSTEM_X86_64 with -M none -accel help, dropping all the
+// words after it. A direct "solitary __qemu-gpu ..." command therefore fails
+// its probe before the VM can start. The wrapper preserves the selected QEMU
+// command for both probes and the eventual VM launch.
+func gpuQEMUWrapper(command string) (string, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("finding solitary for GPU launch: %w", err)
+	}
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("finding cache for GPU launcher: %w", err)
+	}
+	dir := filepath.Join(cache, "solitary", "qemu")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("creating GPU launcher directory: %w", err)
+	}
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return "", fmt.Errorf("QEMU command is empty")
+	}
+	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
+	parts := []string{quote(self), quote(GPUQEMULaunch)}
+	for _, field := range fields {
+		parts = append(parts, quote(field))
+	}
+	script := "#!/bin/sh\nexec " + strings.Join(parts, " ") + " \"$@\"\n"
+	sum := sha256.Sum256([]byte(self + "\x00" + command))
+	path := filepath.Join(dir, fmt.Sprintf("qemu-gpu-%x", sum[:8]))
+	if strings.ContainsAny(path, " \t\n") {
+		return "", fmt.Errorf("GPU launcher path %q has whitespace Lima cannot pass to QEMU", path)
+	}
+	temp, err := os.CreateTemp(dir, ".qemu-gpu-*")
+	if err != nil {
+		return "", fmt.Errorf("creating GPU launcher: %w", err)
+	}
+	defer os.Remove(temp.Name())
+	if _, err := temp.WriteString(script); err != nil {
+		temp.Close()
+		return "", fmt.Errorf("writing GPU launcher: %w", err)
+	}
+	if err := temp.Chmod(0o700); err != nil {
+		temp.Close()
+		return "", fmt.Errorf("making GPU launcher executable: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return "", fmt.Errorf("closing GPU launcher: %w", err)
+	}
+	if err := os.Rename(temp.Name(), path); err != nil {
+		return "", fmt.Errorf("installing GPU launcher: %w", err)
+	}
+	return path, nil
 }
 
 // gpuEnv is the environment limactl start needs for a machine with a GPU, or
@@ -180,14 +250,10 @@ func gpuEnv(render string) ([]string, error) {
 		return nil, err
 	}
 	if runtime.GOARCH == "amd64" {
-		self, err := os.Executable()
+		command, err = gpuQEMUWrapper(command)
 		if err != nil {
-			return nil, fmt.Errorf("finding solitary for GPU launch: %w", err)
+			return nil, err
 		}
-		if strings.ContainsAny(self, " \t\n") {
-			return nil, fmt.Errorf("solitary path %q has whitespace Lima cannot pass to QEMU", self)
-		}
-		command = self + " " + GPUQEMULaunch + " " + command
 	}
 
 	// No quoting: render is checked against config.ValidGPU before it gets

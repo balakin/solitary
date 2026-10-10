@@ -26,19 +26,32 @@ func TestGPUEnvNamesQemuAndItsArguments(t *testing.T) {
 		t.Skip("written against a Linux x86_64 host")
 	}
 	t.Setenv("QEMU_SYSTEM_X86_64", "")
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	env, err := gpuEnv("/dev/dri/by-path/pci-0000:01:00.0-render")
 	if err != nil {
 		t.Fatalf("gpuEnv() error = %v", err)
 	}
-	self, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
+	if len(env) != 1 {
+		t.Fatalf("gpuEnv() = %q, want one QEMU_SYSTEM_X86_64 entry", env)
 	}
-	want := "QEMU_SYSTEM_X86_64=" + self + " __qemu-gpu qemu-system-x86_64" +
+	fields := strings.Fields(env[0])
+	if len(fields) == 0 || !strings.HasPrefix(fields[0], "QEMU_SYSTEM_X86_64=") {
+		t.Fatalf("gpuEnv() = %q, want an executable first", env)
+	}
+	wrapper := strings.TrimPrefix(fields[0], "QEMU_SYSTEM_X86_64=")
+	info, err := os.Stat(wrapper)
+	if err != nil || info.Mode()&0o100 == 0 {
+		t.Fatalf("GPU wrapper %q is not executable: %v", wrapper, err)
+	}
+	script, err := os.ReadFile(wrapper)
+	if err != nil || !strings.Contains(string(script), "'__qemu-gpu' 'qemu-system-x86_64' \"$@\"") {
+		t.Fatalf("GPU wrapper %q does not forward QEMU: %v, %q", wrapper, err, script)
+	}
+	want := "QEMU_SYSTEM_X86_64=" + wrapper +
 		" -device virtio-gpu-gl-pci,venus=on,blob=on,hostmem=4G" +
 		" -display egl-headless,rendernode=/dev/dri/by-path/pci-0000:01:00.0-render"
-	if len(env) != 1 || env[0] != want {
+	if env[0] != want {
 		t.Errorf("gpuEnv() = %q, want [%q]", env, want)
 	}
 }
@@ -50,12 +63,18 @@ func TestGPUEnvKeepsAQemuAlreadyChosen(t *testing.T) {
 		t.Skip("written against a Linux x86_64 host")
 	}
 	t.Setenv("QEMU_SYSTEM_X86_64", "/opt/qemu/bin/qemu-system-x86_64 -smp sockets=1")
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	env, err := gpuEnv("/dev/dri/renderD128")
 	if err != nil {
 		t.Fatalf("gpuEnv() error = %v", err)
 	}
-	if len(env) != 1 || !strings.Contains(env[0], " __qemu-gpu /opt/qemu/bin/qemu-system-x86_64 -smp sockets=1 -device ") {
+	if len(env) != 1 {
+		t.Fatalf("gpuEnv() = %q, want one entry", env)
+	}
+	wrapper := strings.TrimPrefix(strings.Fields(env[0])[0], "QEMU_SYSTEM_X86_64=")
+	script, err := os.ReadFile(wrapper)
+	if err != nil || !strings.Contains(string(script), "'/opt/qemu/bin/qemu-system-x86_64' '-smp' 'sockets=1'") {
 		t.Errorf("gpuEnv() = %q, want the existing qemu first", env)
 	}
 }
@@ -121,5 +140,12 @@ func TestGPUQEMUArgsMovesLimasAccelerator(t *testing.T) {
 	want := []string{"-accel", "kvm,honor-guest-pat=on", "-device", "virtio-gpu-gl-pci,venus=on", "-machine", "q35,usb=off", "-smp", "4"}
 	if got := gpuQEMUArgs(args); !reflect.DeepEqual(got, want) {
 		t.Errorf("gpuQEMUArgs() = %q, want %q", got, want)
+	}
+}
+
+func TestGPUQEMUArgsPreservesLimasProbe(t *testing.T) {
+	args := []string{"-M", "none", "-accel", "help"}
+	if got := gpuQEMUArgs(args); !reflect.DeepEqual(got, args) {
+		t.Errorf("gpuQEMUArgs() = %q, want Lima's probe unchanged", got)
 	}
 }
