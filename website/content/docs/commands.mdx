@@ -22,6 +22,8 @@ solitary doctor                 check that this host can run cells
 solitary update                 replace the binary with the latest release
 ```
 
+The dashboard's cell details show `gpu: false` as **disabled**. For a running cell with `gpu: true`, it lists every Venus device reported by `vulkaninfo --summary` inside the container, including software devices such as llvmpipe. A stopped cell says GPU is enabled and lists the devices after it starts; the image needs `vulkaninfo` installed for the live list.
+
 ## `up` is the only command that changes state
 
 It is idempotent: it creates the cell's machine if absent, boots it if stopped, and attaches if it is already running. It also replaces the container when the image or the secrets changed, so editing `cell.yaml` and running `up` again is what a change takes.
