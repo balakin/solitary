@@ -5,6 +5,17 @@ description: What Solitary does not protect against.
 
 Solitary is not a magic safety switch. It protects a machine boundary, not the authority you give an agent.
 
+## The boundary itself can fail
+
+Solitary aims for full isolation: an agent with root in its container should not be able to reach the host. A VM is the strongest boundary a workstation offers, but it is still made of software, and software has bugs. Isolation can be lost through a flaw in any layer the cell runs on:
+
+- **The hypervisor and host kernel** — KVM or Apple's Virtualization framework, and QEMU with its emulated devices. Escapes from a VM are rare, but they are found. `gpu: true` adds virglrenderer and the host's GPU driver to this list.
+- **Lima** — it turns the machine definition into a running VM and runs the host-side agents for port forwarding and user-mode networking. A setting Lima honours can widen the boundary; Solitary inspects the definition it creates for that, which is only as complete as the checks it knows to make.
+- **The guest kernel, podman and nftables** — they enforce the container and the network policy. A flaw here does not reach the host on its own, but it can defeat an allow list or a VPN-only rule.
+- **Solitary itself** — it renders the machine definition, writes the firewall, moves files across the boundary and handles secrets. A mistake in any of those can open a path the design forbids.
+
+Every one of these is treated as a vulnerability, not as expected behaviour. None of them can be ruled out. Keep the host OS, Lima and Solitary up to date, prefer a restrictive network policy over the default, and do not give a cell anything — a credential, a network path, a port — that you could not afford to lose if the boundary failed. If you find a way through it, [report it privately](https://github.com/balakin/solitary/security/advisories/new).
+
 ## It does not protect granted authority
 
 An agent can still push to every repository reachable by a token, call every API allowed by the network policy, and modify anything inside its cell. Give it credentials with the smallest scope possible.

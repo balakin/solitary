@@ -116,7 +116,7 @@ const layers = [
   },
   {
     name: 'The VM',
-    role: 'The boundary. A hypervisor, not a shared kernel — root in the container is not root on your machine.',
+    role: 'The boundary. A hypervisor, not a shared kernel — built so that root in the container is not root on your machine.',
     boundary: true,
   },
   {
@@ -373,10 +373,16 @@ export default function Home() {
             </div>
             <div className="space-y-5 leading-8 text-fd-muted-foreground">
               <p>
-                Isolation stops a compromise of your machine. It does not stop an agent misusing the
-                authority you granted it: it can still push to any repository the token you
-                whitelisted can reach, and reach anything you allowed. A cell with no allow list
-                reaches the whole internet. The image you run is trusted code.
+                Isolation is built to stop a compromise of your machine, and it is not infallible: a
+                bug in the hypervisor, Lima, the kernel or solitary itself can break it. Every such
+                bug is a vulnerability to fix, but none can be ruled out — keep them all up to date,
+                and give a cell only what you could afford to lose.
+              </p>
+              <p>
+                Even where it holds, isolation does not stop an agent misusing the authority you
+                granted it: it can still push to any repository the token you whitelisted can reach,
+                and reach anything you allowed. A cell with no allow list reaches the whole
+                internet. The image you run is trusted code.
               </p>
               <p>
                 A secret passed to a cell lives inside that cell. Give one only the credentials it
