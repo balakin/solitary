@@ -38,7 +38,7 @@ A context that has not changed can still describe a newer toolset: an unpinned p
 
 Everything in a cell runs as root by default, and that is the right default. The machine is the boundary: the container is rootless, so its root is an unprivileged user in the machine, unable to touch the firewall, the resolver or the machine's own configuration. Root inside buys the cell nothing it should not have, and it means a global `npm install -g`, an `apt-get install` or a write to `/usr/local` inside a cell just works.
 
-So do not add a user out of habit. Add one when the image serves a login of its own — an `sshd` for VS Code Remote-SSH, an editor server — and someone arrives in the cell as that user rather than through `solitary shell`. Then two things have to be true, one on each side.
+So do not add a user out of habit. Add one when something in the cell will not run as root — `limactl` refuses to, and so does Homebrew — or when the image serves a login of its own, an `sshd` for VS Code Remote-SSH or an editor server, and someone arrives in the cell as that user rather than through `solitary shell`. Then two things have to be true, one on each side.
 
 The definition names the user, so `up` gives them the cell's home:
 
@@ -47,22 +47,36 @@ build: ./Containerfile
 user: cell
 ```
 
-The home is a directory in the machine mounted over `/home/cell`, so it belongs to the machine's user, and a rootless container maps that user onto its own root. Naming the user maps them onto the machine's user instead, and the home is theirs. Without it the home is root's, `~/.ssh` is unwritable, and everything that user does in the cell fails on a permission.
+The home is a directory in the machine mounted over `/home/cell`, so it belongs to the machine's user, and a rootless container maps that user onto its own root. Naming the user mounts the home through a view instead, in which what the machine's user owns appears as theirs. Without it the home is root's, `~/.ssh` is unwritable, and everything that user does in the cell fails on a permission.
 
 The image gives them the toolset. A user who cannot write the directories the tools live in cannot install anything, and the fix is not a workaround — it is what the boundary being elsewhere means:
 
 ```dockerfile
-RUN useradd --create-home --shell /bin/bash --uid 1000 cell \
+RUN useradd --create-home --shell /bin/bash cell \
  && echo 'cell ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/cell \
  && chmod 0440 /etc/sudoers.d/cell \
  && chown -R cell:cell "$NVM_DIR"
 ```
 
-`sudo` for the system — installing packages, writing `/usr/local` — and ownership of anything the user installs into daily, a node prefix above all: `npm install -g` writes to the directory node lives in, and a root-owned one is where the permission errors come from.
+`sudo` for the system — installing packages, writing `/usr/local` — and ownership of anything the user installs into daily, a node prefix above all: `npm install -g` writes to the directory node lives in, and a root-owned one is where the permission errors come from. Without `sudo` the user has no way to root at all: `solitary shell` and `solitary exec` always arrive as them.
 
-Give the user id 1000 where you can. It is the machine user's own id, so the mapping is the identity and files keep the ownership they look like they have on both sides of the mount.
+The user's id does not matter, and `up` reads it from the image rather than asking you for it: `useradd` picking the next free one is fine. Ubuntu's base image already has a user of its own at 1000, so yours usually comes out as 1001. The one limit is that a rootless container has 65536 ids to give out, so the id has to be between 1 and 65536.
 
-What the container's command runs as does not change: the image's own user, which is the root an `sshd` needs. Only the login user is mapped, and `solitary shell` and `solitary exec` land on them too, so a file left behind by a session belongs to whoever works in the cell.
+What the container's command runs as does not change: the image's own user, which is the root an `sshd` needs. Only the login user gets the home, and `solitary shell` and `solitary exec` land on them too, so a file left behind by a session belongs to whoever works in the cell.
+
+### How the home reaches the user
+
+Each side of the mount sees the home as its own. Inside the cell it belongs to the user; on the machine it is still the machine's user's, so `solitary send` and `solitary fetch` read and write it exactly as they do in a cell that runs as root. Nothing in the home is ever re-owned, and a user whose id changes in a later image keeps the same files.
+
+Root inside the cell can still write the home — a file it leaves there is root's in the cell, as it would be anywhere. Keep what you mean to fetch the user's, though: `solitary fetch` works from the machine's side, and a file only root can read is one it cannot read either.
+
+The image itself runs exactly as it was built, so a cell with a user starts as quickly as one without.
+
+### A user needs a current machine
+
+The view is an idmapped mount, made by the machine's root before the container starts, and the machine's `mount` has to understand the `X-mount.idmap` option to make it. The default `vm.base` does, and so does any recent distribution. A machine made from an older template cannot give a user its home, and `up` refuses to start a cell with a user there rather than start it with a home the user cannot write.
+
+A machine keeps the distribution it was created with, whatever Lima or solitary later ship. Moving a cell to a newer one means `solitary rm` and `solitary up`, and `rm` discards the home, so [fetch](/docs/artifacts) or push anything you want to keep first. A cell that runs as root has no such requirement.
 
 ## Trust the source
 
