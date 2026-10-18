@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.3](https://github.com/balakin/solitary/compare/v0.16.2...v0.16.3) (2026-10-18)
+
+
+### Bug Fixes
+
+* stop copying the image for a cell that names a user ([19ad58e](https://github.com/balakin/solitary/commit/19ad58e1a88e336b8c57d5841cf6c0c9a26e07e8))
+
 ## [0.16.2](https://github.com/balakin/solitary/compare/v0.16.1...v0.16.2) (2026-10-18)
 
 
