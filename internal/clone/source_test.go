@@ -101,6 +101,10 @@ func TestParseRefuses(t *testing.T) {
 		"escaping path":    "me/cells#../../etc",
 		"named twice":      "me/cells/claude#rust",
 		"trailing nothing": "me/",
+		"external helper":  "ext::/bin/true",
+		"fd helper":        "fd::0",
+		"cleartext HTTP":   "http://example.com/repo.git",
+		"file URL":         "file:///tmp/repo",
 	}
 
 	for what, arg := range cases {

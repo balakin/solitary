@@ -2,9 +2,12 @@ package lima
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/balakin/solitary/internal/config"
 )
@@ -167,7 +170,7 @@ func TestRenderRestrictedNetwork(t *testing.T) {
 
 	for _, want := range []struct{ rule, why string }{
 		{"policy drop", "anything not allowed must be denied by default"},
-		{"for domain in github.com", "an allowed domain must be configured"},
+		{"for domain in 'github.com'", "an allowed domain must be configured"},
 		{`echo "server=/$domain/$resolver"`, "an allowed domain must resolve"},
 		{`echo "nftset=/$domain/inet#solitary#allowed4"`, "resolving it must be what opens the firewall for it"},
 		{`resolvers="1.1.1.1 8.8.8.8"`, "a cell that names no resolvers gets the default ones"},
@@ -340,5 +343,95 @@ func TestRenderHostResolver(t *testing.T) {
 	// would otherwise come up resolving nothing at all.
 	if !strings.Contains(got, "could not find the resolver this machine was given") {
 		t.Error("a machine that cannot discover its resolver does not say so")
+	}
+}
+
+// Every value a definition supplies is written into Lima YAML, and Lima honours
+// properties no cell is allowed to set: copyToHost, for one, writes guest files
+// to host paths. A value that tries to open one has to stay inside its scalar
+// or be refused; rendering it as a property is the one wrong answer.
+func TestRenderKeepsValuesInsideTheirScalars(t *testing.T) {
+	base := config.Defaults()
+	base.Base = "ubuntu-lts\ncopyToHost:\n  - guest: /tmp/source\n    host: /tmp/target"
+	provision := config.Defaults()
+	provision.Provision = "echo fixture\rcopyToHost:\r  - guest: /tmp/source\r    host: /tmp/target\n"
+
+	for name, vm := range map[string]config.VM{"base": base, "provision": provision} {
+		t.Run(name, func(t *testing.T) {
+			rendered, err := Render(goldenCell, vm, nil, config.Network{})
+			if err != nil {
+				return
+			}
+			var doc map[string]any
+			if err := yaml.Unmarshal([]byte(rendered), &doc); err != nil {
+				t.Fatalf("Render() produced YAML that does not parse: %v", err)
+			}
+			if _, ok := doc["copyToHost"]; ok {
+				t.Errorf("Render() turned vm.%s into a copyToHost property", name)
+			}
+		})
+	}
+}
+
+// Allow entries are passed to the provisioning script as arguments. One that is
+// accepted must leave the script parseable; this only runs bash -n over it.
+func TestRenderAllowEntriesCannotBreakTheProvisionScript(t *testing.T) {
+	rendered, err := Render(goldenCell, config.Defaults(), nil, config.Network{Allow: []string{";"}})
+	if err != nil {
+		return
+	}
+	var doc struct {
+		Provision []struct{ Script string } `yaml:"provision"`
+	}
+	if err := yaml.Unmarshal([]byte(rendered), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range doc.Provision {
+		cmd := exec.Command("bash", "-n")
+		cmd.Stdin = strings.NewReader(p.Script)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("a provision script no longer parses: %v: %s", err, out)
+		}
+	}
+}
+
+// DHCP is the VM's, not the container's: an exception any process could use
+// would be a way out of the policy, and so would one keyed on a source port the
+// sender chooses.
+func TestRenderRestrictedNetworkScopesItsExceptions(t *testing.T) {
+	rendered, err := Render(goldenCell, config.Defaults(), nil, config.Network{Allow: []string{"198.51.100.1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range []string{"udp dport { 67, 68 } accept", "ct state new tcp sport 22 accept"} {
+		if strings.Contains(rendered, rule) {
+			t.Errorf("Render() keeps the unscoped rule %q", rule)
+		}
+	}
+}
+
+// A tunnel without an allow list still needs a firewall: without one, traffic
+// takes the ordinary route the moment the tunnel goes down.
+func TestRenderTunnelWithoutAllowListDropsByDefault(t *testing.T) {
+	rendered, err := Render(goldenCell, config.Defaults(), nil, config.Network{
+		Tunnel: &config.Tunnel{EndpointHost: "198.51.100.1", EndpointPort: "51820"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rendered, "hook output") || !strings.Contains(rendered, "policy drop") {
+		t.Error("Render() of a tunnel-only cell has no default-drop output chain")
+	}
+}
+
+// An address learned from DNS is granted for a bounded time, in a bounded set,
+// rather than for as long as the machine stays up.
+func TestRenderBoundsLearnedAddresses(t *testing.T) {
+	rendered, err := Render(goldenCell, config.Defaults(), nil, config.Network{Allow: []string{"example.com"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(rendered, "set allowed4 { type ipv4_addr; }") {
+		t.Error("Render() grants learned addresses with no timeout or size limit")
 	}
 }

@@ -16,7 +16,7 @@ solitary up vscode --detach
 
 `clone` shows you what the definition asks for — its image, its machine, the secrets it wants, what it may reach — and installs a copy only after you say yes. `up` then creates the machine and builds the image **inside it**, so nothing in that `Containerfile` runs on your host. Expect the first build to take a while; it is downloading an editor and its extensions.
 
-When it finishes, open **http://localhost:9797**. That is VS Code, running in the cell, reached through a port the cell forwards to your host's localhost — and to localhost only, which is what makes an editor with no password on it safe to run this way.
+When it finishes, run `limactl shell solitary-vscode podman logs solitary` and open the authenticated URL printed by the editor. It uses **http://localhost:9797** with a connection token. The forward reaches host localhost; the token protects access from other local processes and users.
 
 ```sh
 solitary shell vscode      # a shell in the same cell

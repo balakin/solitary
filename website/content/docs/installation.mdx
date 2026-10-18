@@ -17,16 +17,16 @@ A host also has to be able to run a guest at all, which is not something an inst
 
 ## Install
 
-The install script downloads the release archive for your platform, checks it against the published checksum and puts the binary on your PATH. It works on macOS and Linux:
+The install script downloads the release archive for your platform, verifies its signed checksum manifest and puts the binary on your PATH. It works on macOS and Linux:
 
 ```sh
-curl -fsSL https://solitary.balakin.io/install.sh | sh
+curl --proto '=https' --proto-redir '=https' -fsSL https://solitary.balakin.io/install.sh | sh
 ```
 
 It installs into `/usr/local/bin` when that is writable without `sudo` and `~/.local/bin` otherwise. `SOLITARY_INSTALL_DIR` overrides that, and `SOLITARY_VERSION` installs a tag from [the releases page](https://github.com/balakin/solitary/releases) other than the latest:
 
 ```sh
-curl -fsSL https://solitary.balakin.io/install.sh | SOLITARY_VERSION=v1.2.3 sh
+curl --proto '=https' --proto-redir '=https' -fsSL https://solitary.balakin.io/install.sh | SOLITARY_VERSION=v1.2.3 sh
 ```
 
 ## Homebrew
@@ -41,17 +41,28 @@ brew install balakin/solitary/solitary
 
 ## Download a release by hand
 
-Every release carries a `tar.gz` per platform and a `checksums.txt`. Pick the archive for your machine — `darwin` or `linux`, `arm64` for Apple silicon, `amd64` otherwise:
+Signed releases carry versioned archives, `checksums.txt` and `checksums.txt.sigstore.json`. With a trusted installation of [cosign](https://docs.sigstore.dev/cosign/system_config/installation/), verify the manifest before extracting an archive:
 
 ```sh
+VERSION=1.2.3
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-
-curl -fsSL -o solitary.tar.gz \
-  "https://github.com/balakin/solitary/releases/latest/download/solitary_${OS}_${ARCH}.tar.gz"
-tar -xzf solitary.tar.gz solitary
+BASE="https://github.com/balakin/solitary/releases/download/v${VERSION}"
+ARCHIVE="solitary_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl --proto '=https' --proto-redir '=https' -fsSLO "$BASE/checksums.txt"
+curl --proto '=https' --proto-redir '=https' -fsSLO "$BASE/checksums.txt.sigstore.json"
+cosign verify-blob \
+  --certificate-identity 'https://github.com/balakin/solitary/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  --bundle checksums.txt.sigstore.json checksums.txt
+curl --proto '=https' --proto-redir '=https' -fsSLO "$BASE/$ARCHIVE"
+# Verify the entry for $ARCHIVE with sha256sum or shasum before extraction.
+sha256sum --check --ignore-missing checksums.txt
+tar -xzf "$ARCHIVE" solitary
 install -m 755 solitary /usr/local/bin/solitary
 ```
+
+Stop if either verification fails. `solitary update` performs signature verification internally and needs no `cosign` installation. The install script uses an existing cosign or downloads a fixed verifier version checked against a digest embedded in the script. As with any installer, the script itself must come from a trusted source. Older unsigned releases are refused; use Homebrew or build from source to migrate. Signatures bind releases to this repository's release workflow; they do not protect against compromise of that authorized workflow.
 
 `solitary --version` prints the version that was baked in at build time. The [release page](https://github.com/balakin/solitary/releases/latest) lists every archive and the changelog for the version.
 
@@ -59,7 +70,7 @@ On macOS the binary is unsigned, so Gatekeeper quarantines a download from the b
 
 ## Staying current
 
-`solitary update` replaces the binary with the newest release, after checking it against the published checksum:
+`solitary update` replaces the binary with the newest release, after verifying the release workflow's Sigstore signature and the archive checksum:
 
 ```sh
 solitary update          # install the latest release

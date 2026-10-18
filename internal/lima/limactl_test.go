@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -131,5 +132,19 @@ func TestReachableOnAHungMachine(t *testing.T) {
 	}
 	if n := len(calls); n != 1 {
 		t.Errorf("limactl ran %d times, want 1", n)
+	}
+}
+
+// A failed command is reported with its arguments, and podman's carry the
+// container's environment; the value of a variable must not reach the error.
+func TestExecErrorsOmitEnvironmentValues(t *testing.T) {
+	fakeLimactl(t, "#!/bin/sh\nexit 1\n")
+
+	_, err := Exec("solitary-probe", "podman", "run", "--env", "TOKEN=secret-value")
+	if err == nil {
+		t.Fatal("Exec() error = nil, want the fake limactl's failure")
+	}
+	if strings.Contains(err.Error(), "secret-value") {
+		t.Errorf("Exec() error carries a secret value: %v", err)
 	}
 }

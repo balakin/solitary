@@ -4,7 +4,7 @@
 #   curl -fsSL https://solitary.balakin.io/install.sh | sh
 #
 # The archives hold one static binary, so this script only has to pick the right
-# one, check it against the published checksum and put it somewhere on PATH.
+# one, authenticate its checksum manifest and put it somewhere on PATH.
 #
 #   SOLITARY_VERSION      a tag to install instead of the latest release
 #   SOLITARY_INSTALL_DIR  where to put the binary, instead of the search below
@@ -25,9 +25,9 @@ note() {
 # curl or wget, whichever the machine has: this script is usually piped from
 # one of the two, but not always the same one.
 if command -v curl >/dev/null 2>&1; then
-	fetch() { curl -fsSL -o "$1" "$2"; }
+	fetch() { curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL -o "$1" "$2"; }
 elif command -v wget >/dev/null 2>&1; then
-	fetch() { wget -qO "$1" "$2"; }
+	fetch() { wget --https-only -qO "$1" "$2"; }
 else
 	die "neither curl nor wget found"
 fi
@@ -70,7 +70,6 @@ fi
 
 [ -w "$dir" ] || die "$dir is not writable; set SOLITARY_INSTALL_DIR to somewhere that is"
 
-archive="solitary_${os}_${arch}.tar.gz"
 if [ -n "${SOLITARY_VERSION:-}" ]; then
 	base="${RELEASES}/download/${SOLITARY_VERSION}"
 else
@@ -78,26 +77,52 @@ else
 fi
 
 tmp=$(mktemp -d)
-# shellcheck disable=SC2064 # $tmp is expanded now on purpose: it cannot change.
-trap "rm -rf '$tmp'" EXIT INT TERM
+trap 'rm -rf -- "$tmp"' EXIT INT TERM
 
-note "Downloading ${archive}"
-fetch "$tmp/$archive" "$base/$archive" ||
-	die "no ${archive} at ${base}; check the tag at ${RELEASES}"
-fetch "$tmp/checksums.txt" "$base/checksums.txt" ||
-	die "cannot download checksums.txt from ${base}"
-
-# An unverified download is the whole risk of installing this way, so a machine
-# without a checksum tool is told rather than quietly trusted.
 if command -v sha256sum >/dev/null 2>&1; then
-	sha256() { sha256sum "$1" | cut -d' ' -f1; }
+ sha256() { sha256sum "$1" | cut -d' ' -f1; }
 elif command -v shasum >/dev/null 2>&1; then
-	sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
+ sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
 else
-	die "neither sha256sum nor shasum found; cannot verify the download"
+ die "neither sha256sum nor shasum found; cannot verify the download"
 fi
 
-want=$(grep " ${archive}\$" "$tmp/checksums.txt" | cut -d' ' -f1)
+# Bootstrap only a verifier whose digest is pinned in this installer.
+if command -v cosign >/dev/null 2>&1; then
+ cosign_bin=cosign
+else
+ case "${os}_${arch}" in
+  linux_amd64) verifier_sha=c956e5dfcac53d52bcf058360d579472f0c1d2d9b69f55209e256fe7783f4c74 ;;
+  linux_arm64) verifier_sha=bedac92e8c3729864e13d4a17048007cfafa79d5deca993a43a90ffe018ef2b8 ;;
+  darwin_amd64) verifier_sha=4c3e7af8372d3ca3296e62fa56f23fcbb5721cc6ac1827900d398f110d7cd280 ;;
+  darwin_arm64) verifier_sha=5fadd012ae6381a6a29ff86a7d39aa873878852f1073fc90b15995961ecfb084 ;;
+ esac
+ cosign_bin="$tmp/cosign"
+ note "Downloading pinned signature verifier"
+ fetch "$cosign_bin" "https://github.com/sigstore/cosign/releases/download/v3.0.6/cosign-${os}-${arch}" || die "cannot download signature verifier"
+ [ "$(sha256 "$cosign_bin")" = "$verifier_sha" ] || die "signature verifier checksum mismatch"
+ chmod 700 "$cosign_bin"
+fi
+fetch "$tmp/checksums.txt" "$base/checksums.txt" || die "cannot download release checksums"
+fetch "$tmp/checksums.txt.sigstore.json" "$base/checksums.txt.sigstore.json" || die "release has no signature bundle; unsigned releases are refused"
+"$cosign_bin" verify-blob \
+ --certificate-identity 'https://github.com/balakin/solitary/.github/workflows/release.yml@refs/heads/main' \
+ --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+ --bundle "$tmp/checksums.txt.sigstore.json" "$tmp/checksums.txt" || die "release signature verification failed"
+
+if [ -n "${SOLITARY_VERSION:-}" ]; then
+ version=${SOLITARY_VERSION#v}
+ case "$version" in *[!0-9A-Za-z.+-]*|'') die "invalid release version" ;; esac
+ archive="solitary_${version}_${os}_${arch}.tar.gz"
+else
+ archive=$(awk -v suffix="_${os}_${arch}.tar.gz" '$2 ~ /^solitary_[0-9][0-9A-Za-z.+_-]*$/ && substr($2,length($2)-length(suffix)+1)==suffix {print $2}' "$tmp/checksums.txt")
+ case "$archive" in ''|*'
+'*) die "release checksums must name exactly one matching archive" ;; esac
+fi
+note "Downloading ${archive}"
+fetch "$tmp/$archive" "$base/$archive" || die "cannot download ${archive}"
+
+want=$(awk -v name="$archive" '$2 == name {print $1}' "$tmp/checksums.txt")
 [ -n "$want" ] || die "checksums.txt names no ${archive}"
 got=$(sha256 "$tmp/$archive")
 [ "$want" = "$got" ] || die "checksum mismatch for ${archive}: expected ${want}, got ${got}"
@@ -106,7 +131,7 @@ tar -xzf "$tmp/$archive" -C "$tmp" solitary || die "cannot extract ${archive}"
 
 # Written inside the target directory rather than moved across filesystems, so
 # the rename is atomic and replaces a running binary without breaking it.
-staged="$dir/.solitary.$$"
+staged=$(mktemp "$dir/.solitary.XXXXXXXX")
 cp "$tmp/solitary" "$staged"
 chmod 755 "$staged"
 mv -f "$staged" "$dir/solitary"

@@ -1,17 +1,21 @@
 package cell
 
 import (
+	"bytes"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/balakin/solitary/internal/config"
 	"github.com/balakin/solitary/internal/lima"
 	"github.com/balakin/solitary/internal/podman"
+	"github.com/balakin/solitary/internal/safefile"
 )
 
 // artifactScript is the tool a cell publishes with. It is embedded rather than
@@ -75,18 +79,12 @@ func installArtifacts(instance string) error {
 		return err
 	}
 
-	tool := filepath.Join(home, toolDir, toolName)
-	if _, err := lima.Exec(instance, "mkdir", "-p",
-		filepath.Join(home, outboxDir), filepath.Join(home, inboxDir), filepath.Join(home, toolDir),
-	); err != nil {
-		return fmt.Errorf("creating the outbox and inbox: %w", err)
+	for _, dir := range []string{outboxDir, inboxDir} {
+		if err := lima.GuestMkdir(instance, home, dir); err != nil {
+			return fmt.Errorf("creating %s: %w", dir, err)
+		}
 	}
-
-	// Written through the machine rather than into the container, because
-	// the home is the same directory on both sides of that bind mount.
-	if _, err := lima.Exec(instance, "sh", "-c",
-		"cat > "+tool+" <<'SOLITARY_ARTIFACT'\n"+artifactScript+"SOLITARY_ARTIFACT\nchmod 0755 "+tool,
-	); err != nil {
+	if err := lima.GuestWrite(instance, home, toolDir, toolName, "0755", strings.NewReader(artifactScript)); err != nil {
 		return fmt.Errorf("installing %s in the cell: %w", toolName, err)
 	}
 
@@ -117,27 +115,19 @@ func Artifacts(name string) ([]Artifact, error) {
 		return nil, err
 	}
 
-	out, err := lima.Exec(instance, "find", filepath.Join(home, outboxDir),
-		"-maxdepth", "1", "-type", "f", "-printf", `%s\t%f\n`)
-	if err != nil {
+	var out bytes.Buffer
+	if err := lima.GuestList(instance, home, outboxDir, &out); err != nil {
 		return nil, fmt.Errorf("reading the outbox of %q: %w", name, err)
 	}
 
 	var artifacts []Artifact
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		size, file, ok := strings.Cut(line, "\t")
-		if !ok {
-			continue
+	if err := json.Unmarshal(out.Bytes(), &artifacts); err != nil {
+		return nil, fmt.Errorf("reading artifact list: %w", err)
+	}
+	for i := range artifacts {
+		if err := validName(artifacts[i].Name); err != nil {
+			artifacts[i].Problem = err.Error()
 		}
-		n, err := strconv.ParseInt(size, 10, 64)
-		if err != nil {
-			continue
-		}
-		artifact := Artifact{Name: file, Size: n}
-		if err := validName(file); err != nil {
-			artifact.Problem = err.Error()
-		}
-		artifacts = append(artifacts, artifact)
 	}
 
 	return artifacts, nil
@@ -222,13 +212,18 @@ func Fetch(name string, names []string, into string, force bool, progress io.Wri
 	if err := os.MkdirAll(into, 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", into, err)
 	}
+	destination, err := os.OpenRoot(into)
+	if err != nil {
+		return err
+	}
+	defer destination.Close()
 	// Checked as a group and before anything is written: a half-done fetch
 	// that stopped at the first collision is worse than one that did not
 	// start, and the names came from the cell.
 	if !force {
 		var existing []string
 		for _, artifact := range wanted {
-			if _, err := os.Lstat(filepath.Join(into, artifact.Name)); err == nil {
+			if _, err := destination.Lstat(artifact.Name); err == nil {
 				existing = append(existing, artifact.Name)
 			}
 		}
@@ -240,11 +235,20 @@ func Fetch(name string, names []string, into string, force bool, progress io.Wri
 
 	for _, artifact := range wanted {
 		target := filepath.Join(into, artifact.Name)
-		if err := lima.CopyOut(instance, filepath.Join(home, outboxDir, artifact.Name), target); err != nil {
-			return fmt.Errorf("fetching %s: %w", artifact.Name, err)
+		reader, writer := io.Pipe()
+		done := make(chan error, 1)
+		go func() {
+			err := lima.GuestRead(instance, home, outboxDir, artifact.Name, writer)
+			writer.CloseWithError(err)
+			done <- err
+		}()
+		err := safefile.Write(destination, artifact.Name, reader, 0o644, force)
+		reader.CloseWithError(err)
+		transferErr := <-done
+		if err == nil {
+			err = transferErr
 		}
-		// What a cell produces is data on this host, never a program.
-		if err := os.Chmod(target, 0o644); err != nil {
+		if err != nil {
 			return fmt.Errorf("fetching %s: %w", artifact.Name, err)
 		}
 		fmt.Fprintf(progress, "%s  (%s)\n", target, Size(artifact.Size))
@@ -312,12 +316,15 @@ func Send(name string, paths []string, progress io.Writer) error {
 		}
 	}
 
-	if _, err := lima.Exec(instance, "mkdir", "-p", filepath.Join(home, inboxDir)); err != nil {
-		return fmt.Errorf("creating the inbox: %w", err)
-	}
 	for _, path := range paths {
 		file := filepath.Base(path)
-		if err := lima.CopyFile(path, instance, filepath.Join(home, inboxDir, file)); err != nil {
+		source, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		err = lima.GuestWrite(instance, home, inboxDir, file, "0600", source)
+		source.Close()
+		if err != nil {
 			return fmt.Errorf("sending %s: %w", file, err)
 		}
 		fmt.Fprintf(progress, "sent %s\n", file)
@@ -343,7 +350,7 @@ func validName(name string) error {
 		return fmt.Errorf("%q is a path rather than a file name", name)
 	case strings.HasPrefix(name, "-"):
 		return fmt.Errorf("%q starts with a dash, which a command would read as a flag", name)
-	case strings.ContainsAny(name, "\n\r\t\x00"):
+	case strings.ContainsFunc(name, func(r rune) bool { return unicode.IsControl(r) || unicode.In(r, unicode.Cf) }):
 		return fmt.Errorf("%q contains a character that cannot be in a file name", name)
 	}
 

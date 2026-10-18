@@ -1,6 +1,9 @@
 package cell
 
 import (
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -25,6 +28,7 @@ func TestValidName(t *testing.T) {
 		{`windows\path`, false},
 		{"-rf", false},
 		{"two\nlines", false},
+		{"report\x1b[2J.txt", false},
 	}
 
 	for _, tc := range cases {
@@ -106,4 +110,156 @@ func TestSize(t *testing.T) {
 			t.Errorf("Size(%d) = %q, want %q", tc.n, got, tc.want)
 		}
 	}
+}
+
+// fakeMachine stands in for limactl with one running machine, solitary-probe,
+// whose guest filesystem is a directory on the host: shell runs the command it
+// is given there, and copy copies. FAKE_SWAP_SOURCE and FAKE_SWAP_TARGET make
+// the guest replace a file with a symlink mid-transfer, the race a hostile cell
+// would run. It returns the guest user's home and the cell's home inside it.
+func fakeMachine(t *testing.T) (string, string) {
+	t.Helper()
+
+	root := t.TempDir()
+	vmHome := filepath.Join(root, "vm-user")
+	home := filepath.Join(vmHome, "cell")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	script := `#!/bin/bash
+set -eu
+case "$1" in
+list) printf '%s\n' '{"name":"solitary-probe","status":"Running"}' ;;
+shell)
+  shift 3
+  if [ "$1" = sh ] && [ "${3:-}" = 'echo $HOME' ]; then
+    printf '%s\n' "$FAKE_VMHOME"
+  elif [ "$1" = python3 ]; then
+    if [ "$4" = read ]; then
+      if [ -n "${FAKE_SWAP_SOURCE:-}" ]; then
+        rm -f -- "$5/$6/$7"
+        ln -s -- "$FAKE_SWAP_SOURCE" "$5/$6/$7"
+      fi
+      if [ -n "${FAKE_SWAP_TARGET:-}" ]; then
+        ln -s -- "$FAKE_SWAP_TARGET" "$FAKE_SWAP_DEST"
+      fi
+    fi
+    "$@"
+  elif [ "$1" = podman ]; then
+    exit 0
+  else
+    "$@"
+  fi ;;
+copy)
+  src=$2; dst=$3
+  case "$src" in solitary-probe:*) src=${src#*:};; esac
+  case "$dst" in solitary-probe:*) dst=${dst#*:};; esac
+  if [ -n "${FAKE_SWAP_SOURCE:-}" ]; then
+    rm -f -- "$src"
+    ln -s -- "$FAKE_SWAP_SOURCE" "$src"
+  fi
+  if [ -n "${FAKE_SWAP_TARGET:-}" ]; then
+    ln -s -- "$FAKE_SWAP_TARGET" "$dst"
+  fi
+  cp -- "$src" "$dst" ;;
+*) exit 2 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(root, "limactl"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_VMHOME", vmHome)
+
+	return vmHome, home
+}
+
+func writeFile(t *testing.T, path, data string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// unchanged fails the test if the file at path no longer reads "unchanged":
+// something wrote through a symlink the cell planted.
+func unchanged(t *testing.T, path string) {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "unchanged" {
+		t.Errorf("%s was overwritten through a symlink the cell controls", path)
+	}
+}
+
+// Every path in the guest is the cell's to rearrange, so a write the host makes
+// there must not follow a symlink the cell put in its way.
+func TestInstallArtifactsDoesNotFollowAGuestSymlink(t *testing.T) {
+	vmHome, home := fakeMachine(t)
+	target := filepath.Join(vmHome, "outside")
+	writeFile(t, target, "unchanged")
+	if err := os.MkdirAll(filepath.Join(home, toolDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(home, toolDir, toolName)); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = installArtifacts("solitary-probe")
+	unchanged(t, target)
+}
+
+func TestSendDoesNotFollowAGuestSymlink(t *testing.T) {
+	vmHome, home := fakeMachine(t)
+	target := filepath.Join(vmHome, "outside")
+	writeFile(t, target, "unchanged")
+	if err := os.MkdirAll(filepath.Join(home, inboxDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(home, inboxDir, "input")); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(t.TempDir(), "input")
+	writeFile(t, source, "sent")
+
+	_ = Send("probe", []string{source}, io.Discard)
+	unchanged(t, target)
+}
+
+// A file listed in the outbox can be swapped for a symlink between the listing
+// and the read; fetch has to read what was published, not what it points at.
+func TestFetchDoesNotFollowAReplacedSource(t *testing.T) {
+	vmHome, home := fakeMachine(t)
+	writeFile(t, filepath.Join(home, outboxDir, "report"), "published")
+	private := filepath.Join(vmHome, "private")
+	writeFile(t, private, "private")
+	t.Setenv("FAKE_SWAP_SOURCE", private)
+
+	into := t.TempDir()
+	_ = Fetch("probe", nil, into, false, io.Discard)
+	if data, _ := os.ReadFile(filepath.Join(into, "report")); string(data) == "private" {
+		t.Error("Fetch() followed a symlink swapped in after the listing")
+	}
+}
+
+// A symlink that appears in the destination directory during a fetch must not
+// turn the write into a write somewhere else on the host.
+func TestFetchDoesNotWriteThroughARacedDestination(t *testing.T) {
+	_, home := fakeMachine(t)
+	writeFile(t, filepath.Join(home, outboxDir, "report"), "published")
+	target := filepath.Join(t.TempDir(), "outside")
+	writeFile(t, target, "unchanged")
+	into := t.TempDir()
+	t.Setenv("FAKE_SWAP_TARGET", target)
+	t.Setenv("FAKE_SWAP_DEST", filepath.Join(into, "report"))
+
+	_ = Fetch("probe", nil, into, false, io.Discard)
+	unchanged(t, target)
 }

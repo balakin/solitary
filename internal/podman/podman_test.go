@@ -1,6 +1,9 @@
 package podman
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -151,5 +154,76 @@ func TestStorageOnlyPicksBuildLeftovers(t *testing.T) {
 func TestStorageOnlyWithNoLeftovers(t *testing.T) {
 	if got := storageOnly("3ec0d15c8df3 running\n"); got != nil {
 		t.Errorf("storageOnly() = %q, want nothing", got)
+	}
+}
+
+// Secret values are handed to the VM over standard input, so the host's process
+// list only ever shows variable names. The fake limactl records its arguments;
+// the fake podman records the environment it was asked to give the container,
+// and fails if those values leaked into the launcher's own environment.
+func TestRunKeepsSecretValuesOutOfArguments(t *testing.T) {
+	dir := t.TempDir()
+	for name, source := range map[string]string{
+		"limactl": `#!/bin/sh
+set -eu
+printf '%s\n' "$@" >> "$FAKE_ARGUMENTS"
+shift 3
+case "$1 $2" in
+"sh -c") exit 0 ;;
+"podman image") printf root ;;
+"python3 -c") exec "$@" ;;
+*) exit 2 ;;
+esac
+`,
+		"podman": `#!/usr/bin/env python3
+import json, os, sys
+values = {}
+for index, value in enumerate(sys.argv[:-1]):
+    if value == '--env':
+        name, content = sys.argv[index + 1].split('=', 1)
+        values[name] = content
+if os.environ.get('TOKEN') or os.environ.get('LD_PRELOAD'):
+    raise RuntimeError('container values reached the launcher environment')
+with open(os.environ['FAKE_VALUES'], 'w') as output:
+    json.dump(values, output)
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	argsPath, valuesPath := filepath.Join(dir, "arguments"), filepath.Join(dir, "values")
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_ARGUMENTS", argsPath)
+	t.Setenv("FAKE_VALUES", valuesPath)
+
+	secret := "secret-first-line\nsecond-$(id)-line"
+	env := []string{"TOKEN=" + secret, "PATH=/unusable/secret-path", "LD_PRELOAD=/unusable/secret-library"}
+	if err := Run("probe", RunOptions{Image: "fixture", Command: "sleep infinity", Env: env, HostHome: filepath.Join(dir, "home")}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	data, err := os.ReadFile(valuesPath)
+	if err != nil {
+		t.Fatalf("reading what the container was given: %v", err)
+	}
+	var values map[string]string
+	if err := json.Unmarshal(data, &values); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"TOKEN": secret, "PATH": "/unusable/secret-path", "LD_PRELOAD": "/unusable/secret-library"} {
+		if values[name] != want {
+			t.Errorf("container %s = %q, want %q", name, values[name], want)
+		}
+	}
+
+	args, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"secret-first-line", "second-$(id)-line", "/unusable/secret-"} {
+		if strings.Contains(string(args), value) {
+			t.Errorf("limactl arguments carry %q", value)
+		}
 	}
 }

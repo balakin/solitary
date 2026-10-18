@@ -166,3 +166,40 @@ func TestContextDigestChangesWhenAFileMoves(t *testing.T) {
 		t.Error("moving a file did not change the digest")
 	}
 }
+
+// The cell directory can hold credentials under names other than .env: a
+// WireGuard configuration, or an env file named for where it is used. Those are
+// left out of the context too.
+func TestBuildContextExcludesCredentials(t *testing.T) {
+	root := filepath.Dir(writeContext(t, map[string]string{
+		"Containerfile":  "FROM ubuntu:24.04\n",
+		".env":           "TOKEN=\"secret\"\n",
+		"vpn.conf":       "[Interface]\n",
+		"production.env": "TOKEN=\"secret\"\n",
+	}))
+
+	files, err := contextFiles(root)
+	if err != nil {
+		t.Fatalf("contextFiles() error = %v", err)
+	}
+	for _, rel := range files {
+		if rel == ".env" || rel == "vpn.conf" || rel == "production.env" {
+			t.Errorf("build context includes %s", rel)
+		}
+	}
+}
+
+// A build path that resolves through a symlink to somewhere outside the cell
+// directory would make that directory the build context.
+func TestContextDigestRefusesAContextOutsideTheDefinition(t *testing.T) {
+	dir, outside := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "Containerfile"), []byte("FROM scratch"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "context")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ContextDigest(filepath.Join(dir, "context", "Containerfile"), dir); err == nil {
+		t.Error("ContextDigest() read a context outside its definition directory")
+	}
+}

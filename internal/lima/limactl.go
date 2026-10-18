@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,9 +70,9 @@ func run(args ...string) error {
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
-			return fmt.Errorf("limactl %s: %w", strings.Join(args, " "), err)
+			return fmt.Errorf("limactl %s: %w", safeArgs(args), err)
 		}
-		return fmt.Errorf("limactl %s: %w\n%s", strings.Join(args, " "), err, msg)
+		return fmt.Errorf("limactl %s: %w\n%s", safeArgs(args), err, msg)
 	}
 
 	return nil
@@ -98,7 +99,7 @@ func runVerboseEnv(env []string, args ...string) error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("limactl %s: %w", strings.Join(args, " "), err)
+		return fmt.Errorf("limactl %s: %w", safeArgs(args), err)
 	}
 
 	return nil
@@ -155,6 +156,13 @@ func Lookup(name string) (*Instance, error) {
 // Create builds a machine from a definition file and starts it. gpu is the
 // host render node the machine renders with, or empty for none.
 func Create(name, definitionPath, gpu string) error {
+	definition, err := os.ReadFile(definitionPath)
+	if err != nil {
+		return err
+	}
+	if _, err := resolve(string(definition)); err != nil {
+		return err
+	}
 	env, err := gpuEnv(gpu)
 	if err != nil {
 		return err
@@ -173,6 +181,12 @@ var startRetryDelay = 3 * time.Second
 // Start boots an existing machine. gpu is the host render node the machine
 // renders with, or empty for none.
 func Start(name, gpu string) error {
+	if err := checkGlobalConfig(); err != nil {
+		return err
+	}
+	if err := checkStoredDefinition(name); err != nil {
+		return err
+	}
 	env, err := gpuEnv(gpu)
 	if err != nil {
 		return err
@@ -290,6 +304,12 @@ func Apply(name, definition string) error {
 // to. It fails when the definition is not valid, which is the point of doing it
 // before anything is replaced.
 func resolve(definition string) (string, error) {
+	if err := checkGlobalConfig(); err != nil {
+		return "", err
+	}
+	if err := checkDefinition(definition); err != nil {
+		return "", err
+	}
 	bin, err := limactl()
 	if err != nil {
 		return "", err
@@ -309,7 +329,7 @@ func resolve(definition string) (string, error) {
 		return "", fmt.Errorf("resolving the machine definition: %w", err)
 	}
 
-	cmd := exec.Command(bin, "template", "copy", "--embed-all", temp.Name(), "-")
+	cmd := exec.Command(bin, "template", "copy", "--fill", "--embed-all", temp.Name(), "-")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -320,7 +340,22 @@ func resolve(definition string) (string, error) {
 		return "", errors.New("resolving the machine definition produced nothing")
 	}
 
+	if err := checkDefinition(stdout.String()); err != nil {
+		return "", err
+	}
 	return stdout.String(), nil
+}
+
+func checkStoredDefinition(name string) error {
+	dir, err := dirOf(name)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "lima.yaml"))
+	if err != nil {
+		return err
+	}
+	return checkDefinition(string(data))
 }
 
 // dirOf asks Lima where a machine keeps its files, rather than assuming the
@@ -377,7 +412,7 @@ func Exec(name string, args ...string) ([]byte, error) {
 	out, err := execWithin(execTimeout, name, args...)
 	if errors.Is(err, context.DeadlineExceeded) {
 		if _, probeErr := execWithin(probeTimeout, name, "true"); probeErr == nil {
-			return out, fmt.Errorf("%s: %w: %s did not finish within %s", name, ErrBusy, strings.Join(args, " "), execTimeout)
+			return out, fmt.Errorf("%s: %w: %s did not finish within %s", name, ErrBusy, safeArgs(args), execTimeout)
 		}
 		return out, fmt.Errorf("%s: %w after %s", name, ErrUnreachable, execTimeout)
 	}
@@ -389,9 +424,20 @@ func Exec(name string, args ...string) ([]byte, error) {
 // is never mistaken for the command failing: what the timeout means is for Exec
 // to decide.
 func execWithin(timeout time.Duration, name string, args ...string) ([]byte, error) {
+	var out bytes.Buffer
+	err := execIO(timeout, name, nil, &out, args...)
+	return out.Bytes(), err
+}
+
+// ExecStream keeps sensitive data out of argv and streams file transfers.
+func ExecStream(name string, input io.Reader, output io.Writer, args ...string) error {
+	return execIO(5*time.Minute, name, input, output, args...)
+}
+
+func execIO(timeout time.Duration, name string, input io.Reader, output io.Writer, args ...string) error {
 	bin, err := limactl()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -399,8 +445,9 @@ func execWithin(timeout time.Duration, name string, args ...string) ([]byte, err
 
 	full := append([]string{"shell", "--workdir=/", name}, args...)
 	cmd := exec.CommandContext(ctx, bin, full...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
+	var stderr bytes.Buffer
+	cmd.Stdin = input
+	cmd.Stdout = output
 	cmd.Stderr = &stderr
 
 	// The deadline is worth nothing unless it reaches the whole tree. limactl
@@ -420,16 +467,33 @@ func execWithin(timeout time.Duration, name string, args ...string) ([]byte, err
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return stdout.Bytes(), ctx.Err()
+			return ctx.Err()
 		}
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
-			return stdout.Bytes(), fmt.Errorf("%s: %w", strings.Join(args, " "), err)
+			return fmt.Errorf("%s: %w", safeArgs(args), err)
 		}
-		return stdout.Bytes(), fmt.Errorf("%s: %w\n%s", strings.Join(args, " "), err, msg)
+		return fmt.Errorf("%s: %w\n%s", safeArgs(args), err, redactSecrets(args, msg))
 	}
 
-	return stdout.Bytes(), nil
+	return nil
+}
+
+func safeArgs(args []string) string { return redactSecrets(args, strings.Join(args, " ")) }
+func redactSecrets(args []string, message string) string {
+	for i, arg := range args {
+		if i > 0 && (args[i-1] == "--env" || args[i-1] == "-e") {
+			if _, value, ok := strings.Cut(arg, "="); ok && value != "" {
+				message = strings.ReplaceAll(message, value, "[redacted]")
+			}
+		}
+		if strings.HasPrefix(arg, "--env=") {
+			if _, value, ok := strings.Cut(strings.TrimPrefix(arg, "--env="), "="); ok && value != "" {
+				message = strings.ReplaceAll(message, value, "[redacted]")
+			}
+		}
+	}
+	return message
 }
 
 // Reachable reports whether a running machine answers a trivial command.

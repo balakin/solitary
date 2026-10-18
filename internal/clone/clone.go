@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/safefile"
 )
 
 // cellFile is the one file that makes a directory a cell.
@@ -112,6 +113,16 @@ func Stage(source Source, progress io.Writer) (*Staged, error) {
 		result.Discard()
 		return nil, err
 	}
+	if result.Cell.Network.VPN != "" {
+		private := filepath.Join(staged, result.Cell.Network.VPN)
+		if _, err := os.Lstat(private); err == nil {
+			if err := os.Remove(private); err != nil {
+				result.Discard()
+				return nil, err
+			}
+			result.Refused = append(result.Refused, result.Cell.Network.VPN+": tunnel credentials must be supplied locally")
+		}
+	}
 
 	return result, nil
 }
@@ -145,7 +156,7 @@ func fetch(source Source, progress io.Writer) (string, error) {
 	cmd.Stdout, cmd.Stderr = progress, progress
 	// git must never stop for a password on a URL that was typed rather
 	// than chosen: it would hang with no terminal to answer on.
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ALLOW_PROTOCOL=https:ssh:file")
 
 	if err := cmd.Run(); err != nil {
 		os.RemoveAll(dir)
@@ -227,9 +238,7 @@ func isCell(dir string) bool {
 // is either a mistake in the repository or an attempt to seed this machine with
 // someone else's credential. Neither is worth copying.
 func withheld(name string) bool {
-	lower := strings.ToLower(name)
-
-	return lower == ".env" || strings.HasSuffix(lower, ".env") || lower == "vpn.conf"
+	return config.SensitiveName(name)
 }
 
 // copyTree copies a cell directory into the staging area under rules of its
@@ -264,8 +273,11 @@ func copyTree(src, dst string) ([]string, error) {
 		case !entry.IsDir() && !entry.Type().IsRegular():
 			refused = append(refused, fmt.Sprintf("%s: neither a file nor a directory", rel))
 			return nil
-		case !entry.IsDir() && withheld(entry.Name()):
+		case withheld(entry.Name()):
 			refused = append(refused, fmt.Sprintf("%s: holds credentials, which are yours rather than the cell's", rel))
+			if entry.IsDir() {
+				return fs.SkipDir
+			}
 			return nil
 		}
 
@@ -309,22 +321,12 @@ func copyFile(src, dst string, perm fs.FileMode) error {
 	}
 	defer in.Close()
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	dir, err := os.OpenRoot(filepath.Dir(dst))
 	if err != nil {
 		return err
 	}
-
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	if err := out.Close(); err != nil {
-		return err
-	}
-
-	// O_CREATE leaves an existing file's mode alone, and --force writes
-	// over one. Say what it should be either way.
-	return os.Chmod(dst, perm)
+	defer dir.Close()
+	return safefile.Write(dir, filepath.Base(dst), in, perm, true)
 }
 
 // Install makes a staged definition into a cell called name.
@@ -353,6 +355,11 @@ func Install(staged *Staged, name string, force bool) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("creating %s: %w", dir, err)
 	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
 
 	var written []string
 	err = filepath.WalkDir(staged.Dir, func(path string, entry fs.DirEntry, err error) error {
@@ -368,16 +375,25 @@ func Install(staged *Staged, name string, force bool) ([]string, error) {
 			return nil
 		}
 
-		target := filepath.Join(dir, rel)
 		if entry.IsDir() {
-			return os.MkdirAll(target, 0o700)
+			return root.MkdirAll(rel, 0o700)
 		}
 
 		info, err := entry.Info()
 		if err != nil {
 			return err
 		}
-		if err := copyFile(path, target, mode(info.Mode())); err != nil {
+		parent, err := root.OpenRoot(filepath.Dir(rel))
+		if err != nil {
+			return err
+		}
+		defer parent.Close()
+		source, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+		if err := safefile.Write(parent, filepath.Base(rel), source, mode(info.Mode()), true); err != nil {
 			return err
 		}
 		written = append(written, filepath.ToSlash(rel))

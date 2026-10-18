@@ -8,7 +8,8 @@ description: >-
 #
 #   solitary clone balakin/solitary/examples/vscode
 #   solitary up vscode
-#   open http://localhost:9797
+#   limactl shell solitary-vscode podman logs solitary
+#   Open the URL with its connection token printed in the server log.
 #
 # See https://solitary.balakin.io/docs/guides-examples
 
@@ -30,7 +31,8 @@ build: ./Containerfile
 command: >
   cell-init && seed-extensions
   && exec /opt/openvscode-server/bin/openvscode-server
-  --host 0.0.0.0 --port 9797 --without-connection-token
+  --host 0.0.0.0 --port 9797
+  --connection-token-file "$HOME/.openvscode-server/connection-token"
   --user-data-dir "$HOME/.openvscode-server/data"
   --extensions-dir "$HOME/.openvscode-server/extensions"
 

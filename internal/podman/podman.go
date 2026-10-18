@@ -7,8 +7,11 @@
 package podman
 
 import (
+	"bytes"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -47,7 +50,15 @@ const deviceLabel = "solitary.devices"
 
 // shmLabel records the size the container's shared memory was given, so that a
 // machine whose memory moved gets a container whose /dev/shm moved with it.
-const shmLabel = "solitary.shm"
+const (
+	shmLabel     = "solitary.shm"
+	commandLabel = "solitary.command"
+)
+
+func CommandDigest(command string) string {
+	sum := sha256.Sum256([]byte(command))
+	return hex.EncodeToString(sum[:])
+}
 
 // DeviceList is how a set of devices is written down, both for the label and
 // for comparing what is running against what is asked for. Order is kept: it
@@ -57,12 +68,16 @@ func DeviceList(devices []string) string {
 }
 
 // EnvDigest summarises a set of KEY=VALUE entries. Order does not matter.
-func EnvDigest(env []string) string {
+func EnvDigest(env []string, key ...[]byte) string {
 	sorted := append([]string(nil), env...)
 	sort.Strings(sorted)
 
+	if len(key) != 0 {
+		mac := hmac.New(sha256.New, key[0])
+		mac.Write([]byte(strings.Join(sorted, "\x00")))
+		return hex.EncodeToString(mac.Sum(nil))
+	}
 	sum := sha256.Sum256([]byte(strings.Join(sorted, "\x00")))
-
 	return hex.EncodeToString(sum[:])
 }
 
@@ -90,14 +105,15 @@ type State struct {
 	// the machine's own.
 	Devices string
 	// ShmSize is the size the container's /dev/shm was created with.
-	ShmSize string
+	ShmSize       string
+	CommandDigest string
 }
 
 // Inspect reports the state of a cell's container.
 func Inspect(instance string) (State, error) {
 	out, err := lima.Exec(instance,
 		"podman", "container", "inspect", Container,
-		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}\t{{index .Config.Labels \""+userLabel+"\"}}\t{{index .Config.Labels \""+deviceLabel+"\"}}\t{{index .Config.Labels \""+shmLabel+"\"}}",
+		"--format", "{{.State.Status}}\t{{index .Config.Labels \""+imageLabel+"\"}}\t{{index .Config.Labels \""+envLabel+"\"}}\t{{index .Config.Labels \""+userLabel+"\"}}\t{{index .Config.Labels \""+deviceLabel+"\"}}\t{{index .Config.Labels \""+shmLabel+"\"}}\t{{index .Config.Labels \""+commandLabel+"\"}}",
 	)
 	if err != nil {
 		// podman exits non-zero when the container does not exist, which is
@@ -109,7 +125,7 @@ func Inspect(instance string) (State, error) {
 		return State{}, err
 	}
 
-	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 6)
+	fields := strings.SplitN(strings.TrimSpace(string(out)), "\t", 7)
 	state := State{Exists: true, Running: fields[0] == "running"}
 	if len(fields) > 1 {
 		state.Image = fields[1]
@@ -125,6 +141,9 @@ func Inspect(instance string) (State, error) {
 	}
 	if len(fields) > 5 {
 		state.ShmSize = fields[5]
+	}
+	if len(fields) > 6 {
+		state.CommandDigest = fields[6]
 	}
 
 	return state, nil
@@ -144,7 +163,8 @@ type RunOptions struct {
 	// shells are attached to it separately with Shell.
 	Command string
 	// Env is passed with -e, one KEY=VALUE per entry.
-	Env []string
+	Env     []string
+	EnvHash string
 	// HostHome is the path inside the machine that is bind-mounted over the
 	// container's home, so that work survives the container being replaced.
 	HostHome string
@@ -179,7 +199,31 @@ func Run(instance string, opts RunOptions) error {
 		return err
 	}
 
-	if _, err := lima.Exec(instance, runArgs(opts, mapping)...); err != nil {
+	values := map[string]string{}
+	for _, kv := range opts.Env {
+		name, value, ok := strings.Cut(kv, "=")
+		if !ok || strings.ContainsRune(value, 0) {
+			return fmt.Errorf("invalid environment entry for %q", name)
+		}
+		values[name] = value
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return err
+	}
+	// Construct value-bearing arguments only inside the VM. Passing the values
+	// in the launcher's own environment would let PATH/LD_PRELOAD and similar
+	// container settings alter the VM's Podman process.
+	const launch = `import json,os,sys
+values=json.load(sys.stdin)
+args=sys.argv[1:]
+for index in range(len(args)-1):
+    if args[index]=='--env' and args[index+1] in values:
+        name=args[index+1]
+        args[index+1]=name+'='+values[name]
+os.execvp(args[0],args)`
+	args := append([]string{"python3", "-c", launch}, runArgs(opts, mapping)...)
+	if err := lima.ExecStream(instance, bytes.NewReader(data), os.Stderr, args...); err != nil {
 		return fmt.Errorf("starting the container: %w", err)
 	}
 
@@ -194,7 +238,8 @@ func runArgs(opts RunOptions, mapping []string) []string {
 		"--replace",
 		"--name", Container,
 		"--label", imageLabel + "=" + opts.Identity,
-		"--label", envLabel + "=" + EnvDigest(opts.Env),
+		"--label", envLabel + "=" + opts.EnvHash,
+		"--label", commandLabel + "=" + CommandDigest(opts.Command),
 		"--label", userLabel + "=" + opts.User,
 		"--label", deviceLabel + "=" + DeviceList(opts.Devices),
 		"--label", shmLabel + "=" + opts.ShmSize,
@@ -216,7 +261,8 @@ func runArgs(opts RunOptions, mapping []string) []string {
 		args = append(args, "--device", device)
 	}
 	for _, kv := range opts.Env {
-		args = append(args, "--env", kv)
+		name, _, _ := strings.Cut(kv, "=")
+		args = append(args, "--env", name)
 	}
 
 	// A fixed entrypoint keeps behaviour the same across images, whatever

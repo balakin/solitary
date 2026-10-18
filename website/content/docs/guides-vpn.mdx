@@ -65,13 +65,13 @@ All three are refused when the cell is read, rather than leaving you with a mach
 
 - **A missing `Endpoint`.** There is nothing to connect to, and nothing for the firewall to allow.
 - **A `DNS =` line.** A cell resolves through its own resolver. If you want the tunnel's resolver, name its address under `resolvers:` instead.
-- **An IPv6 `Endpoint`.** The peer is allowed through the same firewall as everything else, and a cell's machine has no IPv6 route. Most providers publish both, so this is usually a line to change rather than a provider to leave.
+- **An IPv6 `Endpoint`.** The peer must use IPv4 because the tunnel firewall drops non-loopback IPv6 traffic. Most providers publish both, so this is usually a line to change rather than a provider to leave.
 
 ## Not the host resolver
 
 Do not pair a tunnel with `resolvers: [host]`. Solitary warns about this combination on every `up` and again in the dashboard's network view, because it undoes much of what the tunnel is for.
 
-The host's resolver is discovered as the address the machine's own network hands it, which is link-local to that network. Queries to it therefore keep taking the interface the tunnel replaced — by design, since that is the only way to reach it. The cell's traffic leaves from somewhere else, but every name it looks up is still read by whoever runs that resolver, and it reopens the one hole in VM→host isolation.
+The host's resolver is discovered as the address the machine's own network hands it, which is link-local to that network. Queries to it therefore keep taking the interface the tunnel replaced — by design, since that is the only way to reach it. Application traffic leaves from somewhere else, but every name it looks up is still read by whoever runs that resolver. This also permits the VM resolver to contact a host service.
 
 Name a resolver by address instead:
 
@@ -85,3 +85,5 @@ network:
 ```
 
 It is a warning rather than a refusal: a network whose names only its own resolver knows is a real thing to be on, and pairing it with a tunnel for everything else is a legitimate — if narrow — choice.
+
+The kill switch is enforced even when `network.allow` is omitted. While the tunnel is absent, normal application traffic is blocked. The VM resolver can still query the configured upstream DNS servers for bootstrap; those DNS queries can leave outside the tunnel. WireGuard `PreUp`, `PostUp`, `PreDown` and `PostDown` hooks are refused because they execute as VM root. `SaveConfig` is also refused because it can replace the managed configuration.

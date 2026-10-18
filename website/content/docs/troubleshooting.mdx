@@ -67,7 +67,7 @@ Three things a WireGuard configuration must not have, all refused when the cell 
 
 - **A missing `Endpoint`.** There is nothing to connect to, and nothing for the firewall to allow.
 - **A `DNS =` line.** A cell resolves through its own resolver; name the address under `network.resolvers` instead.
-- **An IPv6 `Endpoint`.** A cell's machine has no IPv6 route, so the firewall cannot allow the peer through. Use the provider's IPv4 endpoint.
+- **An IPv6 `Endpoint`.** The cell's tunnel firewall enforces IPv4 egress and refuses an IPv6 peer. Use the provider's IPv4 endpoint.
 
 If the tunnel is configured and down, the cell reaches nothing at all — that is the kill switch working, not a separate fault. The dashboard's VPN row says so directly. See [routing a cell through a VPN](/docs/guides-vpn).
 
@@ -145,4 +145,4 @@ Changing `user` replaces the container at the next `up`; nothing in the home is 
 
 Work belongs in `/home/cell`, which lives on the machine's disk rather than in the container. It survives a new image, a stop and start, and anything a tool installs into the home directory.
 
-`rm` is what discards it, and `rm` means destroy the machine. Nothing is synced back to the host, because a cell has no path to the host: anything you would be upset to lose belongs either in a git remote, in [the outbox](/docs/artifacts), or in `secrets`, which lives on the host and is passed in on every start.
+`rm` is what discards it, and `rm` means destroy the machine. No host filesystem is mounted or synced back automatically: anything you would be upset to lose belongs either in a git remote, in [the outbox](/docs/artifacts), or in `secrets`, which lives on the host and is passed in on every start.

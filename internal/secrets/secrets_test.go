@@ -139,3 +139,46 @@ func TestLabelSaysWhatEnterDoes(t *testing.T) {
 		}
 	}
 }
+
+// A secrets file created by hand, or by an older release, can be readable by
+// other users. Saving to it is the moment to take that back.
+func TestSaveTightensAnExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("OLD=value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Save(path, map[string]string{"TOKEN": "secret"}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("Save() left mode %o, want 600", got)
+	}
+}
+
+func TestSaveDoesNotFollowASymlink(t *testing.T) {
+	dir := t.TempDir()
+	target, link := filepath.Join(dir, "unrelated"), filepath.Join(dir, ".env")
+	if err := os.WriteFile(target, []byte("unchanged"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = Save(link, map[string]string{"TOKEN": "secret"})
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "unchanged" {
+		t.Errorf("Save() wrote %q through a symlink", data)
+	}
+}

@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
+
+	"github.com/balakin/solitary/internal/config"
 
 	"github.com/balakin/solitary/internal/lima"
 )
@@ -37,43 +40,110 @@ var excluded = map[string]bool{
 // root, in a stable order. It is the single definition of what a build sees,
 // used both to digest a context and to copy it.
 func contextFiles(root string) ([]string, error) {
-	var files []string
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return contextFilesRoot(r, "")
+}
 
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+func contextFilesRoot(root *os.Root, private string) ([]string, error) {
+	var files []string
+	err := fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if excluded[d.Name()] {
+		if path != "." && (excluded[d.Name()] || config.SensitiveName(d.Name()) || path == private) {
 			if d.IsDir() {
 				return fs.SkipDir
 			}
 			return nil
 		}
-		if d.IsDir() || !d.Type().IsRegular() {
-			return nil
+		if d.Type().IsRegular() && !d.IsDir() {
+			files = append(files, path)
 		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		files = append(files, rel)
 		return nil
 	})
-	if err != nil {
-		return nil, fmt.Errorf("reading build context %s: %w", root, err)
-	}
 	sort.Strings(files)
+	return files, err
+}
 
-	return files, nil
+func openContext(containerfile string, boundary []string) (*os.Root, string, error) {
+	contextDir, err := filepath.Abs(filepath.Dir(containerfile))
+	if err != nil {
+		return nil, "", err
+	}
+	rootDir := contextDir
+	if len(boundary) > 0 && boundary[0] != "" {
+		rootDir, err = filepath.Abs(boundary[0])
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	anchor, err := os.OpenRoot(rootDir)
+	if err != nil {
+		return nil, "", err
+	}
+	defer anchor.Close()
+	rel, err := filepath.Rel(rootDir, contextDir)
+	if err != nil {
+		return nil, "", err
+	}
+	root, err := anchor.OpenRoot(rel)
+	if err != nil {
+		return nil, "", fmt.Errorf("build context must remain inside the cell directory: %w", err)
+	}
+	file, err := openContextFile(root, filepath.Base(containerfile))
+	if err != nil {
+		root.Close()
+		return nil, "", fmt.Errorf("opening Containerfile: %w", err)
+	}
+	file.Close()
+	private := ""
+	if len(boundary) > 1 && boundary[1] != "" {
+		privatePath, absErr := filepath.Abs(boundary[1])
+		if absErr != nil {
+			root.Close()
+			return nil, "", absErr
+		}
+		private, err = filepath.Rel(contextDir, privatePath)
+		if err != nil {
+			root.Close()
+			return nil, "", err
+		}
+		private = filepath.ToSlash(private)
+	}
+	return root, private, nil
+}
+
+func openContextFile(root *os.Root, name string) (*os.File, error) {
+	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		f.Close()
+		return nil, fmt.Errorf("%s is not a regular build file", name)
+	}
+	return f, nil
 }
 
 // ContextDigest summarises a build context: the paths it contains and their
 // contents. Two contexts with the same digest produce the same image, so a
 // build can be skipped when it has not moved.
-func ContextDigest(containerfile string) (string, error) {
-	root := filepath.Dir(containerfile)
-
-	files, err := contextFiles(root)
+func ContextDigest(containerfile string, boundary ...string) (string, error) {
+	root, private, err := openContext(containerfile, boundary)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
+	files, err := contextFilesRoot(root, private)
 	if err != nil {
 		return "", err
 	}
@@ -82,7 +152,7 @@ func ContextDigest(containerfile string) (string, error) {
 	for _, rel := range files {
 		fmt.Fprintf(sum, "%s\x00", rel)
 
-		f, err := os.Open(filepath.Join(root, rel))
+		f, err := openContextFile(root, rel)
 		if err != nil {
 			return "", fmt.Errorf("reading %s: %w", rel, err)
 		}
@@ -102,6 +172,15 @@ func ContextDigest(containerfile string) (string, error) {
 //
 // The caller removes the returned directory.
 func stage(root string, files []string) (string, error) {
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+	return stageRoot(r, files)
+}
+
+func stageRoot(root *os.Root, files []string) (string, error) {
 	dir, err := os.MkdirTemp("", "solitary-build-")
 	if err != nil {
 		return "", fmt.Errorf("creating a staging directory: %w", err)
@@ -113,7 +192,13 @@ func stage(root string, files []string) (string, error) {
 			os.RemoveAll(dir)
 			return "", fmt.Errorf("staging %s: %w", rel, err)
 		}
-		data, err := os.ReadFile(filepath.Join(root, rel))
+		f, err := openContextFile(root, rel)
+		if err != nil {
+			os.RemoveAll(dir)
+			return "", err
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
 		if err != nil {
 			os.RemoveAll(dir)
 			return "", fmt.Errorf("staging %s: %w", rel, err)
@@ -152,14 +237,17 @@ func BuiltDigest(instance, tag string) (string, error) {
 // the base image pulled again. A Containerfile is rarely a pure function of its
 // context — an unpinned package, a `latest` anything — and a cached layer is
 // the build remembering what that resolved to the first time.
-func Build(instance, containerfile, tag, digest string, fresh bool) error {
-	root := filepath.Dir(containerfile)
-
-	files, err := contextFiles(root)
+func Build(instance, containerfile, tag, digest string, fresh bool, boundary ...string) error {
+	root, private, err := openContext(containerfile, boundary)
 	if err != nil {
 		return err
 	}
-	staged, err := stage(root, files)
+	defer root.Close()
+	files, err := contextFilesRoot(root, private)
+	if err != nil {
+		return err
+	}
+	staged, err := stageRoot(root, files)
 	if err != nil {
 		return err
 	}

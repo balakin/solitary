@@ -16,7 +16,7 @@ network:
     - 10.1.2.0/24
 ```
 
-A domain covers its subdomains, so `github.com` reaches `api.github.com`. It does not cover a different domain the same site happens to use, so `objects.githubusercontent.com` has to be listed too. IPv4 addresses and CIDR blocks are used as written; IPv6 is refused when the cell is read, because a cell's machine has no route to reach it through.
+A domain covers its subdomains, so `github.com` reaches `api.github.com`. It does not cover a different domain the same site happens to use, so `objects.githubusercontent.com` has to be listed too. IPv4 addresses and CIDR blocks are used as written; IPv6 entries are refused because restricted cells enforce IPv4 egress and drop non-loopback IPv6 traffic.
 
 Two pieces enforce the list, both in the machine and outside the container. A resolver answers for the listed names only — anything else gets NXDOMAIN, so a query cannot carry data out to a resolver of an agent's choosing — and it records the addresses it hands out in a set the firewall allows. A name resolves and is reachable, or does neither, and a site that changes its addresses keeps working without anyone editing a rule. The container is rootless: nothing inside it can load a firewall rule, stop the resolver, or edit either one's configuration.
 
@@ -32,7 +32,7 @@ The name in the error is the entry to add.
 
 ## Configure DNS
 
-By default the cell's resolver forwards to `1.1.1.1` and `8.8.8.8`. Those are public on purpose: a restricted cell cannot reach the host, and a resolver on the host's network would see every name the cell looks up.
+By default the cell's resolver forwards to `1.1.1.1` and `8.8.8.8`. Public resolvers avoid granting DNS access to a host service. A resolver on the host's network would see every name the cell looks up.
 
 That is the wrong answer on a network whose names only its own resolver knows — a corporate one, a split horizon, anything behind a proxy that intercepts DNS — and on one that refuses to carry DNS to a public resolver at all. Name the resolvers instead:
 
@@ -43,7 +43,7 @@ network:
     - 10.0.0.53 # or name them outright
 ```
 
-`host` is discovered at boot from the machine's DHCP lease, so it follows the network you are on. It is the one hole in VM→host isolation and a narrow one: the cell's own resolver, port 53, and nothing else. A process inside the container still cannot reach any resolver directly — only ask the one in front of it, which answers for the allowed names only.
+`host` is discovered at boot from the machine's DHCP lease, so it follows the network you are on. This grants the VM resolver access to that host service on port 53, independently of the destination allow list. The container asks the VM resolver, which answers for allowed names; direct connections to a DNS server require an address grant like any other connection.
 
 Do not combine `host` with `network.vpn`; see [why](/docs/guides-vpn#not-the-host-resolver).
 
@@ -59,3 +59,5 @@ solitary up my-cell
 ## Remove the policy
 
 Deleting `network.allow` makes the cell unrestricted again from the next boot: the resolver, the firewall and the frozen `resolv.conf` are removed from the machine as part of starting it. The same goes for `network.vpn` — the interface is disabled and the configuration deleted from the machine, private key included. Until the machine restarts, a running cell keeps enforcing what it came up with, and `up` says so.
+
+A domain grant authorizes the IPv4 addresses returned for that domain and its subdomains. Other sites sharing those addresses can also be reached, regardless of their hostname or TLS SNI. DNS-controlled addresses can include a host or private-network address. This is address filtering, so avoid broad grants and do not treat it as hostname-level isolation. Learned addresses expire after one hour and the set is capped at 65,536 addresses; established connections can continue. A client holding an old address may need to resolve the name again.

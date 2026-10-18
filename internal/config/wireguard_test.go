@@ -136,3 +136,39 @@ func TestReadTunnelExplainsAMissingConfiguration(t *testing.T) {
 		}
 	}
 }
+
+// The endpoint is written into the VM's firewall, so it has to be a host and a
+// port and nothing a shell would read as more.
+func TestReadTunnelRefusesAnUnsafeEndpoint(t *testing.T) {
+	for _, endpoint := range []string{"$(id):51820", "vpn.example.invalid:51820;true"} {
+		path := write(t, "[Peer]\nEndpoint = "+endpoint+"\n")
+		if _, err := ReadTunnel(path); err == nil {
+			t.Errorf("ReadTunnel() accepted endpoint %q", endpoint)
+		}
+	}
+}
+
+// wg-quick runs PreUp, PostUp, PreDown and PostDown as root shell commands, and
+// SaveConfig has it rewrite the file it was given. The configuration reaches
+// wg-quick as written, so these are refused like DNS is.
+func TestReadTunnelRefusesWgQuickHooks(t *testing.T) {
+	for _, key := range []string{"PreUp", "PostUp", "PreDown", "PostDown", "SaveConfig"} {
+		path := write(t, "[Interface]\nPrivateKey = aGk=\n"+key+" = touch /tmp/hooked\n[Peer]\nPublicKey = aGk=\nEndpoint = 198.51.100.1:51820\n")
+		if _, err := ReadTunnel(path); err == nil {
+			t.Errorf("ReadTunnel() accepted %s", key)
+		}
+	}
+}
+
+func TestTunnelEndpointPortBounds(t *testing.T) {
+	for _, port := range []string{"0", "65536", "51820;true", "+80", "001"} {
+		if err := (Tunnel{EndpointHost: "vpn.example.com", EndpointPort: port}).Validate(); err == nil {
+			t.Errorf("Validate() accepted port %q", port)
+		}
+	}
+	for _, port := range []string{"1", "65535", "51820"} {
+		if err := (Tunnel{EndpointHost: "vpn.example.com", EndpointPort: port}).Validate(); err != nil {
+			t.Errorf("Validate() refused port %q: %v", port, err)
+		}
+	}
+}

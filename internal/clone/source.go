@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"unicode"
 )
 
 // Source is where a cell definition is to be read from.
@@ -54,6 +55,16 @@ func Parse(arg string) (Source, error) {
 	}
 
 	repo, cell, _ := strings.Cut(arg, "#")
+	if strings.ContainsFunc(repo, unicode.IsControl) {
+		return Source{}, fmt.Errorf("repository contains control characters")
+	}
+	if !local(repo) && strings.Contains(repo, ":") {
+		u, err := url.Parse(repo)
+		isSSH := strings.Contains(repo, "@") && !strings.Contains(repo, "://") && !strings.Contains(repo, "::")
+		if !isSSH && (err != nil || (u.Scheme != "https" && u.Scheme != "ssh") || u.Host == "") {
+			return Source{}, fmt.Errorf("unsupported repository transport: use HTTPS, SSH, or a local directory")
+		}
+	}
 	if repo == "" {
 		return Source{}, fmt.Errorf("%q names a cell but no repository to find it in", arg)
 	}

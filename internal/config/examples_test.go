@@ -3,7 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // The examples in examples/ are published for solitary clone to install, and
@@ -56,5 +59,21 @@ func TestExampleNamesAreUsable(t *testing.T) {
 		if err := ValidateName(name); err != nil {
 			t.Errorf("examples/%s: %v", name, err)
 		}
+	}
+}
+
+// A forwarded port is reachable by every user on the host, so the editor in the
+// example has to ask for its token rather than open a session to anyone.
+func TestVSCodeExampleRequiresAConnectionToken(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "examples", "vscode", "cell.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cell Cell
+	if err := yaml.Unmarshal(data, &cell); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(cell.Command, "--without-connection-token") || !strings.Contains(cell.Command, "--connection-token-file") {
+		t.Errorf("the vscode example's command does not require a connection token: %q", cell.Command)
 	}
 }

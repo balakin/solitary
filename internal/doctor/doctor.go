@@ -62,10 +62,26 @@ func Host() []Check {
 		checkMemory(),
 		checkDisk(),
 		checkMachines(),
+		checkIsolation(),
 		checkGPU(),
 		checkConfig(),
 		checkProxy(),
 	}
+}
+
+func checkIsolation() Check {
+	instances, err := lima.List()
+	if err != nil {
+		return Check{Name: "isolation", Status: Warn, Detail: err.Error()}
+	}
+	for _, inst := range instances {
+		if strings.HasPrefix(inst.Name, config.InstancePrefix) {
+			if err := lima.CheckIsolation(inst); err != nil {
+				return Check{Name: "isolation", Status: Fail, Detail: inst.Name + ": " + err.Error(), Fix: "Stop the affected machine and remove unsafe host mounts, copy rules, networks or forwards before using it again."}
+			}
+		}
+	}
+	return Check{Name: "isolation", Status: OK, Detail: "stored cell definitions have no host mounts, copy rules or additional networks"}
 }
 
 // Failed reports whether any check failed, which is what makes doctor's own

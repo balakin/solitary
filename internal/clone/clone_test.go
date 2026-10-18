@@ -380,3 +380,34 @@ func TestStageAcceptsAMissingTunnel(t *testing.T) {
 		t.Errorf("vpn = %q, want ./vpn.conf", staged.Cell.Network.VPN)
 	}
 }
+
+// A cell directory can hold a symlink a previous definition left behind, and a
+// forced install writes over that directory. It has to replace the link rather
+// than write through it to whatever it points at.
+func TestInstallForceDoesNotFollowASymlink(t *testing.T) {
+	isolate(t)
+
+	dir, err := config.CellDir("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "cell.yaml"), "image: ubuntu:24.04\n", 0o600)
+	target := filepath.Join(t.TempDir(), "outside")
+	write(t, target, "unchanged", 0o600)
+	if err := os.Symlink(target, filepath.Join(dir, "payload")); err != nil {
+		t.Fatal(err)
+	}
+
+	stage := t.TempDir()
+	write(t, filepath.Join(stage, "cell.yaml"), "image: ubuntu:24.04\n", 0o600)
+	write(t, filepath.Join(stage, "payload"), "replacement", 0o600)
+	_, _ = Install(&Staged{Dir: stage}, "probe", true)
+
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "unchanged" {
+		t.Errorf("Install() wrote %q through a symlink in the cell directory", data)
+	}
+}

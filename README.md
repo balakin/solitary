@@ -38,16 +38,19 @@ payload runs as you. No escape was necessary; you executed it yourself.
 A cell is a Lima VM with a container inside it.
 
 - **The VM is the boundary** — a hypervisor, not a shared kernel, so the
-  isolation holds even if the agent gets root in its container.
+  isolation is built to hold even if the agent gets root in its container.
+  Built to, not guaranteed to: a bug in the hypervisor, Lima, the kernel or
+  solitary itself can break it — see [SECURITY.md](SECURITY.md).
 - **The container is the toolset.** Change `image:`, run `up` again: same VM,
   same disk, same secrets, different tools.
 - **Nothing is mounted from the host, ever.** Clone, build, lint and test inside
   the cell; the host only displays results.
-- **Secrets are whitelisted per cell** and stay on the host, so `rm` then `up`
-  gives you a clean cell that is still authenticated.
+- **Secrets are whitelisted per cell.** The source file stays on the host;
+  selected values enter the container and can authenticate a fresh cell.
 - **Ports are the way in, `network.allow` is the way out.** Set the allow list
-  and the cell reaches what you list and nothing else — not the rest of the
-  internet, not your machine, not your local network.
+  to limit destination IPv4 addresses, including host and local addresses.
+  Names sharing an allowed IP share access. Configured DNS upstreams remain
+  reachable by the VM resolver; unrestricted cells can reach host services.
 
 ```yaml
 # ~/.config/solitary/cells/claude/cell.yaml
@@ -103,7 +106,8 @@ An editor in a cell, from nothing:
 ```sh
 solitary clone balakin/solitary/examples/vscode
 solitary up vscode --detach
-open http://localhost:9797
+limactl shell solitary-vscode podman logs solitary
+# Open the URL with its connection token printed in the server log.
 ```
 
 That is VS Code with Claude Code beside it, running in the cell and reached

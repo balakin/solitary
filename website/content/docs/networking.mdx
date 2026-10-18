@@ -14,11 +14,11 @@ Omit `ports` and every port the container listens on reaches host localhost. Set
 
 ## Allow lists
 
-Without `network.allow`, the cell reaches whatever the host reaches. With an allow list, the cell is default-deny: the listed domains, IPv4 addresses, and CIDR blocks resolve and are reachable, and nothing else is — not the rest of the internet, not your machine, not your local network.
+Without `network.allow`, the cell reaches whatever the host reaches. With an allow list, the cell is default-deny: the listed domains, IPv4 addresses, and CIDR blocks resolve and are reachable, and other destinations are denied. An entry can explicitly permit a host or local-network address; review those grants carefully.
 
 A domain covers its subdomains; a different domain the same site uses has to be listed itself. The list must include every dependency: source control, container registries, package registries, APIs, and any CDN a build needs.
 
-A cell's machine has no IPv6 route, so the policy is IPv4 throughout: its resolver answers `AAAA` queries with nothing, and an IPv6 address in `allow` or `resolvers` is refused when the cell is read rather than accepted into a rule that cannot hold it.
+Restricted and VPN-only cells enforce IPv4 egress: non-loopback IPv6 traffic is dropped, their resolver filters `AAAA` answers, and IPv6 entries in `allow`, `resolvers` or a tunnel endpoint are refused. An unrestricted VM may have an IPv6 route.
 
 Enforcement lives in the machine and outside the container, in two halves that agree with each other. A resolver answers for the listed names only, and records the addresses it hands out in a set the firewall allows. So a name resolves and is reachable, or does neither. The container is rootless and cannot load a firewall rule, stop the resolver, or edit either one's configuration.
 
@@ -33,20 +33,24 @@ Deleting it takes effect the same way. The resolver, the firewall and the frozen
 
 ## DNS
 
-By default the cell's resolver forwards to `1.1.1.1` and `8.8.8.8`. They are public on purpose: a restricted cell cannot reach the host, and a resolver on the host's network would see every name the cell looks up.
+By default the cell's resolver forwards to `1.1.1.1` and `8.8.8.8`. Public resolvers avoid granting DNS access to a host service. A resolver on the host's network would see every name the cell looks up.
 
-Set `network.resolvers` for private or corporate DNS. The entry `host` means the resolver the machine is given by its own network, which is the host's — the answer for a network whose names only its own resolver knows. It is the one hole in VM→host isolation, and a narrow one: the cell's resolver alone, on port 53.
+Set `network.resolvers` for private or corporate DNS. The entry `host` means the resolver the machine is given by its own network, which is the host's — the answer for a network whose names only its own resolver knows. This grants the VM resolver access to that host service on port 53, independently of the destination allow list.
 
 Because the resolver and the firewall are driven from the same list, a query for a name outside the policy gets NXDOMAIN rather than an answer nothing can connect to. That also means a query cannot carry data out to a resolver of an agent's choosing.
 
 ## VPN
 
-`network.vpn` points at a WireGuard configuration. The tunnel is brought up in the machine, where the container cannot touch it, and everything the cell reaches leaves through it.
+`network.vpn` points at a WireGuard configuration. The tunnel is brought up in the machine, where the container cannot touch it. Application egress uses that tunnel; the VM resolver can still reach configured DNS upstreams outside it for bootstrap.
 
-The allow list applies exactly as before, except that what it allows is reachable through the tunnel only: with the tunnel down, nothing leaves, rather than the same traffic quietly going out the way it came. See [routing a cell through a VPN](/docs/guides-vpn).
+The allow list applies to application traffic through the tunnel. If the tunnel goes down, that traffic is blocked; resolver bootstrap remains permitted. See [routing a cell through a VPN](/docs/guides-vpn).
 
 ## Observability
 
 The machine logs both halves of the policy: every name the cell asks about, what it resolved to, and every connection the firewall refused. The dashboard's traffic view (`t`) follows that log live. A cell cannot see, let alone edit, what is recorded about it.
 
 When a restricted build fails, a `refused` line names what is missing from the policy.
+
+Without an allow list or VPN, Lima user-mode networking lets a cell reach host services through its gateway, including services listening only on host localhost. VM loopback is also shared with the container. Use an allow list when reachability matters; keep authentication on host services.
+
+The firewall reserves DHCP for the VM DHCP client identities, with source port 68 and destination port 67. Container traffic gets no general DHCP-port exception. VPN-only cells also receive a default-deny kill switch. DNS requests by the VM resolver to configured upstreams remain permitted for tunnel bootstrap, including while the tunnel is down.
