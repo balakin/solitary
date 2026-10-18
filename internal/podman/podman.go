@@ -194,7 +194,7 @@ func Run(instance string, opts RunOptions) error {
 		return fmt.Errorf("creating %s in the machine: %w", opts.HostHome, err)
 	}
 
-	mapping, err := homeMapping(instance, opts)
+	home, mapping, err := homeMapping(instance, opts)
 	if err != nil {
 		return err
 	}
@@ -222,7 +222,7 @@ for index in range(len(args)-1):
         name=args[index+1]
         args[index+1]=name+'='+values[name]
 os.execvp(args[0],args)`
-	args := append([]string{"python3", "-c", launch}, runArgs(opts, mapping)...)
+	args := append([]string{"python3", "-c", launch}, runArgs(opts, home, mapping)...)
 	if err := lima.ExecStream(instance, bytes.NewReader(data), os.Stderr, args...); err != nil {
 		return fmt.Errorf("starting the container: %w", err)
 	}
@@ -230,8 +230,9 @@ os.execvp(args[0],args)`
 	return nil
 }
 
-// runArgs is the podman invocation that creates a cell's container.
-func runArgs(opts RunOptions, mapping []string) []string {
+// runArgs is the podman invocation that creates a cell's container, with home
+// as the machine directory mounted over its home.
+func runArgs(opts RunOptions, home string, mapping []string) []string {
 	args := []string{
 		"podman", "run",
 		"--detach",
@@ -252,7 +253,7 @@ func runArgs(opts RunOptions, mapping []string) []string {
 		// The machine is the boundary, so the container shares its network
 		// rather than adding a second one to reason about.
 		"--network", "host",
-		"--volume", opts.HostHome + ":" + HomeDir,
+		"--volume", home + ":" + HomeDir,
 		"--workdir", HomeDir,
 		"--env", "HOME=" + HomeDir,
 	}
@@ -278,16 +279,19 @@ func runArgs(opts RunOptions, mapping []string) []string {
 // therefore finds its home writable and needs nothing here.
 //
 // A cell with a user of its own does need something: the home would be root's,
-// and everything that user did in it would fail on a permission. So that user
-// is mapped onto the machine's user instead, which is what owns the directory
-// on the other side of the mount. A mapping rather than a chown, because the
-// machine keeps writing into that home from outside the container — fetch,
-// send and the artifact tool all do — and a home chowned away from the machine
-// user would take that with it.
-func homeMapping(instance string, opts RunOptions) ([]string, error) {
+// and everything that user did in it would fail on a permission. So the home
+// is mounted through a view in which the machine's user, who owns it, appears
+// as that user — see viewRule. A view rather than a chown, because the machine
+// keeps writing into that home from outside the container — fetch, send and
+// the artifact tool all do — and a home chowned away from the machine user
+// would take that with it.
+//
+// It returns the machine directory to mount over the container's home and the
+// arguments podman needs for it.
+func homeMapping(instance string, opts RunOptions) (string, []string, error) {
 	image, err := imageUser(instance, opts.Image)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	user := opts.User
@@ -295,27 +299,41 @@ func homeMapping(instance string, opts RunOptions) ([]string, error) {
 		user = image
 	}
 	if isRoot(user) {
-		return nil, nil
+		return opts.HostHome, nil, nil
 	}
 
 	uid, gid, err := lookupUser(instance, opts.Image, user)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
-	// keep-id runs the container as the mapped user as well, and the command
-	// of a cell that has a user is the one thing there that still wants root:
-	// it is an sshd, or an editor server, or whatever else hands that user
-	// their session. So the process stays whoever the image said it was.
+	// The command of a cell that has a user is the one thing there that still
+	// wants root: it is an sshd, or an editor server, or whatever else hands
+	// that user their session. So the process stays whoever the image said it
+	// was.
 	process := image
 	if process == "" {
 		process = "0"
 	}
 
-	return []string{
-		"--userns", fmt.Sprintf("keep-id:uid=%d,gid=%d", uid, gid),
-		"--user", process,
-	}, nil
+	rule, err := homeRule(instance, uid, gid)
+	if err != nil {
+		return "", nil, err
+	}
+
+	// There is no second way in for a machine that cannot make the view.
+	// keep-id would reach the same home by moving the container's whole table
+	// instead, but the image's layers were stored under the default one, and
+	// podman copies every file of the image to re-own it: minutes of silence
+	// after every rebuild, holding podman's lock the whole time, for machines
+	// old enough that a newer one is the better answer.
+	view, err := mountHomeView(instance, opts.HostHome, rule)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w; a cell with a user needs a machine whose mount supports X-mount.idmap, "+
+			"which a current vm.base has, or no user", err)
+	}
+
+	return view, []string{"--user", process}, nil
 }
 
 // imageUser reports the user an image declares, empty when it declares none.
