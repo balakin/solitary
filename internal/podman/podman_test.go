@@ -85,7 +85,7 @@ func TestIsRoot(t *testing.T) {
 // A cell that names no device is run exactly as it was before devices
 // existed: nothing is passed through, and the label says so.
 func TestRunArgsWithoutDevicesPassNone(t *testing.T) {
-	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity"}, nil)
+	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity"}, "", nil)
 
 	for _, got := range args {
 		if got == "--device" {
@@ -102,7 +102,7 @@ func TestRunArgsWithoutDevicesPassNone(t *testing.T) {
 // container still matches the file.
 func TestRunArgsPassDevicesAndRecordThem(t *testing.T) {
 	devices := []string{"/dev/kvm", "/dev/net/tun"}
-	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity", Devices: devices}, nil)
+	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity", Devices: devices}, "", nil)
 
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "--device /dev/kvm --device /dev/net/tun") {
@@ -121,7 +121,7 @@ func TestRunArgsPassDevicesAndRecordThem(t *testing.T) {
 // /dev/shm moved with it. A cell given /dev/kvm depends on this: a guest's
 // memory is a file on /dev/shm.
 func TestRunArgsSizeSharedMemoryToTheMachine(t *testing.T) {
-	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity", ShmSize: "6GiB"}, nil)
+	args := runArgs(RunOptions{Image: "alpine", Command: "sleep infinity", ShmSize: "6GiB"}, "", nil)
 
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "--shm-size 6GiB") {
