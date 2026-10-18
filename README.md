@@ -38,7 +38,9 @@ payload runs as you. No escape was necessary; you executed it yourself.
 A cell is a Lima VM with a container inside it.
 
 - **The VM is the boundary** — a hypervisor, not a shared kernel, so the
-  isolation holds even if the agent gets root in its container.
+  isolation is built to hold even if the agent gets root in its container.
+  Built to, not guaranteed to: a bug in the hypervisor, Lima, the kernel or
+  solitary itself can break it — see [SECURITY.md](SECURITY.md).
 - **The container is the toolset.** Change `image:`, run `up` again: same VM,
   same disk, same secrets, different tools.
 - **Nothing is mounted from the host, ever.** Clone, build, lint and test inside
