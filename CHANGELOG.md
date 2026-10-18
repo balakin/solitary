@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.2](https://github.com/balakin/solitary/compare/v0.16.1...v0.16.2) (2026-10-18)
+
+
+### Bug Fixes
+
+* harden cell isolation, file transfers, secrets and release verification ([7165714](https://github.com/balakin/solitary/commit/71657146d57072cbc5aac2ea2369167345ed96ac))
+
 ## [0.16.1](https://github.com/balakin/solitary/compare/v0.16.0...v0.16.1) (2026-10-10)
 
 
