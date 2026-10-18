@@ -11,7 +11,7 @@ Solitary is designed to stop a compromised coding agent from modifying or execut
 - The agent cannot read the host project, home directory, Git credentials, SSH agent, or Docker socket unless you deliberately provide an equivalent path.
 - Files produced in the cell do not silently appear on the host.
 - Secrets are selected by name and passed to individual cells rather than mounted as the host `.env` file.
-- Nothing inside a cell can open a page on your machine. A cell has no path to the host, so a sign-in that works by launching a browser has nothing to launch. Authenticate on the host and pass the credential in as a secret.
+- Cells have no integration that launches a host browser. Open a sign-in URL yourself, or authenticate on the host and pass the credential in as a secret. This is separate from network isolation: an unrestricted cell can reach host services, including services bound only to host localhost on Lima user-mode networks.
 
 ## Explicit permissions
 
@@ -21,7 +21,7 @@ The boundary is only as useful as the permissions around it. Keep `secrets` list
 
 ## Secrets lifecycle
 
-Secret values live on the host and are passed into the container as environment variables. The `.env` file itself does not enter the VM, but the values do. Podman may record a container environment in the VM's metadata. Destroying the cell removes that metadata with the cell; rotate credentials if they may have been exposed.
+Secret values live on the host and are passed into the container as environment variables. The `.env` file itself does not enter the VM, but the values do. Values travel over standard input rather than host process arguments. Environment identity labels use a host-only HMAC key. Podman may record a container environment in the VM's metadata. Destroying the cell removes that metadata with the cell; rotate credentials if they may have been exposed.
 
 ## Trusted inputs
 

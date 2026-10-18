@@ -17,7 +17,7 @@ solitary clone balakin/cells/claude     # one cell out of a catalogue
 solitary clone balakin/cells            # a catalogue, unnamed: lists what is in it
 ```
 
-`owner/repo` is GitHub shorthand. Anything else is passed to git as it stands — a full URL, an SSH remote, or a path on this machine — and the cell inside it is named with a `#fragment`:
+`owner/repo` is GitHub shorthand. Other accepted forms are an HTTPS URL, an SSH remote, or a local directory — and the cell inside it is named with a `#fragment`:
 
 ```sh
 solitary clone https://gitlab.com/me/cells.git#rust
@@ -51,6 +51,11 @@ Cell "claude" from github.com/balakin/cells
 
   image    build:./Containerfile
   machine  4 cpus · 8GiB · 40GiB
+  base     ubuntu-lts
+  command:
+    sleep infinity
+  user     image default
+  resolvers 1.1.1.1, 8.8.8.8
   secrets  CLAUDE_API_KEY, GITHUB_TOKEN (optional)
            set them with: solitary secrets claude
   ports    all reach host localhost
@@ -105,3 +110,5 @@ vpn.conf
 ```
 
 A `network.vpn:` line is fine to publish — the file it names is deliberately absent, and whoever clones the cell supplies their own, from any provider, with no edit to `cell.yaml`. `clone` says so when it shows the definition.
+
+The review also shows the full `vm.provision` script under a VM-root heading, before you install the definition. It runs before the network policy is loaded. Terminal control characters are displayed visibly. A `build` or VPN path outside the cell directory is refused, as are executable WireGuard hooks. A configured VPN file is withheld even with a custom filename. Build credential exclusions also apply when cloning. Git helper transports such as `ext::` are refused, and HTTPS, SSH and local-file transports are the only ones enabled for the clone.

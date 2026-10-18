@@ -439,7 +439,7 @@ func TestNetworkViewShowsTheTunnel(t *testing.T) {
 	if !strings.Contains(view, "de-01.example.net") {
 		t.Errorf("the network view does not name the peer:\n%s", view)
 	}
-	if !strings.Contains(view, "nothing leaves at all") {
+	if !strings.Contains(view, "application egress is blocked") {
 		t.Errorf("the network view does not say what a tunnel being down means:\n%s", view)
 	}
 }
@@ -461,7 +461,7 @@ func TestVPNRow(t *testing.T) {
 	}{
 		{"no tunnel", cell.Detail{Name: "claude"}, nil, "none"},
 		{"not asked yet", tunnelled, nil, "asking the machine"},
-		{"interface gone", tunnelled, &cell.TunnelState{}, "reaches nothing"},
+		{"interface gone", tunnelled, &cell.TunnelState{}, "application egress blocked"},
 		{"up but silent", tunnelled, &cell.TunnelState{Up: true}, "no recent handshake"},
 		{
 			"working",

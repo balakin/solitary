@@ -59,13 +59,13 @@ func (t Tunnel) EndpointIsAddress() bool {
 //
 // It refuses configurations that cannot work in a cell rather than letting the
 // machine come up with a tunnel that never connects, since a tunnel that is
-// down is — by design — a cell that reaches nothing.
+// down blocks application egress.
 func ReadTunnel(path string) (*Tunnel, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, fmt.Errorf("no WireGuard configuration at %s\n"+
-				"This cell sends everything through a tunnel, and the configuration for it is\n"+
+				"This cell sends application traffic through a tunnel; its configuration is\n"+
 				"yours rather than the cell's. Save the .conf file your VPN provider gives you\n"+
 				"to that path, unchanged, and run this again", path)
 		}
@@ -83,6 +83,8 @@ func ReadTunnel(path string) (*Tunnel, error) {
 		}
 
 		switch key {
+		case "preup", "postup", "predown", "postdown", "saveconfig":
+			return nil, fmt.Errorf("%s: %s is not allowed: tunnel hooks execute as root and SaveConfig can overwrite the managed configuration", path, key)
 		case "dns":
 			// wg-quick would write this into /etc/resolv.conf, which a
 			// restricted cell has made immutable — so bringing the
@@ -107,6 +109,9 @@ func ReadTunnel(path string) (*Tunnel, error) {
 					"Use the peer's IPv4 endpoint instead", path, host, noIPv6)
 			}
 			tunnel.EndpointHost, tunnel.EndpointPort = host, port
+			if err := tunnel.Validate(); err != nil {
+				return nil, fmt.Errorf("%s: %w", path, err)
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {

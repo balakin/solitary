@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/balakin/solitary/internal/safefile"
+
 	"golang.org/x/term"
 )
 
@@ -112,7 +114,7 @@ func Save(path string, values map[string]string) error {
 		fmt.Fprintf(&b, "%s=\"%s\"\n", k, escaped)
 	}
 
-	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+	if err := safefile.WriteFile(path, []byte(b.String()), 0o600); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
 

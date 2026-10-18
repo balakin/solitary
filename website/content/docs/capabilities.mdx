@@ -43,7 +43,7 @@ network:
     - registry.npmjs.org
 ```
 
-Domains, IPv4 addresses, and IPv4 CIDR blocks are supported; a cell's machine has no IPv6 route, so an IPv6 entry is refused when the cell is read. Custom resolvers can be configured for corporate or split-horizon networks. A WireGuard configuration can route the cell's traffic through a separate exit.
+Domains, IPv4 addresses, and IPv4 CIDR blocks are supported; restricted and VPN-only cells drop non-loopback IPv6 traffic, so IPv6 policy entries are refused when the cell is read. Custom resolvers can be configured for corporate or split-horizon networks. A WireGuard configuration can route the cell's traffic through a separate exit.
 
 ## Artifacts
 
@@ -52,3 +52,5 @@ Inside the cell, publish regular files with `artifact`. On the host, `fetch` cop
 ## Dashboard
 
 The dashboard is a live view over the same lifecycle operations as the CLI. It shows state, resources, network permissions, tunnel health, and secret presence without displaying secret values. It can also follow DNS and firewall events to explain an egress decision. See [the dashboard](/docs/dashboard).
+
+Build contexts stay inside the cell directory. Symlinks are skipped and common credential names are excluded: `.env`, `.env.*`, `*.env`, `*.env.*`, `*.pem`, `*.key`, `*.kubeconfig`, `id_*`, `credentials`, `credentials.json`, `vpn.conf`, `.ssh`, `.aws`, `.gnupg` and `.kube`. Files ending in `.example` or `.sample` are allowed unless their name starts with `.env.`. The configured VPN file is also excluded even when it has another name. Arbitrary filenames can still contain secrets; review everything else in the context before building.

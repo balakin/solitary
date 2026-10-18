@@ -4,9 +4,11 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,7 +24,7 @@ func serve(t *testing.T, version, binary string, sum func(string) string) {
 	t.Helper()
 
 	archive := archiveOf(t, binary)
-	name := fmt.Sprintf("solitary_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	name := fmt.Sprintf("solitary_%s_%s_%s.tar.gz", version, runtime.GOOS, runtime.GOARCH)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/latest", func(w http.ResponseWriter, _ *http.Request) {
@@ -36,7 +38,17 @@ func serve(t *testing.T, version, binary string, sum func(string) string) {
 		fmt.Fprintf(w, "%s  %s\n", sum(hex.EncodeToString(digest[:])), name)
 	})
 
-	server := httptest.NewServer(mux)
+	mux.HandleFunc("/download/v"+version+"/checksums.txt.sigstore.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("fixture-signature")) })
+	server := httptest.NewTLSServer(mux)
+	previousClient, previousVerifier := http.DefaultClient, releaseVerifier
+	http.DefaultClient = server.Client()
+	releaseVerifier = func(_ context.Context, _, signature []byte) error {
+		if string(signature) != "fixture-signature" {
+			return fmt.Errorf("missing fixture signature")
+		}
+		return nil
+	}
+	t.Cleanup(func() { http.DefaultClient, releaseVerifier = previousClient, previousVerifier })
 	t.Cleanup(server.Close)
 
 	latest, download := latestURL, downloadURL
@@ -160,5 +172,28 @@ func TestInstallReportsAMissingRelease(t *testing.T) {
 
 	if err := install(t.Context(), "9.9.9", path); err == nil {
 		t.Fatal("install of a version that does not exist succeeded")
+	}
+}
+
+type roundTripper func(*http.Request) (*http.Response, error)
+
+func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// The archive is checked against a signed manifest, but a redirect to cleartext
+// is refused anyway: nothing the updater fetches has a reason to leave HTTPS.
+func TestDownloadRefusesARedirectToHTTP(t *testing.T) {
+	previous := http.DefaultClient
+	http.DefaultClient = &http.Client{Transport: roundTripper(func(r *http.Request) (*http.Response, error) {
+		status, header := http.StatusOK, make(http.Header)
+		if r.URL.Scheme == "https" {
+			status = http.StatusFound
+			header.Set("Location", "http://release.example.invalid/archive")
+		}
+		return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader("archive")), Request: r}, nil
+	})}
+	t.Cleanup(func() { http.DefaultClient = previous })
+
+	if _, err := download(context.Background(), "https://release.example.invalid/archive"); err == nil {
+		t.Error("download() followed a redirect from HTTPS to HTTP")
 	}
 }

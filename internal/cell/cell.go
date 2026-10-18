@@ -270,6 +270,11 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if inst != nil {
+		if err := lima.CheckIsolation(*inst); err != nil {
+			return fmt.Errorf("machine isolation check: %w", err)
+		}
+	}
 
 	switch {
 	case inst == nil:
@@ -428,10 +433,14 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, rebuil
 		return err
 	}
 
-	digest := podman.EnvDigest(env)
+	key, err := config.EnvKey()
+	if err != nil {
+		return err
+	}
+	digest := podman.EnvDigest(env, key)
 	devices := podman.DeviceList(c.Devices)
 	if !rebuild && state.Running && state.Image == identity && state.EnvDigest == digest &&
-		state.User == c.User && state.Devices == devices && state.ShmSize == c.VM.Memory {
+		state.User == c.User && state.Devices == devices && state.ShmSize == c.VM.Memory && state.CommandDigest == podman.CommandDigest(c.Command) {
 		return nil
 	}
 
@@ -442,6 +451,8 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, rebuil
 		fmt.Fprintln(progress, "Rebuilt; replacing the container.")
 	case state.Running && state.Image != identity:
 		fmt.Fprintln(progress, "Image changed; replacing the container.")
+	case state.Running && state.CommandDigest != podman.CommandDigest(c.Command):
+		fmt.Fprintln(progress, "Command changed; replacing the container.")
 	case state.Running && state.EnvDigest != digest:
 		// A container's environment is fixed once it is running, so secrets
 		// that changed only reach the cell by replacing it.
@@ -474,6 +485,7 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, rebuil
 		Identity: identity,
 		Command:  c.Command,
 		Env:      env,
+		EnvHash:  digest,
 		HostHome: home,
 		User:     c.User,
 		Devices:  c.Devices,
@@ -547,7 +559,7 @@ func ensureImage(name, instance string, c *config.Cell, rebuild bool, progress i
 		return c.Image, c.Image, nil
 	}
 
-	digest, err := podman.ContextDigest(c.BuildPath)
+	digest, err := podman.ContextDigest(c.BuildPath, c.Dir, c.Network.VPNPath)
 	if err != nil {
 		return "", "", err
 	}
@@ -575,7 +587,7 @@ func ensureImage(name, instance string, c *config.Cell, rebuild bool, progress i
 		case removed > 0:
 			fmt.Fprintf(progress, "Removed %d containers left behind by unfinished builds.\n", removed)
 		}
-		if err := podman.Build(instance, c.BuildPath, tag, digest, rebuild); err != nil {
+		if err := podman.Build(instance, c.BuildPath, tag, digest, rebuild, c.Dir, c.Network.VPNPath); err != nil {
 			return "", "", err
 		}
 	}

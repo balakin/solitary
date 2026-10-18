@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/config"
 )
 
 func newFetchCmd() *cobra.Command {
@@ -68,7 +69,7 @@ func listArtifacts(cmd *cobra.Command, name string) error {
 			fmt.Fprintf(w, "-\t(cannot be fetched) %s\n", artifact.Problem)
 			continue
 		}
-		fmt.Fprintf(w, "%s\t%s\n", cell.Size(artifact.Size), artifact.Name)
+		fmt.Fprintf(w, "%s\t%s\n", cell.Size(artifact.Size), config.Display(artifact.Name))
 	}
 
 	return w.Flush()

@@ -48,6 +48,7 @@ func newCloneCmd() *cobra.Command {
 			}
 
 			out, errOut := cmd.OutOrStdout(), cmd.ErrOrStderr()
+			out, errOut = displayWriter{out}, displayWriter{errOut}
 
 			// The name a cell would take is known from the source
 			// alone, so a collision is refused here rather than
@@ -144,6 +145,7 @@ func showCatalogue(out io.Writer, catalogue *clone.Catalogue) error {
 // describeStaged shows what a definition asks for, in the shape ls and the
 // dashboard show a cell that already exists.
 func describeStaged(out io.Writer, staged *clone.Staged, name string) {
+	out = displayWriter{out}
 	c := staged.Cell
 
 	image := c.Image
@@ -163,6 +165,30 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 	}
 	fmt.Fprintf(out, "  image    %s\n", image)
 	fmt.Fprintf(out, "  machine  %d cpus · %s · %s\n", c.VM.CPUs, c.VM.Memory, c.VM.Disk)
+	fmt.Fprintf(out, "  base     %s\n", c.VM.Base)
+	fmt.Fprintln(out, "  command:")
+	for _, line := range strings.Split(c.Command, "\n") {
+		fmt.Fprintf(out, "    %s\n", line)
+	}
+	user := c.User
+	if user == "" {
+		user = "image default"
+	}
+	fmt.Fprintf(out, "  user     %s\n", user)
+	resolvers := c.Network.Resolvers
+	if len(resolvers) == 0 {
+		resolvers = config.DefaultResolvers()
+	}
+	fmt.Fprintf(out, "  resolvers %s\n", strings.Join(resolvers, ", "))
+	if c.Network.UsesHostResolver() {
+		fmt.Fprintln(out, "           host DNS can see queries and is reachable outside the VPN")
+	}
+	if c.VM.Provision != "" {
+		fmt.Fprintln(out, "  provision (runs as VM root before the network policy is loaded):")
+		for _, line := range strings.Split(c.VM.Provision, "\n") {
+			fmt.Fprintf(out, "    %s\n", line)
+		}
+	}
 
 	if len(c.Secrets) > 0 {
 		// Which of them the cell can do without is part of what is being
@@ -201,12 +227,15 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 		fmt.Fprintln(out, "  gpu      renders on this host's GPU")
 	}
 
-	if c.Network.Restricted() {
+	switch {
+	case c.Network.Restricted():
 		fmt.Fprintf(out, "  network  %d allowed\n", len(c.Network.Allow))
 		for _, entry := range c.Network.Allow {
 			fmt.Fprintf(out, "           %s\n", entry)
 		}
-	} else {
+	case c.Network.VPN != "":
+		fmt.Fprintln(out, "  network  IPv4 through VPN; DNS upstreams remain reachable")
+	default:
 		fmt.Fprintln(out, "  network  unrestricted")
 	}
 
@@ -215,6 +244,13 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 	}
 
 	fmt.Fprintln(out)
+}
+
+type displayWriter struct{ io.Writer }
+
+func (w displayWriter) Write(p []byte) (int, error) {
+	_, err := io.WriteString(w.Writer, config.Display(string(p)))
+	return len(p), err
 }
 
 // wrap breaks a line of prose at width columns, on spaces. A word longer than

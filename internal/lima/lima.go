@@ -7,9 +7,12 @@ package lima
 import (
 	_ "embed"
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/balakin/solitary/internal/config"
 )
@@ -40,6 +43,8 @@ type templateData struct {
 }
 
 var funcs = template.FuncMap{
+	"quote":      strconv.Quote,
+	"shellquote": func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" },
 	// indent shifts every line of s right by n spaces, including the first,
 	// so that a multi-line script can be dropped into a YAML block scalar.
 	"indent": func(n int, s string) string {
@@ -85,6 +90,23 @@ var funcs = template.FuncMap{
 // machine's name, so that a machine can still say which cell it belongs to
 // when the definition it came from is gone.
 func Render(name string, vm config.VM, ports []int, network config.Network) (string, error) {
+	if err := config.ValidateName(name); err != nil {
+		return "", err
+	}
+	if err := vm.Validate(); err != nil {
+		return "", err
+	}
+	if err := network.Validate(); err != nil {
+		return "", err
+	}
+	if err := checkGlobalConfig(); err != nil {
+		return "", err
+	}
+	for _, port := range ports {
+		if port < 1 || port > 65535 {
+			return "", fmt.Errorf("invalid port %d", port)
+		}
+	}
 	tmpl, err := template.New("cell").Funcs(funcs).Parse(cellTemplate)
 	if err != nil {
 		return "", fmt.Errorf("parsing embedded template: %w", err)
@@ -93,6 +115,19 @@ func Render(name string, vm config.VM, ports []int, network config.Network) (str
 	var out strings.Builder
 	if err := tmpl.Execute(&out, templateData{Name: name, VM: vm, Ports: ports, Network: network}); err != nil {
 		return "", fmt.Errorf("rendering machine definition: %w", err)
+	}
+	var rendered map[string]any
+	if err := yaml.Unmarshal([]byte(out.String()), &rendered); err != nil {
+		return "", fmt.Errorf("invalid rendered definition: %w", err)
+	}
+	allowed := map[string]bool{"minimumLimaVersion": true, "base": true, "cpus": true, "memory": true, "disk": true, "mounts": true, "containerd": true, "propagateProxyEnv": true, "param": true, "provision": true, "probes": true, "portForwards": true}
+	for key := range rendered {
+		if !allowed[key] {
+			return "", fmt.Errorf("unexpected rendered Lima property %q", key)
+		}
+	}
+	if err := checkDefinition(out.String()); err != nil {
+		return "", err
 	}
 
 	return out.String(), nil

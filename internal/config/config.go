@@ -118,6 +118,7 @@ type Cell struct {
 	// BuildPath is Build resolved against the cell's directory. It is filled
 	// in by LoadCell rather than read from the file.
 	BuildPath string `yaml:"-"`
+	Dir       string `yaml:"-"`
 }
 
 // Tag is the image reference a built cell produces. Podman qualifies locally
@@ -276,8 +277,8 @@ type VM struct {
 // Network says what a cell is allowed to reach.
 //
 // An empty Allow leaves the cell's network alone: it reaches whatever the host
-// reaches. Setting it turns the cell default-deny — nothing leaves except to
-// what is listed, the host and the local network included.
+// reaches. An allow list limits destination IPv4 addresses, including those
+// of the host and local network. VPN-only cells also get a kill switch.
 type Network struct {
 	// Resolvers are the DNS servers the cell's own resolver forwards to.
 	//
@@ -285,8 +286,7 @@ type Network struct {
 	// "host" means the resolver the machine is given by its network, which
 	// is the host's — the answer for a network whose names only its own
 	// resolver knows, or where reaching a public one is blocked outright.
-	// It is the one hole in VM→host isolation, and a narrow one: the
-	// cell's resolver alone, on port 53.
+	// This permits the VM resolver to contact a host service on port 53.
 	Resolvers []string `yaml:"resolvers,omitempty"`
 
 	// VPN is a wg-quick configuration file, as a path relative to the cell's
@@ -312,7 +312,7 @@ type Network struct {
 	// happens to use, so "objects.githubusercontent.com" has to be listed
 	// too. An entry that parses as an IPv4 address or CIDR block is used as
 	// given; an IPv6 one is refused, since a cell's machine has no IPv6
-	// route to reach it through.
+	// route guaranteed to reach it through.
 	Allow []string `yaml:"allow,omitempty"`
 }
 
@@ -363,8 +363,8 @@ func (n Network) UsesHostResolver() bool {
 // gives it, which is link-local to that network — so queries to it keep taking
 // the interface the tunnel replaced, by design, rather than going through it.
 // The cell's traffic leaves from somewhere else, but every name it looks up is
-// still read by whoever runs that resolver. It also reopens the one hole in
-// VM→host isolation.
+// still read by whoever runs that resolver. It also permits DNS access to a
+// host service.
 //
 // It is not refused: a network whose names only its own resolver knows is a
 // real thing to be on, and pairing it with a tunnel for everything else is a
@@ -392,12 +392,20 @@ func (n Network) validateResolvers() error {
 	return nil
 }
 
-// validateAllow refuses an IPv6 entry. A domain is left alone: what it resolves
-// to is the resolver's business, and it answers with A records only.
+// validateAllow accepts only IPv4 addresses/CIDRs and safe ASCII DNS names.
 func (n Network) validateAllow() error {
 	for _, entry := range n.Allow {
 		if ipv6(entry) {
 			return fmt.Errorf("network.allow: %q is an IPv6 address, which a cell cannot reach: %s", entry, noIPv6)
+		}
+		if ip := net.ParseIP(entry); ip != nil {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(entry); err == nil {
+			continue
+		}
+		if !ValidDomain(entry) {
+			return fmt.Errorf("network.allow: %q is not an IPv4 address, CIDR, or DNS name", entry)
 		}
 	}
 
@@ -406,7 +414,7 @@ func (n Network) validateAllow() error {
 
 // noIPv6 is why an IPv6 entry is refused rather than rendered, said the same
 // way wherever one turns up.
-const noIPv6 = "a cell's machine has no IPv6 route, and its firewall holds IPv4 addresses only"
+const noIPv6 = "restricted cells enforce an IPv4-only egress policy; their firewall drops IPv6"
 
 // ipv6 reports whether an entry is an IPv6 address or an IPv6 CIDR block.
 //
@@ -424,7 +432,7 @@ func ipv6(entry string) bool {
 	return ip != nil && ip.To4() == nil
 }
 
-// Restricted reports whether this network is default-deny.
+// Restricted reports whether this network has a destination allow list.
 func (n Network) Restricted() bool {
 	return len(n.Allow) > 0
 }
@@ -651,8 +659,13 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 		return nil, fmt.Errorf("%s: set image or build, not both", path)
 	}
 	if cell.Build != "" {
-		cell.BuildPath = filepath.Join(dir, cell.Build)
+		var err error
+		cell.BuildPath, err = LocalPath(dir, cell.Build)
+		if err != nil {
+			return nil, fmt.Errorf("build: %w", err)
+		}
 	}
+	cell.Dir = dir
 	if cell.Command == "" {
 		cell.Command = DefaultCommand
 	}
@@ -681,6 +694,9 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 		return nil, err
 	}
 	cell.VM = Resolve(cell.VM, user.VM, Defaults())
+	if err := cell.VM.Validate(); err != nil {
+		return nil, err
+	}
 	if cell.GPU {
 		// Only a preference, and possibly an empty one: whether the host
 		// has a GPU to give is answered when the cell starts.
@@ -695,7 +711,10 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if cell.Network.VPN != "" {
-		cell.Network.VPNPath = filepath.Join(dir, cell.Network.VPN)
+		cell.Network.VPNPath, err = LocalPath(dir, cell.Network.VPN)
+		if err != nil {
+			return nil, fmt.Errorf("network.vpn: %w", err)
+		}
 		if tunnel {
 			cell.Network.Tunnel, err = ReadTunnel(cell.Network.VPNPath)
 			if err != nil {

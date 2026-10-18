@@ -38,19 +38,19 @@ const controls: { icon: LucideIcon; title: string; text: string; href: string }[
   {
     icon: ShieldBan,
     title: 'Default-deny egress',
-    text: 'List the domains a cell may reach and it reaches nothing else — not the rest of the internet, not your machine, not your local network.',
+    text: 'Limit outgoing connections to addresses resolved for allowed domains. Host and local addresses are refused unless allowed; names sharing an IP share access.',
     href: '/docs/guides-network-policy',
   },
   {
     icon: Waypoints,
     title: 'A VPN with a kill switch',
-    text: 'Point a cell at a WireGuard config and everything it reaches leaves through that tunnel. With the tunnel down, nothing leaves at all.',
+    text: 'Route application traffic through WireGuard. If the tunnel goes down, application egress stops. The VM resolver can still reach configured DNS upstreams.',
     href: '/docs/guides-vpn',
   },
   {
     icon: KeyRound,
     title: 'Secrets whitelisted per cell',
-    text: 'A cell receives the names it declares and nothing else. The values stay on the host, so a cell you destroy is one you can rebuild already authenticated.',
+    text: 'A cell receives only the secrets it declares. The source file stays on the host; selected values enter the container and remain available when you rebuild.',
     href: '/docs/guides-secrets',
   },
   {

@@ -194,7 +194,7 @@ A GPU is authority in the way a device is, and more of it: what the cell renders
 
 Each entry under `resolvers` must be an IPv4 address or the literal `host`; anything else is refused when the cell is read.
 
-IPv6 is refused throughout — in `allow`, in `resolvers`, and as a tunnel's `Endpoint`. A cell's machine has no IPv6 route, so such an address was never reachable; it is named when the cell is read rather than left to fail as a machine that cannot be reached. See [networking](/docs/networking) and [routing a cell through a VPN](/docs/guides-vpn).
+IPv6 entries are refused in `allow`, `resolvers`, and a tunnel's `Endpoint`. Restricted and VPN-only cells drop non-loopback IPv6 packets. Unrestricted VMs may have an IPv6 route. See [networking](/docs/networking) and [routing a cell through a VPN](/docs/guides-vpn).
 
 ## The machine
 
@@ -233,3 +233,13 @@ git:
 A cell has nowhere of its own to keep a git identity: nothing is mounted from the host, and anything configured by hand inside a cell is gone when it is rebuilt. So `git:` is passed in as environment variables, which git reads ahead of any config file. Git wants an author and a committer, each with a name and an email, and has no single setting for both — solitary fills in all four from these two fields.
 
 Write it once in `config.yaml` and every cell commits as you.
+
+### Input and boundary checks
+
+`vm.base` is an image template name containing letters, digits, dots, underscores or dashes. `build` and `network.vpn` must be relative paths inside the cell directory; symlink components are refused. Build reads remain confined to that directory.
+
+Allow entries must be IPv4 addresses/CIDRs or ASCII DNS names with labels of at most 63 characters, up to 253 characters overall. Punycode names, private single-label names and an optional trailing dot are supported. Tunnel endpoint ports must be integers from 1 to 65535. WireGuard shell hooks and `SaveConfig` are refused; the latter could overwrite the managed configuration.
+
+A forwarded localhost service is reachable by other local users and processes. Browser reachability also depends on browser and service protections. Require authentication on editors, terminals and other privileged services.
+
+Solitary rejects nonempty Lima `_config/default.yaml` and `_config/override.yaml` settings because Lima can merge host mounts into an empty mounts list. Use a separate `LIMA_HOME` for cells if other Lima machines require global settings. `solitary doctor` checks stored cell definitions for unsafe mounts, copy rules, networks and forwards.

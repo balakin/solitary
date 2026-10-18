@@ -55,9 +55,11 @@ image: docker.io/library/ubuntu:24.04
 #     description: pushing branches and opening pull requests
 
 # What this cell may reach. Leave it out and the cell reaches whatever the host
-# reaches. Set it and nothing leaves except to what is listed — the host and the
-# local network included. A domain covers its subdomains; a site's other domains
+# reaches, including host services. Set it to limit destination IPv4 addresses,
+# including host and local addresses. A domain covers its subdomains; other domains
 # have to be listed themselves, as does the registry an image is pulled from.
+# Names sharing an allowed IP share access. Configured DNS upstreams remain
+# reachable by the VM resolver; VM loopback is shared with the container.
 #
 # network:
 #   resolvers:        # optional; defaults to 1.1.1.1 and 8.8.8.8.
@@ -72,7 +74,9 @@ image: docker.io/library/ubuntu:24.04
 # provider gives you, saved beside this file and left out of anything you
 # publish: it holds a private key, which is yours rather than the cell's.
 # Nothing else changes — the allow list is enforced the same way, except that
-# with the tunnel down nothing leaves at all.
+# with the tunnel down application egress is blocked. Resolver requests to DNS
+# upstreams remain permitted for tunnel bootstrap. A VPN also gets this kill
+# switch without an allow list.
 #
 #   vpn: ./vpn.conf
 

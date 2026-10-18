@@ -5,7 +5,7 @@
 minimumLimaVersion: 2.0.0
 
 base:
-  - template:_images/ubuntu-lts
+  - "template:_images/ubuntu-lts"
 
 cpus: 4
 memory: "8GiB"
@@ -16,6 +16,9 @@ disk: "40GiB"
 # path back to files the host executes (git hooks, package scripts, .envrc).
 # Do not add mounts.
 mounts: []
+containerd:
+  system: false
+  user: false
 
 # Host proxy configuration can name internal hosts and carry credentials.
 propagateProxyEnv: false
@@ -43,17 +46,14 @@ provision:
     script: |
       #!/bin/bash
       set -eux -o pipefail
+      command -v python3 >/dev/null 2>&1 || apt-get install -y python3
       command -v podman >/dev/null 2>&1 && exit 0
       export DEBIAN_FRONTEND=noninteractive
       apt-get update
       apt-get install -y podman uidmap slirp4netns fuse-overlayfs
 
   - mode: system
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      apt-get update
-      apt-get install -y build-essential
+    script: "#!/bin/bash\nset -eux -o pipefail\napt-get update\napt-get install -y build-essential"
 
   # network.vpn is not set, so this cell sends its traffic the way it came.
   #

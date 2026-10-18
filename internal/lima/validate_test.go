@@ -49,3 +49,24 @@ func TestRenderedDefinitionsPassLimactlValidate(t *testing.T) {
 		})
 	}
 }
+
+// Lima merges default.yaml and override.yaml into every machine it creates, so
+// either one can add the host mounts a cell is defined without. Render refuses
+// to work under a LIMA_HOME that has them rather than trust what they say.
+func TestRenderRefusesGlobalLimaSettings(t *testing.T) {
+	for _, name := range []string{"default.yaml", "override.yaml"} {
+		t.Run(name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("LIMA_HOME", home)
+			if err := os.MkdirAll(filepath.Join(home, "_config"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(home, "_config", name), []byte("mounts:\n  - location: /tmp\n    writable: true\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Render(goldenCell, config.Defaults(), nil, config.Network{}); err == nil {
+				t.Errorf("Render() accepted a LIMA_HOME with %s", name)
+			}
+		})
+	}
+}

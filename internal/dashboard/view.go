@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/config"
 )
 
 func (m model) View() string {
@@ -171,7 +172,7 @@ func (m model) about() []string {
 	}
 
 	var lines []string
-	wrapped := lipgloss.NewStyle().Width(descriptionWidth).Render(m.detail.Description)
+	wrapped := lipgloss.NewStyle().Width(descriptionWidth).Render(config.Display(m.detail.Description))
 	for i, line := range strings.Split(wrapped, "\n") {
 		// lipgloss pads every line out to the width it wrapped at, and
 		// the padding would sit under the pane's border as trailing
@@ -196,14 +197,18 @@ const networkPreview = 4
 // is a security control, so a cell that restricts nothing has to be as plain to
 // read as one that does — the absence is the thing worth noticing.
 func (m model) network() []string {
-	if !m.detail.Network.Restricted() {
+	if !m.detail.Network.Restricted() && m.detail.Network.Tunnel == nil {
 		return []string{field("network", statusStyle(cell.StatusDegraded).Render("unrestricted"))}
 	}
 
 	allow := m.detail.Network.Allow
 	summary := fmt.Sprintf("%d allowed", len(allow))
 	if m.detail.Network.Tunnel != nil {
-		summary += " · tunnel"
+		if len(allow) == 0 {
+			summary = "IPv4 through tunnel"
+		} else {
+			summary += " · tunnel"
+		}
 	}
 	lines := []string{field("network", noticeStyle.Render(summary))}
 
@@ -223,7 +228,7 @@ func (m model) network() []string {
 
 // vpn is where the cell's traffic leaves from, and whether it is leaving at
 // all. Configured and up are separate facts and the gap between them is the
-// one worth seeing: a cell whose tunnel is down reaches nothing.
+// one worth seeing: a cell whose tunnel is down loses application egress.
 func (m model) vpn() []string {
 	tunnel := m.detail.Network.Tunnel
 	if tunnel == nil {
@@ -246,7 +251,7 @@ func (m model) vpn() []string {
 
 	case !m.tunnel.Up:
 		return []string{
-			field("vpn", errorStyle.Render("down — this cell reaches nothing")),
+			field("vpn", errorStyle.Render("down — application egress blocked")),
 			field("", valueStyle.Render(endpoint)),
 		}
 
@@ -294,7 +299,7 @@ func ago(d time.Duration) string {
 
 // networkBody is the whole allow list, for when the preview is not enough.
 func (m model) networkBody() string {
-	if !m.detail.Network.Restricted() {
+	if !m.detail.Network.Restricted() && m.detail.Network.Tunnel == nil {
 		return valueStyle.Render("This cell reaches whatever the host reaches.") + "\n" +
 			labelStyle.Render("Restrict it with network.allow in its cell.yaml.")
 	}
@@ -303,12 +308,15 @@ func (m model) networkBody() string {
 	for _, entry := range m.detail.Network.Allow {
 		rows = append(rows, "  "+valueStyle.Render(entry))
 	}
-	rows = append(rows, "", labelStyle.Render("Everything else is refused, including the host."))
+	if m.detail.Network.Restricted() {
+		rows = append(rows, "", labelStyle.Render("Other destination addresses are refused; shared IPs share access."))
+	}
 	if tunnel := m.detail.Network.Tunnel; tunnel != nil {
 		rows = append(rows,
 			labelStyle.Render("And what is allowed is reached only through the tunnel to ")+
 				valueStyle.Render(tunnel.EndpointHost)+labelStyle.Render(","),
-			labelStyle.Render("so while that is down, nothing leaves at all."),
+			labelStyle.Render("so while that is down, application egress is blocked."),
+			labelStyle.Render("Resolver traffic to configured DNS upstreams remains permitted."),
 			"")
 		rows = append(rows, m.vpn()...)
 	}
@@ -334,7 +342,7 @@ func (m model) trafficBody() string {
 		if m.stream == nil {
 			return labelStyle.Render("Waiting for the machine's log…")
 		}
-		if !m.detail.Network.Restricted() {
+		if !m.detail.Network.Restricted() && m.detail.Network.Tunnel == nil {
 			return valueStyle.Render("Nothing is logged for this cell.") + "\n" +
 				labelStyle.Render("Traffic is recorded where it is filtered; set network.allow to see it.")
 		}
@@ -365,7 +373,7 @@ func (m model) trafficRows() []string {
 		line := fmt.Sprintf("%s %s %s",
 			labelStyle.Render(row.entry.At),
 			trafficStyle(row.entry.Kind).Render(fmt.Sprintf("%-8s", string(row.entry.Kind))),
-			valueStyle.Render(row.entry.Detail),
+			valueStyle.Render(config.Display(row.entry.Detail)),
 		)
 		if row.count > 1 {
 			line += labelStyle.Render(fmt.Sprintf(" ×%d", row.count))
@@ -503,7 +511,7 @@ func (m model) secretsBody() string {
 		// What the secret is for, under the name it belongs to, so a
 		// value can be found before it is asked for.
 		if s.Description != "" {
-			rows = append(rows, fmt.Sprintf("  %s  %s", strings.Repeat(" ", width), labelStyle.Render(s.Description)))
+			rows = append(rows, fmt.Sprintf("  %s  %s", strings.Repeat(" ", width), labelStyle.Render(config.Display(s.Description))))
 		}
 	}
 

@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestResolvePrefersMostSpecificLayer(t *testing.T) {
@@ -474,5 +476,65 @@ func TestCellDevicesAreEmptyByDefault(t *testing.T) {
 	}
 	if len(cell.Devices) != 0 {
 		t.Errorf("Devices = %q, want none", cell.Devices)
+	}
+}
+
+// An allow entry ends up in the VM's provisioning script and its firewall, so
+// anything that is neither a DNS name nor an address is refused before it gets
+// that far.
+func TestNetworkRefusesWhatIsNeitherADomainNorAnAddress(t *testing.T) {
+	isolate(t)
+
+	for _, entry := range []string{"$(id)", "example.com;true", "#", "/", "-x", "a\nb"} {
+		t.Run(entry, func(t *testing.T) {
+			data, err := yaml.Marshal(map[string]any{"image": "ubuntu:24.04", "network": map[string]any{"allow": []string{entry}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := CheckCell(data, t.TempDir()); err == nil {
+				t.Errorf("CheckCell() accepted allow entry %q", entry)
+			}
+		})
+	}
+}
+
+func TestValidDomain(t *testing.T) {
+	for _, domain := range []string{"example.com", "EXAMPLE.COM.", "internal", "xn--bcher-kva.example"} {
+		if !ValidDomain(domain) {
+			t.Errorf("ValidDomain(%q) = false, want true", domain)
+		}
+	}
+	for _, domain := range []string{"$(id)", "a;true", "a\nb", "a/b", "-x", "a..b", "a b", "."} {
+		if ValidDomain(domain) {
+			t.Errorf("ValidDomain(%q) = true, want false", domain)
+		}
+	}
+}
+
+// A definition can come from someone else's repository, so every path in it is
+// held to its own directory and the VM base to a single template name: one
+// line, no traversal, no symlink out.
+func TestCheckCellRefusesWhatReachesOutsideTheDefinition(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	dir, outside := t.TempDir(), t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dir, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []map[string]any{
+		{"image": "ubuntu", "vm": map[string]any{"base": "ubuntu-lts\ncopyToHost: []"}},
+		{"image": "ubuntu", "vm": map[string]any{"base": "../custom"}},
+		{"build": "../Containerfile"},
+		{"build": "../../elsewhere/Containerfile"},
+		{"build": "linked/Containerfile"},
+		{"image": "ubuntu", "network": map[string]any{"vpn": "../vpn.conf"}},
+	} {
+		data, err := yaml.Marshal(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := CheckCell(data, dir); err == nil {
+			t.Errorf("CheckCell() accepted %s", data)
+		}
 	}
 }

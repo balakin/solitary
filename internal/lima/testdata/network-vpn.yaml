@@ -5,7 +5,7 @@
 minimumLimaVersion: 2.0.0
 
 base:
-  - template:_images/ubuntu-lts
+  - "template:_images/ubuntu-lts"
 
 cpus: 2
 memory: "4GiB"
@@ -16,6 +16,9 @@ disk: "20GiB"
 # path back to files the host executes (git hooks, package scripts, .envrc).
 # Do not add mounts.
 mounts: []
+containerd:
+  system: false
+  user: false
 
 # Host proxy configuration can name internal hosts and carry credentials.
 propagateProxyEnv: false
@@ -43,6 +46,7 @@ provision:
     script: |
       #!/bin/bash
       set -eux -o pipefail
+      command -v python3 >/dev/null 2>&1 || apt-get install -y python3
       command -v podman >/dev/null 2>&1 && exit 0
       export DEBIAN_FRONTEND=noninteractive
       apt-get update
@@ -228,13 +232,13 @@ provision:
       no-resolv
       no-hosts
       cache-size=1000
+      max-cache-ttl=60
       local=/#/
-      # A machine has no IPv6 route, so an AAAA answer only sends a client
-      # down a path that cannot work — and it would need a second set the
-      # resolver has to keep in step with this one.
+      # Restricted and VPN-only cells enforce IPv4 egress; avoid returning
+      # addresses the firewall refuses.
       filter-AAAA
       DNSMASQ
-      for domain in github.com; do
+      for domain in 'github.com' ; do
         for resolver in $resolvers; do
           echo "server=/$domain/$resolver"
         done
@@ -281,11 +285,8 @@ provision:
 
       table inet solitary {
         # Filled in by the resolver as it answers for the allowed names.
-        # Without an expiry: a program that resolves a name once and keeps the
-        # address — a connection pool, an NTP client — would otherwise work at
-        # first and be refused later, which is a worse thing to debug than the
-        # addresses of an allowed name staying reachable while the cell runs.
-        set allowed4 { type ipv4_addr; }
+        # Grants expire after one hour. Clients must refresh DNS after expiry.
+        set allowed4 { type ipv4_addr; flags timeout; timeout 1h; size 65536; }
 
         # Addresses the cell was configured with directly.
         set static4 { type ipv4_addr; flags interval;
@@ -302,14 +303,23 @@ provision:
         set vpn4 { type ipv4_addr;
         }
 
+        # Remember connections initiated through Lima's host-facing network.
+        # Replies to inbound VPN connections must stay in the tunnel too.
+        chain input {
+          type filter hook input priority filter; policy accept;
+          iifname != "vpn0" ct direction original ct mark set 0x534f4c
+        }
+
         chain output {
           type filter hook output priority filter; policy drop;
 
-          ct state established,related accept
           oifname "lo" accept
-
-          # Answers to whatever reached the cell from the host.
-          ct state new tcp sport 22 accept
+          meta nfproto ipv6 drop
+          # Keep replies to host-initiated connections, including Lima SSH.
+          # Cell-initiated connections must still leave through the tunnel,
+          # even after conntrack has marked them established.
+          ct mark 0x534f4c ct direction reply ct state established,related accept
+          oifname "vpn0" ct state established,related accept
 
           # Not limited to the tunnel, unlike everything below: the peer's own
           # name has to be resolved before there is a tunnel to resolve it
@@ -321,7 +331,7 @@ provision:
           ip daddr 127.0.0.1 tcp dport 53 accept
 
           # Keeping the address the machine was given.
-          udp dport { 67, 68 } accept
+          meta nfproto ipv4 meta skuid { 0, @DHCP_UID@ } udp sport 68 udp dport 67 accept
 
           # Making the tunnel. This is the only thing the cell sends that
           # does not go through it.
@@ -333,10 +343,6 @@ provision:
           oifname "vpn0" ip daddr @allowed4 accept
           oifname "vpn0" ip daddr @static4 accept
 
-          # The machine has no IPv6 route, so its neighbour and router
-          # discovery goes nowhere. Dropped without a line each time.
-          ip6 daddr ff00::/8 drop
-
           # Everything else, the host and the local network included. Logged
           # first: a refusal nobody can see is indistinguishable from a bug,
           # and what a cell tried to reach is worth knowing. Rate-limited so
@@ -347,6 +353,8 @@ provision:
       }
       NFT
 
+      dhcp_uid=$(id -u systemd-network 2>/dev/null || printf 0)
+      sed -i "s/@DHCP_UID@/$dhcp_uid/g" /etc/nftables.conf
       systemctl enable --now nftables
       nft -f /etc/nftables.conf
 
@@ -355,6 +363,13 @@ provision:
       for resolver in $resolvers; do
         nft add element inet solitary upstream "{ $resolver }"
       done
+      mkdir -p /etc/systemd/system/dnsmasq.service.d
+      cat > /etc/systemd/system/dnsmasq.service.d/log-limit.conf <<'UNIT'
+      [Service]
+      LogRateLimitIntervalSec=30s
+      LogRateLimitBurst=1000
+      UNIT
+      systemctl daemon-reload
       systemctl enable dnsmasq
       systemctl restart dnsmasq
 

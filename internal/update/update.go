@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -38,9 +39,12 @@ const (
 // Endpoints are variables rather than constants so tests can serve them
 // locally: everything below is otherwise one round trip to github.com.
 var (
-	latestURL   = "https://api.github.com/repos/" + repo + "/releases/latest"
-	downloadURL = "https://github.com/" + repo + "/releases/download"
+	latestURL       = "https://api.github.com/repos/" + repo + "/releases/latest"
+	downloadURL     = "https://github.com/" + repo + "/releases/download"
+	releaseVerifier = verifyRelease
 )
+
+var releaseVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
 
 // ErrManaged is returned when the running binary belongs to a package manager,
 // which has to be the one to replace it.
@@ -55,7 +59,7 @@ func Latest(ctx context.Context) (string, error) {
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := secureClient().Do(req)
 	if err != nil {
 		return "", fmt.Errorf("asking github for the latest release: %w", err)
 	}
@@ -71,7 +75,7 @@ func Latest(ctx context.Context) (string, error) {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&release); err != nil {
 		return "", fmt.Errorf("reading the latest release: %w", err)
 	}
-	if release.Tag == "" {
+	if !releaseVersion.MatchString(strings.TrimPrefix(release.Tag, "v")) {
 		return "", errors.New("reading the latest release: no tag in the answer")
 	}
 
@@ -95,6 +99,9 @@ func Install(ctx context.Context, version string) error {
 // install is Install once the binary to replace is known, which is what tests
 // vary: the one Install picks is the test binary itself.
 func install(ctx context.Context, version, path string) error {
+	if !releaseVersion.MatchString(version) {
+		return fmt.Errorf("invalid release version %q", version)
+	}
 	dir := filepath.Dir(path)
 	// Writability is checked by writing, since that is the only answer that
 	// counts, and the staged file has to live here anyway: a rename is only
@@ -106,7 +113,7 @@ func install(ctx context.Context, version, path string) error {
 	}
 	defer os.Remove(staged.Name()) // a no-op once the rename below succeeded
 
-	name := fmt.Sprintf("solitary_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	name := fmt.Sprintf("solitary_%s_%s_%s.tar.gz", version, runtime.GOOS, runtime.GOARCH)
 	base := downloadURL + "/v" + version
 
 	archive, err := download(ctx, base+"/"+name)
@@ -123,6 +130,14 @@ func install(ctx context.Context, version, path string) error {
 	if err := verify(archive, sums, name); err != nil {
 		staged.Close()
 		return err
+	}
+	signature, err := download(ctx, base+"/checksums.txt.sigstore.json")
+	if err == nil {
+		err = releaseVerifier(ctx, sums, signature)
+	}
+	if err != nil {
+		staged.Close()
+		return fmt.Errorf("verifying signed release (unsigned releases are not accepted): %w", err)
 	}
 
 	if err := extract(archive, staged); err != nil {
@@ -174,7 +189,10 @@ func download(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("preparing the download: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	if req.URL.Scheme != "https" {
+		return nil, errors.New("release downloads require HTTPS")
+	}
+	resp, err := secureClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("downloading %s: %w", url, err)
 	}
@@ -192,8 +210,8 @@ func download(ctx context.Context, url string) ([]byte, error) {
 	return body, nil
 }
 
-// verify checks the archive against the published checksum. It is the only
-// thing standing between a release download and whatever answered the request.
+// verify checks the archive against the checksum manifest. install also
+// authenticates that manifest before extracting or publishing the binary.
 func verify(archive, sums []byte, name string) error {
 	sum := sha256.Sum256(archive)
 	got := hex.EncodeToString(sum[:])

@@ -65,7 +65,7 @@ The [examples](/docs/guides-examples) turn the self-updaters off in their images
 
 The container runs with `--network host`. The machine is the boundary, so there is no reason to put a second one between the container and the machine it lives in; ports reach the host through Lima's forwarding.
 
-A container's identity is recorded in two labels: the image as written in `cell.yaml`, and a digest of the environment it was started with. `up` compares both and replaces the container when either has moved, which is why changing a secret or an image needs no separate command.
+A container records its image, command digest, keyed environment digest, user, devices and shared-memory size. `up` compares these settings and replaces the container when one changes.
 
 ## Authority
 
@@ -76,6 +76,6 @@ A cell receives authority in named pieces:
 - `network.allow` controls which destinations the cell can reach.
 - `image` or `build` determines which code is trusted inside the cell.
 
-A cell also **cannot open a browser on your machine**. It has no path to the host at all, so a sign-in that works by launching one has nothing to launch, whatever the image happens to contain. Authenticate on the host instead and pass the credential in under `secrets`.
+A cell has no integration that launches a host browser. Open a displayed sign-in URL yourself, or authenticate on the host and pass the credential in under `secrets`. Unrestricted networking can still reach host services; browser integration and network isolation are separate permissions.
 
 The configuration should make those decisions reviewable before the cell runs. Because values are separated from names, the definition can be committed and shared as a reusable workflow without sharing credentials, and taken with [`solitary clone`](/docs/sharing).
