@@ -143,4 +143,6 @@ RUN for ext in \
 COPY skel/ /opt/cell-skel/
 COPY cell-init /usr/local/bin/cell-init
 COPY seed-extensions /usr/local/bin/seed-extensions
-RUN chmod 755 /usr/local/bin/cell-init /usr/local/bin/seed-extensions
+COPY editor-url /usr/local/bin/editor-url
+RUN chmod 755 /usr/local/bin/cell-init /usr/local/bin/seed-extensions \
+    /usr/local/bin/editor-url

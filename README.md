@@ -106,8 +106,8 @@ An editor in a cell, from nothing:
 ```sh
 solitary clone balakin/solitary/examples/vscode
 solitary up vscode --detach
-limactl shell solitary-vscode podman logs solitary
-# Open the URL with its connection token printed in the server log.
+solitary exec vscode editor-url
+# Open the URL it prints: the editor requires its connection token.
 ```
 
 That is VS Code with Claude Code beside it, running in the cell and reached

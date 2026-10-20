@@ -129,7 +129,7 @@ The dashboard reports the same thing in the cell's detail view. Editing the scri
 
 ## The editor will not open without a token
 
-The `vscode` example cell requires a connection token, so `http://localhost:9797` on its own is refused. Run `limactl shell solitary-vscode podman logs solitary` and open the `?tkn=` URL it prints, or read the token from `~/.openvscode-server/connection-token` inside the cell and add it to the address yourself. The token is created the first time the cell starts and kept in its home, so it survives a stop and start, a new image, `up --rebuild` and a rotated secret. Only `solitary rm` changes it, or deleting the file: the next start creates a new one, and a bookmarked URL stops working. Authentication stays on even though the port reaches host localhost only: other users and processes on the host can reach it too.
+The `vscode` example cell requires a connection token, so `http://localhost:9797` on its own is refused. `solitary exec vscode editor-url` prints the address with the token in it. The token itself is `~/.openvscode-server/connection-token` inside the cell. The token is created the first time the cell starts and kept in its home, so it survives a stop and start, a new image, `up --rebuild` and a rotated secret. Only `solitary rm` changes it, or deleting the file: the next start creates a new one, and a bookmarked URL stops working. Authentication stays on even though the port reaches host localhost only: other users and processes on the host can reach it too.
 
 ## Permission denied inside a cell
 

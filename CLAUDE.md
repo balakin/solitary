@@ -120,6 +120,13 @@ So site-only work has to be committed on its own; the moment the same commit als
 or `.github/workflows/pages.yml` it becomes a release trigger, and prose about the site belongs in
 its own `docs:` commit anyway.
 
+Changes to `examples/` are typed `docs`, never `feat` or `fix`, even when they add a script to an
+image. `solitary clone` takes an example from the default branch rather than from a tag, so an
+example reaches people the moment it merges and no release carries it — the binary a release ships
+is the same one as before. `docs` cannot keep it out of a release, since nothing outside `website/`
+can, but it keeps the bump to a patch and keeps a changelog line about a file the binary does not
+contain out of the changelog.
+
 Pull requests are merged with a merge commit, so the changelog is composed from the commits on the
 branch: every one of them has to be a well-formed Conventional Commit, and every one of them becomes
 its own changelog line. The merge commit is the trap. Its title is GitHub's own `MERGE_MESSAGE`

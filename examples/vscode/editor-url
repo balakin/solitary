@@ -1,0 +1,27 @@
+#!/bin/sh
+# Print the address the editor opens at, connection token included.
+#
+# Both halves are read from the running server's own arguments rather than
+# written here: the port is already named twice in cell.yaml, in --port and in
+# ports:, and a third copy would be the one nobody remembers to move. The
+# forward keeps the number, so the port the server listens on is the one the
+# host opens.
+set -eu
+
+for cmdline in /proc/[0-9]*/cmdline; do
+	args=$(tr '\0' '\n' < "$cmdline" 2>/dev/null) || continue
+	case "$args" in
+	*--connection-token-file*) ;;
+	*) continue ;;
+	esac
+
+	port=$(printf '%s\n' "$args" | sed -n '/^--port$/{n;p;q;}')
+	token_file=$(printf '%s\n' "$args" | sed -n '/^--connection-token-file$/{n;p;q;}')
+	[ -n "$port" ] && [ -n "$token_file" ] || continue
+
+	echo "http://localhost:$port/?tkn=$(cat "$token_file")"
+	exit 0
+done
+
+echo "editor-url: the editor is not running" >&2
+exit 1
