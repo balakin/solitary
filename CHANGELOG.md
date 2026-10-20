@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.4](https://github.com/balakin/solitary/compare/v0.16.3...v0.16.4) (2026-10-20)
+
+
+### Bug Fixes
+
+* keep resolved addresses allowed until the cell reboots ([d178d29](https://github.com/balakin/solitary/commit/d178d2970f6a98eed8117112324a11ac3847d228))
+
 ## [0.16.3](https://github.com/balakin/solitary/compare/v0.16.2...v0.16.3) (2026-10-18)
 
 
