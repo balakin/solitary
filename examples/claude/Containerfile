@@ -10,8 +10,16 @@ ARG NVIM_VERSION=v0.12.5
 ARG LAZYGIT_VERSION=0.64.1
 ARG WORKMUX_VERSION=v0.1.247
 ARG GH_VERSION=2.98.0
+ARG TMUX_VERSION=3.7c
+ARG CATPPUCCIN_TMUX_VERSION=v2.3.0
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+# Without this the image has no locale at all, and every terminal program falls
+# back to ASCII: tmux rewrites each wide character as an underscore, so the
+# theme's rounded pills and workmux's status glyphs arrive mangled. C.UTF-8 is
+# built into glibc, so it needs no locale package.
+ENV LANG=C.UTF-8
 ENV NVM_DIR=/opt/nvm
 # /opt/nvm/current is a symlink this file creates. It keeps node on PATH for
 # `solitary exec`, which runs a command in a non-interactive shell where nvm's
@@ -40,8 +48,9 @@ RUN apt-get update \
       git \
       jq \
       less \
+      ncurses-term \
+      procps \
       ripgrep \
-      tmux \
       unzip \
       xz-utils \
  && rm -rf /var/lib/apt/lists/*
@@ -128,6 +137,42 @@ RUN arch="$(uname -m)" \
  && install -m755 "/tmp/gh_${GH_VERSION}_linux_${gh_arch}/bin/gh" /usr/local/bin/gh \
  && rm -rf /tmp/gh.tar.gz /tmp/gh.sha256 "/tmp/gh_${GH_VERSION}_linux_${gh_arch}" \
  && gh --version
+
+# tmux, built from source. Ubuntu ships 3.4, which does not know
+# extended-keys-format; tmux stops reading a config file at the first unknown
+# option, so on 3.4 everything below that line — the theme, the key bindings,
+# the plugins — is silently skipped.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libevent-dev libncurses-dev bison pkg-config \
+ && curl -fsSL -o /tmp/tmux.tar.gz \
+      "https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz" \
+ && tar -C /tmp -xzf /tmp/tmux.tar.gz \
+ && cd "/tmp/tmux-${TMUX_VERSION}" \
+ && ./configure \
+ && make -j"$(nproc)" \
+ && make install \
+ && cd / \
+ && rm -rf /tmp/tmux.tar.gz "/tmp/tmux-${TMUX_VERSION}" /var/lib/apt/lists/* \
+ && tmux -V
+
+# tmux is configured system-wide rather than seeded: /etc/tmux.conf is read
+# before anything in the home, so a rebuilt image brings a new theme to a cell
+# whose home is years old, and a ~/.tmux.conf still overrides it. The plugins
+# are cloned here rather than installed by TPM on first run, so a fresh cell has
+# a working status bar without pressing anything.
+ENV TMUX_PLUGIN_MANAGER_PATH=/etc/tmux/plugins/
+
+RUN mkdir -p /etc/tmux/plugins \
+ && git clone --depth 1 https://github.com/tmux-plugins/tpm /etc/tmux/plugins/tpm \
+ && git clone --depth 1 https://github.com/tmux-plugins/tmux-sensible /etc/tmux/plugins/tmux-sensible \
+ # Pinned: the theme is the visible half of this config, and it should not
+ # change because an image was rebuilt on a different day.
+ && git clone --depth 1 --branch "${CATPPUCCIN_TMUX_VERSION}" https://github.com/catppuccin/tmux /etc/tmux/plugins/tmux
+
+# tmux is the quietest of them: given a config file it cannot read, it starts
+# anyway with none of this applied and reports nothing.
+COPY --chmod=0644 tmux.conf /etc/tmux.conf
+COPY --chmod=0755 system-stats.sh /etc/tmux/system-stats.sh
 
 # Everything under /opt/cell-skel is copied into the cell's home the first time
 # the container starts, and only where nothing is there already.
