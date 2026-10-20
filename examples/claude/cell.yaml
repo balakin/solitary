@@ -13,7 +13,7 @@ description: >-
 
 build: ./Containerfile
 
-# cell-init seeds ~/.bashrc, ~/.tmux.conf, ~/.config/nvim and the rest into the
+# cell-init seeds ~/.bashrc, ~/.config/nvim and the rest into the
 # cell's home the first time the container starts. The home is a directory on
 # the machine, not in the image, so what it seeds is yours to edit afterwards
 # and a rebuilt image never overwrites it.
