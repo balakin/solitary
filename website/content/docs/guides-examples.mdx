@@ -77,7 +77,13 @@ solitary up vscode
 
 Then open the authenticated URL described below: the bare `http://localhost:9797` is refused without the connection token. The port is 9797 rather than openvscode-server's own 3000 because 3000 belongs to whatever dev server you are there to work on; it is written twice in `cell.yaml`, in `--port` and in `ports:`, and the two move together.
 
-The server requires a random connection token, kept in the cell's home. Read its authenticated URL (`http://localhost:9797/?tkn=…`) with `limactl shell solitary-vscode podman logs solitary` and open that URL on the host. The token is generated once per cell, the first time it starts, and kept in the cell's home like the claude login: it survives a stop and start, a new image, `up --rebuild` and a rotated secret, so the URL stays the same, and only `solitary rm` (which discards the home) or deleting the file yourself makes a new one. The file is `~/.openvscode-server/connection-token` inside it, if you would rather read it with `solitary exec vscode cat ~/.openvscode-server/connection-token` and append it as `?tkn=`. Forwarding to **host localhost** limits network exposure, but other local users and processes can connect; keep authentication enabled. See [ports](/docs/configuration#ports).
+The server requires a random connection token, kept in the cell's home. Print the authenticated URL and open it on the host:
+
+```sh
+solitary exec vscode editor-url
+```
+
+The token is generated once per cell, the first time it starts, and kept in the cell's home like the claude login: it survives a stop and start, a new image, `up --rebuild` and a rotated secret, so the URL stays the same, and only `solitary rm` (which discards the home) or deleting `~/.openvscode-server/connection-token` yourself makes a new one. `editor-url` is a script in the image that reads the port and the token file from the running server's own arguments, so the port stays written in the two places above and no third. Forwarding to **host localhost** limits network exposure, but other local users and processes can connect; keep authentication enabled. See [ports](/docs/configuration#ports).
 
 That same forward is the thing to remember when you start a dev server inside the editor. Naming any port at all turns off forwarding every port the cell listens on, so the cell names the three a web project reaches for first alongside the editor's:
 
