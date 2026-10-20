@@ -79,6 +79,12 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # Off, where setup-go turns it on by default. Any job running on main
+          # can write any cache entry, verify.yml shares this one's key, and go
+          # build links whatever its build cache holds without checking it —
+          # into a binary signed as this workflow and pushed to the tap.
+          # Fetched fresh, every module is checked against go.sum instead.
+          cache: false
 
       - name: Install release signer
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2

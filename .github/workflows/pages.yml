@@ -46,18 +46,11 @@ jobs:
           corepack enable
           corepack install
 
-      - name: 💾 Get pnpm store path
-        id: pnpm-cache
-        run: echo "path=$(pnpm store path)" >> "$GITHUB_OUTPUT"
-
-      - name: 💾 Cache pnpm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.pnpm-cache.outputs.path }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('website/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
+      # No cache, deliberately, unlike verify.yml. Any job running on main can
+      # write any cache entry, and verify runs the whole toolchain there — so a
+      # store restored here would be one that third-party code had the chance
+      # to fill, building a site that serves install.sh. Fetched fresh, every
+      # package is checked against the lockfile's hashes instead.
       - name: 📚 Install dependencies
         run: pnpm install --frozen-lockfile
 
