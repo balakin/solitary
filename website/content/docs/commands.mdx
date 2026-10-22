@@ -15,6 +15,7 @@ solitary down <name>            stop the cell, keep the disk
 solitary rm <name>              destroy the VM; definition and secrets stay
 solitary ls                     list cells and their state
 solitary inspect [name]         report what a cell runs on outside its container
+solitary patch <name>           install every update the cell's machine is missing
 solitary fetch <name> [files]   collect what a cell published
 solitary send <name> <file...>  put files into a cell's inbox
 solitary secrets <name>         set the values a cell is allowed to see
@@ -62,9 +63,24 @@ The image is yours and its versions are in your `Containerfile`; everything unde
 - **machine** — the system it runs and its kernel, the base it was created from beside the one a new machine would get, how many updates are pending and how many of those fix security problems, whether an installed kernel or library waits on a reboot, when the package lists those counts are measured against were last refreshed, its disk, and the versions of the packages a cell's isolation and its TLS are made of.
 - **container** — the image it was created from, the system in it, its user and its devices.
 
-It changes nothing and starts nothing. A stopped machine is reported as it was last seen running, and says when that was. The refresh time matters more than it looks: a cell whose `network.allow` keeps the Ubuntu archive out never refreshes its lists, and then no pending updates means nothing.
+It changes nothing and starts nothing. A stopped machine is reported as it was last seen running, and says when that was. The refresh time matters more than it looks: the counts are only as current as the lists they are measured against, and a machine that is rarely running refreshes them rarely.
 
 With no name it reports the host alone — what a bug report needs first. `--json` prints the same report for a script, and `--packages` adds every installed package in a running machine and its container. The container's environment, which is where a cell's secrets are, is never read, so a report can be pasted where others will see it.
+
+## `patch` updates the machine
+
+The machine under a cell is Ubuntu, and Ubuntu's own `unattended-upgrades` installs security fixes in it on its own — but only while it runs, a day or so after they are published, and never the reboot a kernel fix needs. A new machine also starts from the image its release shipped, behind by however much has been fixed since. `solitary patch <name>` installs everything the machine is missing, now:
+
+- **A running cell keeps running.** Services the upgrade touched are restarted the way Ubuntu restarts them, which never includes the session the container runs in. When what was installed needs a reboot, `patch` asks first, since a reboot ends everything in the container; `--reboot` answers yes, and without a terminal to ask on it says what is left to do instead. The container comes back up with the machine, and the home is kept.
+- **A stopped cell is patched with its machine alone** and stopped again. Its container never starts, and its next start is the reboot.
+
+The container's system is not touched: it comes from the image, and [`up --rebuild`](/docs/concepts#updating-the-tools-in-a-cell) is what updates that.
+
+A cell with `network.allow` reaches [Ubuntu's archive](/docs/networking#allow-lists) for this whatever the list says. Any other source the machine's apt fetches from — one a `vm.provision` script added, say — has to be listed, and `patch` names the ones that are not before it starts rather than failing halfway through. It never adds them itself.
+
+| Flag       | Meaning                                                                  |
+| ---------- | ------------------------------------------------------------------------ |
+| `--reboot` | Restart a running cell without asking, when what was installed needs it. |
 
 ## `update` keeps the binary current
 

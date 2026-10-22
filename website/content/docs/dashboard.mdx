@@ -22,7 +22,7 @@ description: Every cell and its state in one live view.
                         │ outbox  2 files · 4.1 MiB        │
                         │ secrets 2 of 2 set               │
                         ╰──────────────────────────────────╯
- ⏎ shell · u up · b rebuild · s stop · e secrets · n network · i inspect · t traffic · d rm · q quit
+ ⏎ shell · u up · b rebuild · p patch · s stop · e secrets · n network · i inspect · t traffic · d rm
 ```
 
 It does nothing the commands cannot, and the slow ones it runs _as_ those commands: pressing `u` runs `solitary up --detach`, so a build prints what a build prints and a cell missing a secret asks for it the way it always does. The dashboard steps out of the way and comes back rather than owning a second, worse version of each.
@@ -35,6 +35,7 @@ It does nothing the commands cannot, and the slow ones it runs _as_ those comman
 | `⏎`               | Shell into the selected cell              |
 | `u`               | Bring it up (`solitary up --detach`)      |
 | `b`               | Rebuild it, after a confirmation          |
+| `p`               | Patch its machine (`solitary patch`)      |
 | `s`               | Stop it                                   |
 | `d`               | Destroy its machine, after a confirmation |
 | `e`               | Manage its secrets                        |
@@ -53,13 +54,14 @@ A cell that needs something done has a `!` after its status in the list, so it i
 - **The machine's definition was edited outside solitary**, with `limactl edit` or by hand. `u` on a stopped cell puts back what the cell describes; a running one needs `s` first.
 - **A running machine holds settings that changed since it started.** `s` then `u` applies them. A stopped machine is not marked for this: `u` applies them on the way up without being asked.
 - **`vm.provision` changed since the machine was provisioned.** It is the one setting stopping and starting the cell does not apply: the old script has already run, and only `d` then `u` — destroying the machine and its disk — gets one built by the current script alone.
+- **The machine is missing security fixes**: updates that fix security problems are pending, or a running machine waits on a reboot to use the ones it installed. `unattended-upgrades` gets to the updates in time while the machine runs, but never to the reboot, and a stopped machine gets to neither; `p` installs them now, and asks before it restarts anything. A stopped machine shows what it was missing when it last ran.
 - **`vm.base` is still set.** solitary chooses the system a machine is created from, so the line does nothing; removing it is the fix.
 
-All of it is worked out from files on this host — the definition, the record of what the machine was given, and the definition Lima keeps for it — so the list can afford it for every cell at every refresh without asking any machine.
+All of it is worked out from files on this host — the definition, the record of what the machine was given, the definition Lima keeps for it, and what the machine said when it was last asked — so the list can afford it for every cell at every refresh without asking any machine.
 
 ## The system rows
 
-The machine's row ends with the image template it was created from — beside the container image above it, the other half of what a cell runs on — and, for a machine created from an older one, the template a new machine would get. Under it, the detail view says what the machine runs — its release and kernel — and, on the line under it, how far behind its own packages are: how many updates are pending, how many of them fix security problems, and whether an installed kernel or library waits on a reboot. The last two are in the warning colour, since they are fixes the machine could have and does not.
+The machine's row ends with the image template it was created from — beside the container image above it, the other half of what a cell runs on — and, for a machine created from an older one, the template a new machine would get. Under it, the detail view says what the machine runs — its release and kernel — and, on the line under it, how far behind its own packages are: how many updates are pending, how many of them fix security problems, and whether an installed kernel or library waits on a reboot. The last two are in the warning colour, since they are fixes the machine could have and does not; `p` installs them.
 
 It is the same reading [`inspect`](/docs/commands#inspect-reports-what-a-cell-runs-on) makes, and `i` shows the rest of that report in place of the detail view: the host's Lima, QEMU and kernel, the base the machine was created from, when its package lists were refreshed, its disk, the versions of the packages its isolation is made of, and the container's image and system. Any key goes back. A running cell is asked when it is selected, which takes about a second, and not again at every refresh: the answer only moves when packages do. A stopped cell shows what it said the last time it ran, and how long ago that was; one that has never been asked while running says so.
 

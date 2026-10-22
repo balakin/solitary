@@ -20,6 +20,8 @@ A domain covers its subdomains; a different domain the same site uses has to be 
 
 Restricted and VPN-only cells enforce IPv4 egress: non-loopback IPv6 traffic is dropped, their resolver filters `AAAA` answers, and IPv6 entries in `allow`, `resolvers` or a tunnel endpoint are refused. An unrestricted VM may have an IPv6 route.
 
+One destination is open whatever the list says: Ubuntu's archive, to the machine's package manager alone. Every machine is Ubuntu, and one that cannot reach its archive cannot be [patched](/docs/commands#patch-updates-the-machine) and never refreshes the lists its pending updates are counted against. The firewall opens it to the user apt downloads as, which nothing in the container can be, so the container cannot reach the archive unless the list names it. A machine started before solitary did this gets it at its next start.
+
 Enforcement lives in the machine and outside the container, in two halves that agree with each other. A resolver answers for the listed names only, and records the addresses it hands out in a set the firewall allows. So a name resolves and is reachable, or does neither. The container is rootless and cannot load a firewall rule, stop the resolver, or edit either one's configuration.
 
 Changing the list takes effect when the machine next starts:
