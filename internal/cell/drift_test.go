@@ -34,7 +34,7 @@ func TestWarnDriftIsSilentWithoutAKnownChange(t *testing.T) {
 	c := cellWith("apt-get install -y ripgrep")
 
 	var out bytes.Buffer
-	warnDrift("probe", c, "definition", &out)
+	warnDrift("probe", c, "definition", "", &out)
 	if out.Len() != 0 {
 		t.Errorf("warnDrift() with no record wrote %q", out.String())
 	}
@@ -42,14 +42,14 @@ func TestWarnDriftIsSilentWithoutAKnownChange(t *testing.T) {
 	if err := config.WriteApplied("probe", config.NewApplied("definition", c.VM.Provision)); err != nil {
 		t.Fatal(err)
 	}
-	warnDrift("probe", c, "definition", &out)
+	warnDrift("probe", c, "definition", "", &out)
 	if out.Len() != 0 {
 		t.Errorf("warnDrift() on an unchanged definition wrote %q", out.String())
 	}
 
 	// Every setting the definition carries is read at boot, so the warning
 	// must not name only the vm block.
-	warnDrift("probe", c, "definition with an allow list", &out)
+	warnDrift("probe", c, "definition with an allow list", "", &out)
 	if got := out.String(); !strings.Contains(got, "network") || !strings.Contains(got, "solitary down probe") {
 		t.Errorf("warnDrift() = %q, want the settings that changed and how to apply them", got)
 	}
@@ -66,7 +66,7 @@ func TestWarnDriftReportsAChangedProvisionScript(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	warnDrift("probe", cellWith("apt-get install -y ripgrep fd-find"), "definition", &out)
+	warnDrift("probe", cellWith("apt-get install -y ripgrep fd-find"), "definition", "", &out)
 
 	got := out.String()
 	for _, want := range []string{"vm.provision", "nothing undoes it", "solitary rm probe && solitary up probe"} {
@@ -92,48 +92,105 @@ func TestWarnDriftIsSilentOnAProvisionScriptItCannotCompare(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	warnDrift("probe", cellWith("apt-get install -y ripgrep"), "definition", &out)
+	warnDrift("probe", cellWith("apt-get install -y ripgrep"), "definition", "", &out)
 	if strings.Contains(out.String(), "vm.provision") {
 		t.Errorf("warnDrift() = %q, want nothing said about a script that was never recorded", out.String())
 	}
 }
 
-// A record from an older version says nothing about vm.provision, and a cell
-// whose definition has not changed since would never get one — leaving the one
-// warning that cannot be worked out from the machine permanently unavailable.
-// It is completed in place, without touching the machine: the script is part of
-// the definition, so a definition that matches means a script that matches.
-func TestApplyDriftCompletesAnOlderRecord(t *testing.T) {
+// A running machine cannot have its definition replaced, so an edit to it is
+// said, along with the restart that lets up put it back.
+func TestWarnDriftReportsAnEditedDefinition(t *testing.T) {
 	isolate(t)
 
-	c := cellWith("apt-get install -y ripgrep")
-	if err := config.WriteApplied("probe", config.Applied{Definition: config.Digest("definition")}); err != nil {
+	c := cellWith("")
+	record := config.NewApplied("definition", "")
+	record.Stored = config.Digest("stored")
+	if err := config.WriteApplied("probe", record); err != nil {
 		t.Fatal(err)
 	}
 
 	var out bytes.Buffer
-	// "definition" is not a machine definition and there is no machine named
-	// solitary-probe, so anything that reached limactl would fail here. That
-	// is the point: an unchanged definition must not be applied to complete a
-	// record.
-	if err := applyDrift("probe", "solitary-probe", c, "definition", &out); err != nil {
+	warnDrift("probe", c, "definition", "stored", &out)
+	if out.Len() != 0 {
+		t.Errorf("warnDrift() on the definition solitary stored wrote %q", out.String())
+	}
+
+	warnDrift("probe", c, "definition", "stored\nssh:\n  forwardAgent: true\n", &out)
+	got := out.String()
+	for _, want := range []string{"edited outside solitary", "solitary down probe && solitary up probe"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("warnDrift() = %q, want it to contain %q", got, want)
+		}
+	}
+}
+
+// A machine whose definition matches what the cell says, and whose stored
+// definition is the one solitary left there, is not rewritten.
+//
+// "definition" is not a machine definition and there is no machine named
+// solitary-probe, so anything that reached Lima would fail in these tests. A
+// test that expects an error is asserting that the definition was applied.
+func TestApplyDriftLeavesAMatchingMachineAlone(t *testing.T) {
+	isolate(t)
+
+	c := cellWith("apt-get install -y ripgrep")
+	record := config.NewApplied("definition", c.VM.Provision)
+	record.Stored = config.Digest("stored")
+	if err := config.WriteApplied("probe", record); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := applyDrift("probe", "solitary-probe", c, "definition", "stored", &out); err != nil {
 		t.Fatalf("applyDrift() error = %v", err)
 	}
 	if out.Len() != 0 {
-		t.Errorf("applyDrift() wrote %q for a definition that did not change", out.String())
+		t.Errorf("applyDrift() wrote %q for a machine that matches", out.String())
 	}
+}
 
-	record, err := config.ReadApplied("probe")
-	if err != nil {
+// An edit to the stored definition is put back even when the cell itself did
+// not change — that is the case the record exists for.
+func TestApplyDriftRestoresAnEditedDefinition(t *testing.T) {
+	isolate(t)
+
+	c := cellWith("")
+	record := config.NewApplied("definition", "")
+	record.Stored = config.Digest("stored")
+	if err := config.WriteApplied("probe", record); err != nil {
 		t.Fatal(err)
 	}
-	if record.Definition != config.Digest("definition") {
-		t.Errorf("Definition = %q, want the digest the machine already had", record.Definition)
+
+	var out bytes.Buffer
+	err := applyDrift("probe", "solitary-probe", c, "definition", "stored\nssh:\n  forwardAgent: true\n", &out)
+	if err == nil {
+		t.Fatal("applyDrift() = nil, want the edited definition replaced")
 	}
-	if record.ProvisionChanged(c.VM.Provision) {
-		t.Error("the completed record reports the current script as changed")
+	if !strings.Contains(out.String(), "edited outside solitary; restoring it") {
+		t.Errorf("applyDrift() = %q, want the edit named", out.String())
 	}
-	if !record.ProvisionChanged("apt-get install -y ripgrep fd-find") {
-		t.Error("the completed record cannot tell an edited script apart")
+	if strings.Contains(out.String(), "settings for") {
+		t.Errorf("applyDrift() = %q, want no claim that the cell's settings changed", out.String())
+	}
+}
+
+// A record from before the stored definition was kept cannot vouch for what
+// the machine holds, so the machine is written once — quietly, since nothing
+// is known to have changed.
+func TestApplyDriftRewritesAMachineItCannotVerify(t *testing.T) {
+	isolate(t)
+
+	c := cellWith("apt-get install -y ripgrep")
+	if err := config.WriteApplied("probe", config.NewApplied("definition", c.VM.Provision)); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := applyDrift("probe", "solitary-probe", c, "definition", "stored", &out); err == nil {
+		t.Fatal("applyDrift() = nil, want a record without the stored definition to rewrite the machine")
+	}
+	if out.Len() != 0 {
+		t.Errorf("applyDrift() wrote %q for a machine with no known change", out.String())
 	}
 }

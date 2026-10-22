@@ -270,9 +270,13 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 	if err != nil {
 		return err
 	}
+	var stored string
 	if inst != nil {
 		if err := lima.CheckIsolation(*inst); err != nil {
 			return fmt.Errorf("machine isolation check: %w", err)
+		}
+		if stored, err = inst.StoredDefinition(); err != nil {
+			return err
 		}
 	}
 
@@ -285,7 +289,7 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		if err := createMachine(instance, rendered, c.VM.GPU); err != nil {
 			return err
 		}
-		if err := config.WriteApplied(name, config.NewApplied(rendered, c.VM.Provision)); err != nil {
+		if err := recordMachine(name, instance, rendered, c.VM.Provision); err != nil {
 			return err
 		}
 
@@ -302,7 +306,7 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 			name, name, instance)
 
 	case inst.Status == lima.StatusRunning:
-		warnDrift(name, c, rendered, progress)
+		warnDrift(name, c, rendered, stored, progress)
 
 	default:
 		// A stopped machine reads its definition again when it starts, so
@@ -313,7 +317,7 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		if err := verifyDisk(name, instance, c.VM.Disk); err != nil {
 			return err
 		}
-		if err := applyDrift(name, instance, c, rendered, progress); err != nil {
+		if err := applyDrift(name, instance, c, rendered, stored, progress); err != nil {
 			return err
 		}
 		if err := verifyMemory(c.VM.Memory, progress); err != nil {
@@ -1169,10 +1173,19 @@ func wholeGiB(b uint64) string {
 // warnDrift reports settings that changed since the machine started. Lima
 // cannot apply them to a running machine, and silently ignoring them would
 // leave the cell running a definition the file no longer describes.
-func warnDrift(name string, c *config.Cell, rendered string, w io.Writer) {
+func warnDrift(name string, c *config.Cell, rendered, stored string, w io.Writer) {
 	record, err := config.ReadApplied(name)
 	if err != nil || !record.Recorded() {
 		return
+	}
+	// Said rather than repaired: the file can only be replaced while the
+	// machine is stopped, and a running one may already be using what the
+	// edit gave it.
+	if record.Edited(stored) {
+		fmt.Fprintf(w, "Warning: the machine definition for %q was edited outside solitary.\n", name)
+		fmt.Fprintf(w, "         The running machine may be using the edited settings. Stopping it\n")
+		fmt.Fprintf(w, "         lets up put back what the cell describes:\n")
+		fmt.Fprintf(w, "           solitary down %s && solitary up %s\n", name, name)
 	}
 	if record.Definition != config.Digest(rendered) {
 		fmt.Fprintf(w, "Warning: the machine settings for %q changed since it started.\n", name)
@@ -1211,7 +1224,12 @@ func warnProvision(name string, c *config.Cell, record config.Applied, w io.Writ
 // can be handed new ones and simply start with them. Only what solitary
 // generates is replaced, and only when there is a reason to: a machine whose
 // definition is known to match what the cell says is not rewritten.
-func applyDrift(name, instance string, c *config.Cell, rendered string, progress io.Writer) error {
+//
+// stored is the definition the machine holds now. One that is not what
+// solitary left there is put back: the isolation check only knows the settings
+// it was written to refuse, and an edit can reach the machine through any
+// other — SSH agent forwarding, a provision script of its own.
+func applyDrift(name, instance string, c *config.Cell, rendered, stored string, progress io.Writer) error {
 	record, err := config.ReadApplied(name)
 	if err != nil {
 		return err
@@ -1221,21 +1239,19 @@ func applyDrift(name, instance string, c *config.Cell, rendered string, progress
 	// match. Nothing is known about it — it was created before solitary kept
 	// the record, or the state directory was cleared — and reading that as
 	// "unchanged" is how a new memory size, cpu count or allow list silently
-	// never reaches it.
+	// never reaches it. A record that never kept the stored definition is
+	// treated the same way: what the machine holds may have been edited
+	// before anything was watching, and writing it once is what makes every
+	// later edit visible.
 	changed := record.Definition != config.Digest(rendered)
-	if record.Recorded() && !changed {
-		if record.Provision == "" {
-			// An older record, which kept the definition's digest and
-			// nothing else. The definition it describes is the one being
-			// rendered now, and vm.provision is part of that definition, so
-			// the script the machine was given is the script in hand: the
-			// record can be completed without touching the machine.
-			return config.WriteApplied(name, config.NewApplied(rendered, c.VM.Provision))
-		}
-
+	edited := record.Edited(stored)
+	if record.Recorded() && record.Stored != "" && !changed && !edited {
 		return nil
 	}
 
+	if edited {
+		fmt.Fprintf(progress, "The machine definition for %q was edited outside solitary; restoring it.\n", name)
+	}
 	if changed && record.Recorded() {
 		fmt.Fprintf(progress, "The machine settings for %q changed; applying them to its machine.\n", name)
 	}
@@ -1248,7 +1264,29 @@ func applyDrift(name, instance string, c *config.Cell, rendered string, progress
 		return err
 	}
 
-	return config.WriteApplied(name, config.NewApplied(rendered, c.VM.Provision))
+	return recordMachine(name, instance, rendered, c.VM.Provision)
+}
+
+// recordMachine records what a machine was just given, together with the
+// definition Lima stored for it. What Lima stores is resolved from what was
+// rendered, so it is read back rather than worked out.
+func recordMachine(name, instance, rendered, provision string) error {
+	inst, err := lima.Lookup(instance)
+	if err != nil {
+		return err
+	}
+	if inst == nil {
+		return fmt.Errorf("recording the machine of %q: Lima no longer lists %s", name, instance)
+	}
+	stored, err := inst.StoredDefinition()
+	if err != nil {
+		return err
+	}
+
+	record := config.NewApplied(rendered, provision)
+	record.Stored = config.Digest(stored)
+
+	return config.WriteApplied(name, record)
 }
 
 // SetSecrets asks for every secret a cell declares, keeping values that are
