@@ -63,6 +63,39 @@ func qemuCommand() (key, command string, err error) {
 	return key, command, nil
 }
 
+// QEMU reports the qemu binary Lima runs machines with on this host and its
+// version. It is a separate install from Lima, updated on its own schedule —
+// or not at all, when it was built by hand — and it is half of what stands
+// between a guest and the host.
+func QEMU() (bin, version string, err error) {
+	_, command, err := qemuCommand()
+	if err != nil {
+		return "", "", err
+	}
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return "", "", fmt.Errorf("QEMU_SYSTEM_X86_64 does not name a QEMU binary")
+	}
+	bin = fields[0]
+	if path, err := exec.LookPath(bin); err == nil {
+		bin = path
+	}
+
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil {
+		return bin, "", fmt.Errorf("running %s --version: %w", bin, err)
+	}
+	const prefix = "QEMU emulator version "
+	for _, line := range strings.Split(string(out), "\n") {
+		if rest, ok := strings.CutPrefix(line, prefix); ok {
+			version, _, _ = strings.Cut(rest, " ")
+			return bin, version, nil
+		}
+	}
+
+	return bin, "", fmt.Errorf("%s --version does not name a QEMU version", bin)
+}
+
 // GPUSupport reports why this host's qemu cannot give a machine a GPU, or nil
 // when it can.
 //

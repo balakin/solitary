@@ -14,6 +14,7 @@ solitary exec <name> <cmd...>   run one command in a running cell
 solitary down <name>            stop the cell, keep the disk
 solitary rm <name>              destroy the VM; definition and secrets stay
 solitary ls                     list cells and their state
+solitary inspect [name]         report what a cell runs on outside its container
 solitary fetch <name> [files]   collect what a cell published
 solitary send <name> <file...>  put files into a cell's inbox
 solitary secrets <name>         set the values a cell is allowed to see
@@ -52,6 +53,18 @@ It is idempotent: it creates the cell's machine if absent, boots it if stopped, 
 - **`proxy`** — a host proxy the cells will not inherit, which they deliberately do not: a proxy configuration names internal hosts and carries credentials. It is worth saying because of how it fails — a cell behind an unset proxy reaches nothing, which looks exactly like an incomplete allow list.
 
 It changes nothing, and every check that is not `ok` names what to do about it. It exits non-zero when one failed outright, so it can stand at the top of a script; warnings alone exit zero.
+
+## `inspect` reports what a cell runs on
+
+The image is yours and its versions are in your `Containerfile`; everything under it is not. `solitary inspect <name>` reports those layers, so that a question like "is the fix for that CVE on this cell yet?" has an answer without opening a shell:
+
+- **host** — solitary, Lima, the QEMU Lima runs machines with and where it is, the kernel, and whether KVM lets a guest run guests of its own. QEMU is installed apart from Lima and updated on its own schedule, and the two of them are what stands between a guest and the host.
+- **machine** — the system it runs and its kernel, the base it was created from beside the one a new machine would get, how many updates are pending and how many of those fix security problems, whether an installed kernel or library waits on a reboot, when the package lists those counts are measured against were last refreshed, its disk, and the versions of the packages a cell's isolation and its TLS are made of.
+- **container** — the image it was created from, the system in it, its user and its devices.
+
+It changes nothing and starts nothing. A stopped machine is reported as it was last seen running, and says when that was. The refresh time matters more than it looks: a cell whose `network.allow` keeps the Ubuntu archive out never refreshes its lists, and then no pending updates means nothing.
+
+With no name it reports the host alone — what a bug report needs first. `--json` prints the same report for a script, and `--packages` adds every installed package in a running machine and its container. The container's environment, which is where a cell's secrets are, is never read, so a report can be pasted where others will see it.
 
 ## `update` keeps the binary current
 
