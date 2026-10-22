@@ -44,7 +44,7 @@ func TestWriteReport(t *testing.T) {
 		"machine    stopped",
 		"created   ubuntu-lts (new machines: ubuntu-26.04)",
 		"system    Ubuntu 24.04.5 LTS · kernel 6.8.0-142-generic",
-		"updates   23 pending, 7 security · reboot required",
+		"          23 updates pending, 7 of them security · reboot required",
 		"lists     refreshed 3 days ago · unattended-upgrades enabled",
 		"ca-certificates 20240203 · podman 4.9.3",
 		// A stopped machine is described as it was, and says so.

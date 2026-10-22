@@ -46,6 +46,8 @@ const (
 	confirming
 	// viewingNetwork is the full list of what the selected cell may reach.
 	viewingNetwork
+	// viewingReport is what inspect reports about the selected cell.
+	viewingReport
 	// watchingTraffic is a live view of what it is actually reaching.
 	watchingTraffic
 	// filteringTraffic is typing what to narrow that view to.
@@ -94,6 +96,11 @@ type model struct {
 	tunnel *cell.TunnelState
 	// handoff is the live inbox/outbox count for the selected running cell.
 	handoff *cell.Handoff
+	// report is what the inspect view shows, nil until it arrives.
+	report    *cell.Report
+	reportErr error
+	// version is solitary's own, which the inspect view reports.
+	version string
 	// gpus is what Venus actually exposes inside the selected running cell.
 	// A stopped cell cannot be queried, even when its definition asks for a GPU.
 	gpus   []string
@@ -152,12 +159,29 @@ type (
 		devices []string
 		err     error
 	}
+	// guestMsg is what the selected running machine said about its system.
+	guestMsg struct {
+		name  string
+		guest cell.Guest
+	}
+	// reportMsg is what inspect found about one cell.
+	reportMsg struct {
+		name   string
+		report cell.Report
+		err    error
+	}
 	// probedMsg is what one running machine said about its container.
 	probedMsg struct {
 		name   string
 		status cell.Status
 	}
 )
+
+// withVersion is the model reporting version as solitary's own.
+func (m model) withVersion(version string) model {
+	m.version = version
+	return m
+}
 
 func newModel() model {
 	input := textinput.New()
@@ -219,12 +243,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detail, m.detailErr = msg.detail, nil
 		m.handoff = nil
 		m.gpus, m.gpuErr = nil, nil
-		tunnelCmd, handoffCmd, venusCmd := m.watchTunnel(), m.watchHandoff(), m.watchVenus()
+		tunnelCmd, handoffCmd, venusCmd, guestCmd := m.watchTunnel(), m.watchHandoff(), m.watchVenus(), m.watchGuest()
 		if tunnelCmd != nil {
-			return m, tea.Batch(tunnelCmd, handoffCmd, venusCmd)
+			return m, tea.Batch(tunnelCmd, handoffCmd, venusCmd, guestCmd)
 		}
 		m.tunnel = nil
-		return m, tea.Batch(handoffCmd, venusCmd)
+		return m, tea.Batch(handoffCmd, venusCmd, guestCmd)
 
 	case tunnelMsg:
 		// The selection may have moved while the machine was answering.
@@ -236,6 +260,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case handoffMsg:
 		if msg.name == m.detail.Name {
 			m.handoff = msg.state
+		}
+		return m, nil
+
+	case guestMsg:
+		if msg.name == m.detail.Name {
+			m.detail.Guest = &msg.guest
+		}
+		return m, nil
+
+	case reportMsg:
+		if msg.name == m.selected().Name {
+			m.report, m.reportErr = &msg.report, msg.err
+			// The report asked the machine too, so the summary beside
+			// it should not say less than the report does.
+			if msg.err == nil && msg.report.Machine != nil && msg.report.Machine.Guest != nil && msg.name == m.detail.Name {
+				m.detail.Guest = msg.report.Machine.Guest
+			}
 		}
 		return m, nil
 
@@ -373,7 +414,7 @@ func (m model) withProbe(name string, status cell.Status) (tea.Model, tea.Cmd) {
 		// so the selected one becoming running is the moment to start.
 		if i == m.cursor && status == cell.StatusRunning && c.Status != status {
 			m.gpus, m.gpuErr = nil, nil
-			return m, tea.Batch(m.watchTunnel(), m.watchHandoff(), m.watchVenus())
+			return m, tea.Batch(m.watchTunnel(), m.watchHandoff(), m.watchVenus(), m.watchGuest())
 		}
 	}
 
@@ -412,6 +453,16 @@ func (m model) watchHandoff() tea.Cmd {
 	return handoffStatus(m.detail.Name)
 }
 
+// watchGuest asks the selected running machine about its system once, when it
+// is selected or starts running. Not at every tick: the answer moves when
+// packages do, and asking takes a second of the machine's time.
+func (m model) watchGuest() tea.Cmd {
+	if m.detail.Name == "" || m.selected().Status != cell.StatusRunning {
+		return nil
+	}
+	return askGuest(m.detail.Name)
+}
+
 func (m model) watchVenus() tea.Cmd {
 	if !m.detail.GPU || m.selected().Status != cell.StatusRunning {
 		return nil
@@ -431,7 +482,7 @@ func (m model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case confirming:
 		return m.confirmKey(msg)
-	case viewingNetwork:
+	case viewingNetwork, viewingReport:
 		return m.networkKey(msg)
 	case watchingTraffic:
 		return m.trafficKey(msg)
@@ -544,6 +595,13 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.mode = viewingNetwork
 		return m.clear(), describe(name)
+
+	case "i":
+		if name == "" {
+			return m, nil
+		}
+		m.mode, m.report, m.reportErr = viewingReport, nil, nil
+		return m.clear(), inspect(name, m.version)
 
 	case "t":
 		if name == "" {
@@ -826,6 +884,29 @@ func venusDevices(name string) tea.Cmd {
 	return func() tea.Msg {
 		devices, err := cell.VenusDevices(name)
 		return venusMsg{name: name, devices: devices, err: err}
+	}
+}
+
+// inspect makes the report the inspect command prints, for the inspect view.
+// It asks a running machine and its container, so it is made once, when the
+// view is opened, rather than at every refresh.
+func inspect(name, version string) tea.Cmd {
+	return func() tea.Msg {
+		report, err := cell.Inspect(name, version, false)
+		return reportMsg{name: name, report: report, err: err}
+	}
+}
+
+// askGuest asks a running machine about its system. A machine that does not
+// answer leaves the last reading on screen, dated, which is all there is to
+// show; there is no failure worth putting over it.
+func askGuest(name string) tea.Cmd {
+	return func() tea.Msg {
+		guest, err := cell.AskGuest(name)
+		if err != nil {
+			return nil
+		}
+		return guestMsg{name: name, guest: guest}
 	}
 }
 

@@ -84,6 +84,9 @@ func (m model) detailPane() string {
 	if m.mode == viewingNetwork {
 		return pane("network · "+m.detail.Name, m.networkBody())
 	}
+	if m.mode == viewingReport {
+		return pane("inspect · "+m.selected().Name, m.reportBody())
+	}
 	if m.mode == watchingTraffic || m.mode == filteringTraffic {
 		return pane("traffic · "+m.detail.Name, m.trafficBody())
 	}
@@ -103,6 +106,9 @@ func (m model) detailPane() string {
 	}
 
 	machine := fmt.Sprintf("%d cpus · %s · %s", m.detail.VM.CPUs, m.detail.VM.Memory, m.detail.VM.Disk)
+	if base := m.machineBase(); base != "" {
+		machine += " · " + base
+	}
 
 	ports := "all reach host localhost"
 	if len(m.detail.Ports) > 0 {
@@ -119,6 +125,7 @@ func (m model) detailPane() string {
 		field("image", m.detail.Image),
 		field("machine", machine),
 	)
+	lines = append(lines, m.systemLines()...)
 	lines = append(lines, m.gpuLines()...)
 	lines = append(lines,
 		field("ports", ports),
@@ -151,6 +158,55 @@ func (m model) attentionLines() []string {
 			field("warning", warnStyle.Render(a.What)),
 			field("", valueStyle.Render(a.Fix)),
 		)
+	}
+
+	return lines
+}
+
+// machineBase is the image template the machine was made from, beside the
+// container image above it: what the machine was created from, and what a new
+// one would be when that differs; for a cell with no machine yet, what up
+// will create it from.
+func (m model) machineBase() string {
+	switch created := m.detail.CreatedFrom; {
+	case m.selected().Status == cell.StatusUninitialized:
+		return config.Base
+	case created == "":
+		return ""
+	case created != config.Base:
+		return created + " (new: " + config.Base + ")"
+	default:
+		return created
+	}
+}
+
+// systemLines are what the machine runs and how far behind it is, as inspect
+// reports them. A stopped machine shows what it said the last time it ran,
+// dated; a running one is asked again when it is selected.
+func (m model) systemLines() []string {
+	running := m.selected().Status == cell.StatusRunning
+	g := m.detail.Guest
+	switch {
+	case g == nil && running:
+		return []string{field("system", labelStyle.Render("asking the machine…"))}
+	case g == nil && m.selected().Status != cell.StatusUninitialized:
+		return []string{field("system", labelStyle.Render("not seen yet · start the cell to ask it"))}
+	case g == nil:
+		return nil
+	}
+
+	lines := []string{field("system", valueStyle.Render(strings.TrimSpace(g.Release+" · kernel "+g.Kernel)))}
+	if pending := g.Pending(); pending != "" {
+		// Security fixes the machine could have and does not are worth the
+		// colour; ordinary updates are not.
+		style := valueStyle
+		if g.Behind() {
+			style = warnStyle
+		}
+		lines = append(lines, field("", style.Render(pending)))
+	}
+	if !g.Live {
+		lines = append(lines, field("", labelStyle.Render("as last seen, "+ago(time.Since(g.AsOf)))))
 	}
 
 	return lines
@@ -313,12 +369,44 @@ func ago(d time.Duration) string {
 		return fmt.Sprintf("%ds ago", int(d.Seconds()))
 	case d < time.Hour:
 		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	default:
+	case d < 48*time.Hour:
 		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
 }
 
 // networkBody is the whole allow list, for when the preview is not enough.
+// reportBody is the inspect command's report, row for row, styled: section
+// headings stand out, and what the machine could fix and has not is in the
+// warning colour.
+func (m model) reportBody() string {
+	switch {
+	case m.reportErr != nil:
+		return errorStyle.Render(m.reportErr.Error())
+	case m.report == nil:
+		return labelStyle.Render("asking the machine…")
+	}
+
+	var lines []string
+	for i, row := range m.report.Rows(time.Now()) {
+		if row.Heading != "" {
+			if i > 0 {
+				lines = append(lines, "")
+			}
+			lines = append(lines, selectedStyle.Render(row.Heading)+" "+valueStyle.Render(row.Value))
+			continue
+		}
+		value := valueStyle.Render(row.Value)
+		if row.Warn {
+			value = warnStyle.Render(row.Value)
+		}
+		lines = append(lines, labelStyle.Render(fmt.Sprintf("  %-9s", row.Label))+value)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 func (m model) networkBody() string {
 	if !m.detail.Network.Restricted() && m.detail.Network.Tunnel == nil {
 		return valueStyle.Render("This cell reaches whatever the host reaches.") + "\n" +
@@ -563,7 +651,7 @@ func (m model) help() string {
 		return "y " + m.asking.verb + " · any other key cancel"
 	case typing:
 		return "enter save · esc cancel"
-	case viewingNetwork:
+	case viewingNetwork, viewingReport:
 		return "any key back"
 	case filteringTraffic:
 		return "type to narrow · enter keep · esc clear"
@@ -572,7 +660,9 @@ func (m model) help() string {
 	case managingSecrets:
 		return "↑↓ move · enter set value · esc back"
 	default:
-		return "↑↓ move · ⏎ shell · u up · b rebuild · s stop · e secrets · n network · t traffic · d rm · q quit"
+		// Arrows moving through a list go without saying, and the line has
+		// to fit a terminal a hundred columns wide.
+		return "⏎ shell · u up · b rebuild · s stop · e secrets · n network · i inspect · t traffic · d rm · q quit"
 	}
 }
 

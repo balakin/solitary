@@ -123,3 +123,36 @@ func TestDescribeWithoutSecrets(t *testing.T) {
 		t.Errorf("secrets = %+v, want none", detail.Secrets)
 	}
 }
+
+// The base a machine was made from is told the way up will record it: as the
+// record has it, or — for a record from before it was kept — the old default
+// or the vm.base the cell names. A cell with no record has no machine to name.
+func TestDescribeSaysWhatTheMachineWasCreatedFrom(t *testing.T) {
+	for name, tt := range map[string]struct {
+		definition string
+		record     *config.Applied
+		want       string
+	}{
+		"no machine":      {definition: "image: ubuntu\n", want: ""},
+		"recorded":        {definition: "image: ubuntu\n", record: &config.Applied{Definition: "d", Base: config.Base}, want: config.Base},
+		"an older record": {definition: "image: ubuntu\n", record: &config.Applied{Definition: "d"}, want: config.LegacyBase},
+		"a written base":  {definition: "image: ubuntu\nvm:\n  base: ubuntu-24.04\n", record: &config.Applied{Definition: "d"}, want: "ubuntu-24.04"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			writeCell(t, tt.definition, "")
+			if tt.record != nil {
+				if err := config.WriteApplied("probe", *tt.record); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			detail, err := Describe("probe")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if detail.CreatedFrom != tt.want {
+				t.Errorf("CreatedFrom = %q, want %q", detail.CreatedFrom, tt.want)
+			}
+		})
+	}
+}
