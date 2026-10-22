@@ -39,6 +39,8 @@ A cell is edited by editing `cell.yaml` and running `up` again. What that costs 
 
 `up` says which one it is: it replaces a container without being asked, warns when a running machine is holding settings that changed, and applies them itself when the machine is stopped.
 
+The machine's own definition is not one of the files to edit. Lima keeps it in the machine's directory and reads it at every boot, so `limactl edit` would reach the machine — with settings no cell describes, and around the checks solitary makes before it reuses one. solitary records what it left there, and `up` puts it back: a stopped machine whose definition was edited outside solitary is given the one its cell describes again, and a running one is warned about. Anything a machine needs belongs in `cell.yaml`.
+
 Removing a setting is applied like adding one. A machine that was restricted or tunnelled has its resolver, firewall and tunnel taken back out at the next boot, so the guest matches the definition in both directions — the machine is not left enforcing an allow list nothing describes any more.
 
 `vm.provision` is the exception, and the reason the third row exists. The script runs in the machine and changes its disk; the disk survives every change short of `rm`. A new script runs at the next start, but nothing undoes what the old one did, so a machine built by the current script alone is a machine created again from scratch. Both `up` and the dashboard say so when the script changes.
