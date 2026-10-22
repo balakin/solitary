@@ -30,14 +30,18 @@ The dashboard's cell details show `gpu: false` as **disabled**. For a running ce
 
 It is idempotent: it creates the cell's machine if absent, boots it if stopped, and attaches if it is already running. It also replaces the container when the image or the secrets changed, so editing `cell.yaml` and running `up` again is what a change takes.
 
-`vm`, `ports` and `network` are read when the machine boots. `up` applies them to a stopped machine itself, and warns rather than pretending when the cell is already running — `down` then `up` applies them without touching the disk. The one change no restart applies is `vm.provision`: the old script has already run, and only `rm` then `up` gets a machine built by the current one. `up` says so when it happens. See [changing a cell](/docs/concepts#changing-a-cell).
+`vm`, `ports` and `network` are read when the machine boots. `up` applies them to a stopped machine itself, and warns rather than pretending when the cell is already running — `down` then `up` applies them without touching the disk. The one change no restart applies is `vm.provision`: the old script has already run, and only `up --new-machine` gets a machine built by the current one. `up` says so when it happens. See [changing a cell](/docs/concepts#changing-a-cell).
 
-| Flag        | Meaning                                                                                     |
-| ----------- | ------------------------------------------------------------------------------------------- |
-| `--detach`  | Start the cell without attaching a shell.                                                   |
-| `--rebuild` | Build the image again without a cache, or pull it again, and replace the container with it. |
+| Flag            | Meaning                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| `--detach`      | Start the cell without attaching a shell.                                                   |
+| `--rebuild`     | Build the image again without a cache, or pull it again, and replace the container with it. |
+| `--new-machine` | Replace the machine with a new one, carrying the home across. Asks first.                   |
+| `--force`       | With `--new-machine`, skip the question.                                                    |
 
 `--rebuild` is how the tools in a cell are updated, since nothing about the cell has changed to make `up` replace the container on its own. The home is kept. See [updating the tools in a cell](/docs/concepts#updating-the-tools-in-a-cell).
+
+`--new-machine` is how a cell moves to a new machine: one created from the release solitary uses now, and [patched](#patch-updates-the-machine). The home comes with it and nothing else does — not what `vm.provision` or anyone installed on the old disk, not the images, which are built or pulled again. See [a new machine](/docs/concepts#a-new-machine).
 
 `up` takes a cell that is already defined. `init` scaffolds one; [`clone`](/docs/sharing) takes one from a repository.
 

@@ -29,21 +29,22 @@ It does nothing the commands cannot, and the slow ones it runs _as_ those comman
 
 ## Keys
 
-| Key               | Action                                    |
-| ----------------- | ----------------------------------------- |
-| `↑` `↓` / `k` `j` | Move between cells                        |
-| `⏎`               | Shell into the selected cell              |
-| `u`               | Bring it up (`solitary up --detach`)      |
-| `b`               | Rebuild it, after a confirmation          |
-| `p`               | Patch its machine (`solitary patch`)      |
-| `s`               | Stop it                                   |
-| `d`               | Destroy its machine, after a confirmation |
-| `e`               | Manage its secrets                        |
-| `n`               | Show the whole allow list                 |
-| `i`               | Show what `inspect` reports about it      |
-| `t`               | Follow its network traffic                |
-| `r`               | Refresh                                   |
-| `q`               | Quit                                      |
+| Key               | Action                                                              |
+| ----------------- | ------------------------------------------------------------------- |
+| `↑` `↓` / `k` `j` | Move between cells                                                  |
+| `⏎`               | Shell into the selected cell                                        |
+| `u`               | Bring it up (`solitary up --detach`)                                |
+| `b`               | Rebuild it, after a confirmation                                    |
+| `p`               | Patch its machine (`solitary patch`)                                |
+| `m`               | Move it to a new machine, after a confirmation (`up --new-machine`) |
+| `s`               | Stop it                                                             |
+| `d`               | Destroy its machine, after a confirmation                           |
+| `e`               | Manage its secrets                                                  |
+| `n`               | Show the whole allow list                                           |
+| `i`               | Show what `inspect` reports about it                                |
+| `t`               | Follow its network traffic                                          |
+| `r`               | Refresh                                                             |
+| `q`               | Quit                                                                |
 
 The list appears as soon as Lima says which machines are up. A running machine is then asked what its container is doing, each on its own, and shows `loading` until it answers — a machine that is [busy or unreachable](/docs/troubleshooting) can take the better part of a minute to, and the rest of the list does not wait on it. A loading cell can be looked at, its allow list included, but not acted on: what `u`, `s` or `⏎` would do depends on the answer. After that, every refresh shows what the machine last said while it is asked again.
 
@@ -53,7 +54,7 @@ A cell that needs something done has a `!` after its status in the list, so it i
 
 - **The machine's definition was edited outside solitary**, with `limactl edit` or by hand. `u` on a stopped cell puts back what the cell describes; a running one needs `s` first.
 - **A running machine holds settings that changed since it started.** `s` then `u` applies them. A stopped machine is not marked for this: `u` applies them on the way up without being asked.
-- **`vm.provision` changed since the machine was provisioned.** It is the one setting stopping and starting the cell does not apply: the old script has already run, and only `d` then `u` — destroying the machine and its disk — gets one built by the current script alone.
+- **`vm.provision` changed since the machine was provisioned.** It is the one setting stopping and starting the cell does not apply: the old script has already run, and only `m` — a new machine, with the home carried across — gets one built by the current script alone.
 - **The machine is missing security fixes**: updates that fix security problems are pending, or a running machine waits on a reboot to use the ones it installed. `unattended-upgrades` gets to the updates in time while the machine runs, but never to the reboot, and a stopped machine gets to neither; `p` installs them now, and asks before it restarts anything. A stopped machine shows what it was missing when it last ran.
 - **`vm.base` is still set.** solitary chooses the system a machine is created from, so the line does nothing; removing it is the fix.
 
