@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -542,6 +543,50 @@ const Base = "ubuntu-26.04"
 // names the alias and not a release, because the alias moved with Lima and the
 // release a machine actually runs is only known by asking it.
 const LegacyBase = "ubuntu-lts"
+
+// Archive is where every machine's apt fetches packages and fixes from: Ubuntu's
+// own archive, its security pocket, and ports for the architectures the main
+// archive does not carry. Every base is Ubuntu, so a restricted cell's machine
+// reaches these whatever network.allow says — for apt alone, not the
+// container, so that patching a cell never means widening what its agent can
+// reach.
+var Archive = []string{"archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com"}
+
+// ArchiveCovers reports whether host is one of Archive, or under one of them.
+func ArchiveCovers(host string) bool {
+	return slices.ContainsFunc(Archive, func(domain string) bool { return coveredBy(host, domain) })
+}
+
+// Covers reports whether this network lets the cell reach host: everything
+// does without an allow list, and with one a domain covers its subdomains.
+func (n Network) Covers(host string) bool {
+	if !n.Restricted() {
+		return true
+	}
+	ip := net.ParseIP(host)
+	for _, entry := range n.Allow {
+		if ip != nil {
+			if _, block, err := net.ParseCIDR(entry); err == nil && block.Contains(ip) {
+				return true
+			}
+			if entry == host {
+				return true
+			}
+			continue
+		}
+		if coveredBy(host, entry) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func coveredBy(host, domain string) bool {
+	host, domain = strings.ToLower(host), strings.ToLower(domain)
+
+	return host == domain || strings.HasSuffix(host, "."+domain)
+}
 
 // Defaults returns the settings compiled into the binary, used when neither the
 // cell nor the user-wide config specifies a value.

@@ -60,6 +60,9 @@ var funcs = template.FuncMap{
 	},
 	// join is strings.Join, for rendering a list into one line of a rule.
 	"join": strings.Join,
+	// archive is where every machine's apt fetches from, which a restricted
+	// cell's firewall opens to apt alone.
+	"archive": func() []string { return config.Archive },
 	// vpnInterface and vpnConfig name the tunnel inside the machine. They
 	// come from config so that the definition rendered here and the file
 	// solitary later places in the machine cannot disagree.
