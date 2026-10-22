@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.5](https://github.com/balakin/solitary/compare/v0.16.4...v0.16.5) (2026-10-22)
+
+
+### Bug Fixes
+
+* **deps:** build with Go 1.26.10 ([cb8e738](https://github.com/balakin/solitary/commit/cb8e7388c6346d7a2f88df0134bd47f653796cdc))
+
 ## [0.16.4](https://github.com/balakin/solitary/compare/v0.16.3...v0.16.4) (2026-10-20)
 
 
