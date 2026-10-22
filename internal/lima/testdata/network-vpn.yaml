@@ -248,6 +248,22 @@ provision:
         echo "nftset=/$domain/inet#solitary#allowed4"
       done >> /etc/dnsmasq.d/solitary.conf
 
+      # Ubuntu's archive, which the machine's apt reaches whatever the allow
+      # list says: every base is Ubuntu, and a machine nobody can patch is one
+      # left with the fixes it was created with. Into a set of its own, which
+      # the firewall opens to apt alone, so the container gains nothing by it.
+      # A name the allow list covers as well goes into both sets, since the
+      # resolver files an address under the most specific name it matches and
+      # would otherwise take it away from the cell.
+      for domain in archive.ubuntu.com security.ubuntu.com ports.ubuntu.com; do
+        for resolver in $resolvers; do
+          echo "server=/$domain/$resolver"
+        done
+      done >> /etc/dnsmasq.d/solitary.conf
+      echo "nftset=/archive.ubuntu.com/inet#solitary#archive4" >> /etc/dnsmasq.d/solitary.conf
+      echo "nftset=/security.ubuntu.com/inet#solitary#archive4" >> /etc/dnsmasq.d/solitary.conf
+      echo "nftset=/ports.ubuntu.com/inet#solitary#archive4" >> /etc/dnsmasq.d/solitary.conf
+
       # The tunnel's own peer, resolved like any other allowed name but into a
       # set of its own: everything else is reachable only through the tunnel,
       # and the peer is what there is no tunnel without.
@@ -294,6 +310,12 @@ provision:
         # expiring grant refuses an address the resolver is still handing
         # out, an hour after the name was first asked however busy it was.
         set allowed4 { type ipv4_addr; size 65536; }
+
+        # Ubuntu's archive, filled in by the resolver like allowed4 and open
+        # to apt's own user only: apt fetches as _apt, which nothing in the
+        # container can be, since the container's users are the machine
+        # user's and its subordinate ids.
+        set archive4 { type ipv4_addr; size 1024; }
 
         # Addresses the cell was configured with directly.
         set static4 { type ipv4_addr; flags interval;
@@ -349,6 +371,7 @@ provision:
           # than the same traffic quietly going out the way it came.
           oifname "vpn0" ip daddr @allowed4 accept
           oifname "vpn0" ip daddr @static4 accept
+          oifname "vpn0" meta skuid @APT_UID@ ip daddr @archive4 tcp dport { 80, 443 } accept
 
           # Everything else, the host and the local network included. Logged
           # first: a refusal nobody can see is indistinguishable from a bug,
@@ -362,6 +385,10 @@ provision:
 
       dhcp_uid=$(id -u systemd-network 2>/dev/null || printf 0)
       sed -i "s/@DHCP_UID@/$dhcp_uid/g" /etc/nftables.conf
+      # Not a fallback to root as above: a machine without _apt has no apt to
+      # open the archive to, so the rule is left matching nobody.
+      apt_uid=$(id -u _apt 2>/dev/null || printf 4294967294)
+      sed -i "s/@APT_UID@/$apt_uid/g" /etc/nftables.conf
       systemctl enable --now nftables
       nft -f /etc/nftables.conf
 

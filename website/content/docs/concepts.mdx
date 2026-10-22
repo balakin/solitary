@@ -61,6 +61,12 @@ Replacing the container ends whatever is running in it. Anything in the home —
 
 The [examples](/docs/guides-examples) turn the self-updaters off in their images for this reason: an update that does not survive a reboot is only a download repeated at every start.
 
+## Updating the machine
+
+The machine under the container is solitary's choice — an Ubuntu LTS release — and so is keeping it patched. Ubuntu's `unattended-upgrades` runs in every machine and installs security fixes while it is up; [`solitary patch`](/docs/commands#patch-updates-the-machine) installs everything it is missing at once, and restarts it when a fix needs that. The disk and the home stay where they are: patching updates the system on that disk, it does not replace it.
+
+[`inspect`](/docs/commands#inspect-reports-what-a-cell-runs-on) and the [dashboard](/docs/dashboard#the-system-rows) say how far behind a machine is, and a machine missing security fixes is [marked](/docs/dashboard#warnings) until it has them.
+
 ## How it works
 
 `up` renders an embedded Lima template into a machine definition, creates the machine, and starts one rootless podman container inside it. Both are driven by shelling out — `limactl` on the host, `podman` through `limactl shell` in the machine — so there is nothing to install beyond Lima.

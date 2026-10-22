@@ -126,3 +126,29 @@ func TestAttentionReportsAnIgnoredBaseWithoutAMachine(t *testing.T) {
 		t.Errorf("attention() = %+v for a machine with no record, want the ignored base alone", found)
 	}
 }
+
+// Security fixes a machine was last seen without are something to act on; a
+// reboot it waits on is only while it runs, since starting a stopped one is
+// that reboot.
+func TestAttentionNamesMissingSecurityFixes(t *testing.T) {
+	security, updates := 3, 10
+	for _, tc := range []struct {
+		status string
+		guest  Guest
+		want   string
+	}{
+		{lima.StatusRunning, Guest{Updates: &updates, Security: &security}, "machine: 3 security updates pending"},
+		{lima.StatusStopped, Guest{Updates: &updates, Security: &security, RebootRequired: true}, "machine: 3 security updates pending"},
+		{lima.StatusRunning, Guest{RebootRequired: true}, "machine: installed fixes wait on a reboot"},
+		{lima.StatusStopped, Guest{RebootRequired: true}, ""},
+		{lima.StatusRunning, Guest{Updates: &updates}, ""},
+	} {
+		c, inst, _ := attentionFixture(t, tc.status)
+		if err := writeGuest("probe", tc.guest); err != nil {
+			t.Fatal(err)
+		}
+		if got := whats(attention("probe", c, inst)); got != tc.want {
+			t.Errorf("%s, %+v: attention() = %q, want %q", tc.status, tc.guest, got, tc.want)
+		}
+	}
+}

@@ -571,3 +571,54 @@ func TestCheckCellRefusesWhatReachesOutsideTheDefinition(t *testing.T) {
 		}
 	}
 }
+
+func TestNetworkCovers(t *testing.T) {
+	n := Network{Allow: []string{"ubuntu.com", "10.1.2.0/24", "192.0.2.7"}}
+	for host, want := range map[string]bool{
+		"ubuntu.com":         true,
+		"archive.ubuntu.com": true,
+		"ARCHIVE.Ubuntu.com": true,
+		"notubuntu.com":      false,
+		"ppa.launchpad.net":  false,
+		"10.1.2.9":           true,
+		"192.0.2.7":          true,
+		"192.0.2.8":          false,
+	} {
+		if got := n.Covers(host); got != want {
+			t.Errorf("Covers(%q) = %v, want %v", host, got, want)
+		}
+	}
+	if !(Network{}).Covers("ppa.launchpad.net") {
+		t.Error("a network with no allow list does not cover everything")
+	}
+}
+
+func TestArchiveCovers(t *testing.T) {
+	for host, want := range map[string]bool{
+		"archive.ubuntu.com":       true,
+		"us.archive.ubuntu.com":    true,
+		"security.ubuntu.com":      true,
+		"ubuntu.com":               false,
+		"ppa.launchpadcontent.net": false,
+	} {
+		if got := ArchiveCovers(host); got != want {
+			t.Errorf("ArchiveCovers(%q) = %v, want %v", host, got, want)
+		}
+	}
+}
+
+// A new machine is patched unless config.yaml says not to; only a written no
+// turns it off.
+func TestPatchNewIsOnUnlessConfigSaysNo(t *testing.T) {
+	isolate(t)
+	for config, want := range map[string]bool{"": true, "patch: true\n": true, "patch: false\n": false} {
+		writeUserConfig(t, config)
+		cell, err := CheckCell([]byte("image: alpine\n"), t.TempDir())
+		if err != nil {
+			t.Fatalf("%q: %v", config, err)
+		}
+		if cell.PatchNew != want {
+			t.Errorf("config.yaml %q: PatchNew = %v, want %v", config, cell.PatchNew, want)
+		}
+	}
+}

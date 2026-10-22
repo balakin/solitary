@@ -267,81 +267,8 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		return err
 	}
 
-	warnIgnoredBase(name, c, progress)
-
-	// Before the definition is rendered, since the GPU is part of it.
-	c.VM.GPU = chooseGPU(name, c, progress)
-
-	rendered, err := lima.Render(name, c.VM, c.Ports, c.Network)
+	instance, err := ensureMachine(name, c, progress)
 	if err != nil {
-		return err
-	}
-
-	instance := config.Instance(name)
-	inst, err := lima.Lookup(instance)
-	if err != nil {
-		return err
-	}
-	var stored string
-	if inst != nil {
-		if err := lima.CheckIsolation(*inst); err != nil {
-			return fmt.Errorf("machine isolation check: %w", err)
-		}
-		if stored, err = inst.StoredDefinition(); err != nil {
-			return err
-		}
-	}
-
-	switch {
-	case inst == nil:
-		if err := verifyMemory(c.VM.Memory, progress); err != nil {
-			return err
-		}
-		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
-		if err := createMachine(instance, rendered, c.VM.GPU); err != nil {
-			return err
-		}
-		if err := recordMachine(name, instance, rendered, c.VM.Provision, c.VM.Base); err != nil {
-			return err
-		}
-
-	case inst.Status == lima.StatusBroken:
-		return fmt.Errorf("cell %q is broken; inspect it with 'limactl shell %s' or discard it with 'solitary rm %s'", name, instance, name)
-
-	case inst.Status == lima.StatusRunning && !lima.Reachable(instance):
-		// The machine's process is alive and Lima still calls it running, but
-		// nothing inside answers. Stopping it releases the memory and lets the
-		// next up start it cleanly.
-		return fmt.Errorf("cell %q is running but not responding.\n"+
-			"Stop it with 'solitary down %s' and start it again; if it keeps happening,\n"+
-			"check that vm.memory fits this host and look at ~/.lima/%s/ha.stderr.log",
-			name, name, instance)
-
-	case inst.Status == lima.StatusRunning:
-		warnDrift(name, c, rendered, stored, progress)
-
-	default:
-		// A stopped machine reads its definition again when it starts, so
-		// this is the moment a change to the vm block can take effect
-		// without destroying the disk that machine carries. The one such
-		// change a machine cannot take is asked about before the
-		// definition is replaced.
-		if err := verifyDisk(name, instance, c.VM.Disk); err != nil {
-			return err
-		}
-		if err := applyDrift(name, instance, c, rendered, stored, progress); err != nil {
-			return err
-		}
-		if err := verifyMemory(c.VM.Memory, progress); err != nil {
-			return err
-		}
-		fmt.Fprintf(progress, "Starting cell %q...\n", name)
-		if err := lima.Start(instance, c.VM.GPU); err != nil {
-			return err
-		}
-	}
-
-	if err := installTunnel(instance, c.Network, progress); err != nil {
 		return err
 	}
 
@@ -369,6 +296,154 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 	// whatever is running now, and unconditionally, since a container that
 	// did not need replacing may still predate this.
 	return installArtifacts(instance)
+}
+
+// ensureMachine is the half of up below the container: the machine created or
+// started as the cell describes it, and its tunnel up. patch needs the machine
+// without the container, so this stops where the container begins.
+//
+// c.VM.GPU is filled in on the way, since it is part of the definition.
+func ensureMachine(name string, c *config.Cell, progress io.Writer) (string, error) {
+	warnIgnoredBase(name, c, progress)
+
+	// Before the definition is rendered, since the GPU is part of it.
+	c.VM.GPU = chooseGPU(name, c, progress)
+
+	rendered, err := lima.Render(name, c.VM, c.Ports, c.Network)
+	if err != nil {
+		return "", err
+	}
+
+	instance := config.Instance(name)
+	inst, err := lima.Lookup(instance)
+	if err != nil {
+		return "", err
+	}
+	var stored string
+	if inst != nil {
+		if err := lima.CheckIsolation(*inst); err != nil {
+			return "", fmt.Errorf("machine isolation check: %w", err)
+		}
+		if stored, err = inst.StoredDefinition(); err != nil {
+			return "", err
+		}
+	}
+
+	switch {
+	case inst == nil:
+		if err := verifyMemory(c.VM.Memory, progress); err != nil {
+			return "", err
+		}
+		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
+		if err := createMachine(instance, rendered, c.VM.GPU); err != nil {
+			return "", err
+		}
+		if err := recordMachine(name, instance, rendered, c.VM.Provision, c.VM.Base); err != nil {
+			return "", err
+		}
+
+	case inst.Status == lima.StatusBroken:
+		return "", fmt.Errorf("cell %q is broken; inspect it with 'limactl shell %s' or discard it with 'solitary rm %s'", name, instance, name)
+
+	case inst.Status == lima.StatusRunning && !lima.Reachable(instance):
+		// The machine's process is alive and Lima still calls it running, but
+		// nothing inside answers. Stopping it releases the memory and lets the
+		// next up start it cleanly.
+		return "", fmt.Errorf("cell %q is running but not responding.\n"+
+			"Stop it with 'solitary down %s' and start it again; if it keeps happening,\n"+
+			"check that vm.memory fits this host and look at ~/.lima/%s/ha.stderr.log",
+			name, name, instance)
+
+	case inst.Status == lima.StatusRunning:
+		warnDrift(name, c, rendered, stored, progress)
+
+	default:
+		// A stopped machine reads its definition again when it starts, so
+		// this is the moment a change to the vm block can take effect
+		// without destroying the disk that machine carries. The one such
+		// change a machine cannot take is asked about before the
+		// definition is replaced.
+		if err := verifyDisk(name, instance, c.VM.Disk); err != nil {
+			return "", err
+		}
+		if err := applyDrift(name, instance, c, rendered, stored, progress); err != nil {
+			return "", err
+		}
+		if err := verifyMemory(c.VM.Memory, progress); err != nil {
+			return "", err
+		}
+		fmt.Fprintf(progress, "Starting cell %q...\n", name)
+		if err := lima.Start(instance, c.VM.GPU); err != nil {
+			return "", err
+		}
+	}
+
+	if err := installTunnel(instance, c.Network, progress); err != nil {
+		return "", err
+	}
+
+	// After the tunnel, since a cell that reaches everything through one
+	// reaches nothing, the archive included, until it is up.
+	if inst == nil && c.PatchNew {
+		if err := patchNew(name, instance, c, progress); err != nil {
+			return "", err
+		}
+	}
+
+	return instance, nil
+}
+
+// patchNew brings a machine that was just created up to date. It is created
+// from the image its release shipped with, already behind by every fix since,
+// and nothing is running in it yet, so this is the one moment it can be
+// restarted for a new kernel without asking anyone.
+//
+// A machine that cannot be patched still works, so a failed patch is a warning
+// and not a failed up: the cell starts, and patch can be run again by hand. A
+// machine that does not come back from the restart is up's failure, since
+// there is no cell left to start.
+func patchNew(name, instance string, c *config.Cell, progress io.Writer) error {
+	warn := func(err error) {
+		fmt.Fprintf(progress, "Warning: the new machine could not be patched: %v\n"+
+			"  The cell works without it; 'solitary patch %s' tries again.\n", err, name)
+	}
+
+	fmt.Fprintf(progress, "Patching the new machine behind %q...\n", name)
+	if err := reachArchive(name, instance, c.Network); err != nil {
+		warn(err)
+		return nil
+	}
+	if err := upgrade(instance, progress); err != nil {
+		warn(err)
+		return nil
+	}
+
+	guest, err := askGuest(instance)
+	if err != nil {
+		warn(err)
+		return nil
+	}
+	if guest.RebootRequired {
+		fmt.Fprintf(progress, "Restarting cell %q to boot what the patch installed...\n", name)
+		if err := lima.Stop(instance); err != nil {
+			return err
+		}
+		if err := lima.Start(instance, c.VM.GPU); err != nil {
+			return err
+		}
+		if err := installTunnel(instance, c.Network, progress); err != nil {
+			return err
+		}
+		if guest, err = askGuest(instance); err != nil {
+			warn(err)
+			return nil
+		}
+	}
+	if err := writeGuest(name, guest); err != nil {
+		warn(err)
+	}
+
+	return nil
 }
 
 // resolveSecrets collects the values this cell is allowed to see, asking for

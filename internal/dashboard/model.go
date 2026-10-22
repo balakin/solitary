@@ -501,7 +501,7 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	name := m.selected().Name
 
 	switch msg.String() {
-	case "enter", "u", "b", "s", "d", "e", "t":
+	case "enter", "u", "b", "p", "s", "d", "e", "t":
 		if m.selected().Status == statusLoading {
 			m.failure = fmt.Errorf("cell %q is still being asked what it is doing; it can be acted on once it answers", name)
 			return m, nil
@@ -558,6 +558,19 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			notice:  fmt.Sprintf("Cell %q is rebuilt.", name),
 		}
 		return m.clear(), nil
+
+	case "p":
+		if name == "" {
+			return m, nil
+		}
+		if m.selected().Status == cell.StatusUninitialized {
+			m.failure = fmt.Errorf("cell %q has no machine to patch: press u to create one", name)
+			return m, nil
+		}
+		// Not asked here: patching ends nothing by itself, and the one step
+		// that would — a reboot — is asked about by the command, which has
+		// the terminal by then.
+		return m.clear(), m.run(name, "patch", fmt.Sprintf("Cell %q is patched.", name))
 
 	case "s":
 		if name == "" || m.selected().Status == cell.StatusUninitialized {

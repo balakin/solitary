@@ -225,6 +225,7 @@ func TestLifecycleKeysRunTheRightCommands(t *testing.T) {
 	}{
 		{[]string{"u"}, []string{"up", "claude", "--detach"}},
 		{[]string{"s"}, []string{"down", "claude"}},
+		{[]string{"p"}, []string{"patch", "claude"}},
 		{[]string{"d", "y"}, []string{"rm", "claude", "--force"}},
 		{[]string{"b", "y"}, []string{"up", "claude", "--detach", "--rebuild"}},
 	} {
@@ -899,7 +900,7 @@ func TestARunningCellIsLoadingUntilItAnswers(t *testing.T) {
 		t.Error("the list does not say the cell is loading")
 	}
 
-	for _, key := range []string{"enter", "u", "s", "d", "e", "t"} {
+	for _, key := range []string{"enter", "u", "p", "s", "d", "e", "t"} {
 		after, cmd := press(t, m, key)
 		if cmd != nil || after.mode != browsing {
 			t.Errorf("%s acted on a cell that is still loading", key)

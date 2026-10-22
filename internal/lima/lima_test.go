@@ -435,3 +435,50 @@ func TestRenderBoundsLearnedAddresses(t *testing.T) {
 		t.Error("Render() grants learned addresses with no timeout or size limit")
 	}
 }
+
+// Every machine is Ubuntu, so a restricted one still reaches Ubuntu's archive —
+// but only apt does: the container must gain nothing an allow list did not give
+// it.
+func TestRenderOpensTheArchiveToAptAlone(t *testing.T) {
+	rendered, err := Render(goldenCell, config.Defaults(), nil, config.Network{Allow: []string{"github.com"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`echo "nftset=/security.ubuntu.com/inet#solitary#archive4" >>`,
+		"meta skuid @APT_UID@ ip daddr @archive4 tcp dport { 80, 443 } accept",
+		`apt_uid=$(id -u _apt`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("Render() lacks %q", want)
+		}
+	}
+	if strings.Contains(rendered, "ip daddr @archive4 accept") {
+		t.Error("Render() opens the archive to everything in the machine")
+	}
+}
+
+// The resolver files an address under the most specific name it matches, so an
+// allow list naming ubuntu.com would lose the archive's names to apt's set
+// unless they go into the cell's own set too.
+func TestRenderKeepsTheArchiveForACellThatAllowsIt(t *testing.T) {
+	rendered, err := Render(goldenCell, config.Defaults(), nil, config.Network{Allow: []string{"ubuntu.com"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `echo "nftset=/archive.ubuntu.com/inet#solitary#archive4,inet#solitary#allowed4"`; !strings.Contains(rendered, want) {
+		t.Errorf("Render() lacks %q", want)
+	}
+}
+
+// The archive comes with a restriction and nothing else: a cell whose network
+// is left alone reaches it already.
+func TestRenderAddsNoArchiveToAnUnrestrictedCell(t *testing.T) {
+	rendered, err := Render(goldenCell, config.Defaults(), nil, config.Network{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(rendered, "archive4") {
+		t.Error("Render() of an unrestricted cell names the archive set")
+	}
+}

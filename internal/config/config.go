@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -124,6 +125,11 @@ type Cell struct {
 	// from before solitary chose the base itself. It changes nothing, and is
 	// kept only so that saying so is possible.
 	IgnoredBase string `yaml:"-"`
+
+	// PatchNew is whether up patches a machine it has just created, from
+	// config.yaml's patch. It is filled in by LoadCell rather than read from
+	// the cell: it is about this host's patience, not the cell.
+	PatchNew bool `yaml:"-"`
 }
 
 // Tag is the image reference a built cell produces. Podman qualifies locally
@@ -523,6 +529,13 @@ type UserConfig struct {
 	// one to use. A /dev/dri/by-path name is the one to give: renderD128 and
 	// renderD129 are numbered in the order the drivers loaded.
 	GPU string `yaml:"gpu"`
+
+	// Patch is whether up patches a machine it has just created, before its
+	// container starts. Unset is yes: a new machine starts from the image its
+	// release shipped with, behind by every fix since. No leaves that to
+	// unattended-upgrades and to patch run by hand, which this does not
+	// affect.
+	Patch *bool `yaml:"patch"`
 }
 
 // DefaultCommand keeps a container alive without assuming anything about the
@@ -542,6 +555,50 @@ const Base = "ubuntu-26.04"
 // names the alias and not a release, because the alias moved with Lima and the
 // release a machine actually runs is only known by asking it.
 const LegacyBase = "ubuntu-lts"
+
+// Archive is where every machine's apt fetches packages and fixes from: Ubuntu's
+// own archive, its security pocket, and ports for the architectures the main
+// archive does not carry. Every base is Ubuntu, so a restricted cell's machine
+// reaches these whatever network.allow says — for apt alone, not the
+// container, so that patching a cell never means widening what its agent can
+// reach.
+var Archive = []string{"archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com"}
+
+// ArchiveCovers reports whether host is one of Archive, or under one of them.
+func ArchiveCovers(host string) bool {
+	return slices.ContainsFunc(Archive, func(domain string) bool { return coveredBy(host, domain) })
+}
+
+// Covers reports whether this network lets the cell reach host: everything
+// does without an allow list, and with one a domain covers its subdomains.
+func (n Network) Covers(host string) bool {
+	if !n.Restricted() {
+		return true
+	}
+	ip := net.ParseIP(host)
+	for _, entry := range n.Allow {
+		if ip != nil {
+			if _, block, err := net.ParseCIDR(entry); err == nil && block.Contains(ip) {
+				return true
+			}
+			if entry == host {
+				return true
+			}
+			continue
+		}
+		if coveredBy(host, entry) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func coveredBy(host, domain string) bool {
+	host, domain = strings.ToLower(host), strings.ToLower(domain)
+
+	return host == domain || strings.HasSuffix(host, "."+domain)
+}
 
 // Defaults returns the settings compiled into the binary, used when neither the
 // cell nor the user-wide config specifies a value.
@@ -739,6 +796,7 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 		cell.VM.GPU = user.GPU
 	}
 	cell.Git = ResolveGit(cell.Git, user.Git)
+	cell.PatchNew = user.Patch == nil || *user.Patch
 	cell.Network = ResolveNetwork(cell.Network, user.Network)
 	if err := cell.Network.validateResolvers(); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
