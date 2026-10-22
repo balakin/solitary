@@ -124,7 +124,7 @@ type checkpoints struct {
 
 // checkpointRecords is how many records tar writes between dots. A record is
 // 20 blocks of 512 bytes, tar's default blocking factor, so a dot is 1000KiB
-// of the archive before it is compressed — which is the home's own size plus
+// of the archive — which is the home's own size plus
 // a header for each file, and so what the total is estimated in.
 const (
 	checkpointRecords = 100

@@ -111,7 +111,7 @@ func HomeArchive(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "cells", name+".home.tar.gz"), nil
+	return filepath.Join(dir, "cells", name+".home.tar"), nil
 }
 
 // UserConfigFile is the user-wide defaults file.

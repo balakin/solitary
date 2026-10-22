@@ -3,7 +3,6 @@ package cell
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,8 +11,7 @@ import (
 func writeArchive(t *testing.T, names ...string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	z := gzip.NewWriter(&buf)
-	w := tar.NewWriter(z)
+	w := tar.NewWriter(&buf)
 	for _, name := range names {
 		body := bytes.Repeat([]byte(name), 4096)
 		if err := w.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: name, Mode: 0o600, Size: int64(len(body))}); err != nil {
@@ -26,18 +24,15 @@ func writeArchive(t *testing.T, names ...string) []byte {
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := z.Close(); err != nil {
-		t.Fatal(err)
-	}
 	return buf.Bytes()
 }
 
 // The old machine is destroyed on the strength of this count, so a stream cut
-// off anywhere — inside a file, or past the last one but before gzip's
-// checksum — must fail rather than count what arrived.
+// off anywhere — inside a file, between two, or inside the end tar writes —
+// must fail rather than count what arrived.
 func TestCountEntriesRefusesACutOffArchive(t *testing.T) {
 	data := writeArchive(t, "./a", "./b", "./c/d")
-	path := filepath.Join(t.TempDir(), "home.tar.gz")
+	path := filepath.Join(t.TempDir(), "home.tar")
 
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
@@ -46,7 +41,10 @@ func TestCountEntriesRefusesACutOffArchive(t *testing.T) {
 		t.Fatalf("countEntries(whole) = %d, %v, want 3", n, err)
 	}
 
-	for _, cut := range []int{len(data) / 2, len(data) - 4} {
+	// Each file is a 512-byte header and its body, a multiple of 512 here,
+	// so the first file ends where the second header begins.
+	between := 512 + len(bytes.Repeat([]byte("./a"), 4096))
+	for _, cut := range []int{len(data) / 2, between, len(data) - 512} {
 		if err := os.WriteFile(path, data[:cut], 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -64,7 +62,7 @@ func TestHomeArchivesLiveInTheStateDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(pending) != "probe.home.tar.gz" || partial != pending+".partial" || saved != pending+".saved" {
+	if filepath.Base(pending) != "probe.home.tar" || partial != pending+".partial" || saved != pending+".saved" {
 		t.Errorf("homeArchives() = %q, %q, %q", partial, saved, pending)
 	}
 	if exists(pending) {

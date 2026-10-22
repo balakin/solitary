@@ -3,7 +3,6 @@ package cell
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -114,7 +113,7 @@ func NewMachine(name string, progress io.Writer) error {
 // saveHome reads a cell's home out of its machine into an archive on the host,
 // and reads the archive back to make sure all of it arrived. The archive is
 // never unpacked on the host: what a cell wrote is the cell's, and a file
-// named to land somewhere it should not stays inside a compressed stream.
+// named to land somewhere it should not stays inside the archive.
 func saveHome(name, instance string, c *config.Cell, running bool, partial, saved string, progress io.Writer) (err error) {
 	if !running {
 		// The machine as it is, with the definition it already has: it is
@@ -153,21 +152,6 @@ func saveHome(name, instance string, c *config.Cell, running bool, partial, save
 		return fmt.Errorf("measuring the home: unexpected du output %q", out)
 	}
 
-	dir := filepath.Dir(partial)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("creating %s: %w", dir, err)
-	}
-	// Compressed it is smaller, by how much nobody can say beforehand; its
-	// size uncompressed is the most it can need.
-	free, err := host.DiskFree(dir)
-	if err != nil {
-		return err
-	}
-	if bytesUsed >= free {
-		return fmt.Errorf("the home of %q holds %s and %s has %s free; nothing was changed",
-			name, host.FormatSize(bytesUsed), dir, host.FormatSize(free))
-	}
-
 	// Sockets are left out by tar, so they are left out of the count too.
 	out, err = guestRun(instance, nil, "sudo", "sh", "-c", "cd "+shellQuote(home)+" && find . ! -type s | wc -l")
 	if err != nil {
@@ -178,10 +162,25 @@ func saveHome(name, instance string, c *config.Cell, running bool, partial, save
 		return fmt.Errorf("counting the home's files: unexpected output %q", out)
 	}
 
+	// The archive is the home itself and a 512-byte header for each entry in
+	// it, give or take the padding tar rounds each file up with.
+	estimate := bytesUsed + 512*uint64(want)
+
+	dir := filepath.Dir(partial)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("creating %s: %w", dir, err)
+	}
+	free, err := host.DiskFree(dir)
+	if err != nil {
+		return err
+	}
+	if estimate >= free {
+		return fmt.Errorf("the home of %q holds %s and %s has %s free; nothing was changed",
+			name, host.FormatSize(estimate), dir, host.FormatSize(free))
+	}
+
 	fmt.Fprintf(progress, "Saving the home of %q (%s, %d entries) to the host...\n", name, host.FormatSize(bytesUsed), want)
-	// What tar counts is the archive before compression: the home itself,
-	// and a 512-byte header for each entry in it.
-	if err := streamOut(instance, home, partial, newMeter(progress, "saving", bytesUsed+512*uint64(want))); err != nil {
+	if err := streamOut(instance, home, partial, newMeter(progress, "saving", estimate)); err != nil {
 		return err
 	}
 
@@ -199,14 +198,14 @@ func saveHome(name, instance string, c *config.Cell, running bool, partial, save
 	return nil
 }
 
-// streamOut writes the home as a compressed tar to path. Run as root with
-// numeric owners, so that a file a cell's other users own keeps its owner: the
-// new machine maps the same ids the old one did.
+// streamOut writes the home as a tar to path. Run as root with numeric owners,
+// so that a file a cell's other users own keeps its owner: the new machine maps
+// the same ids the old one did.
 //
-// Compressed at gzip's fastest: it runs on one of the machine's cores, and
-// for a home of any size it is what the save waits on — a smaller archive
-// that takes three times as long is not the better trade for a file that
-// lives for a few minutes.
+// Not compressed. Compression runs on one of the machine's cores and is what a
+// save of any size waits on, to make smaller a file that lives for the few
+// minutes of a move — and what a home holds most of, media and models and
+// dependencies already packed, barely compresses at all.
 func streamOut(instance, home, path string, m *meter) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
@@ -215,7 +214,7 @@ func streamOut(instance, home, path string, m *meter) error {
 
 	cmd, err := lima.Command(instance, "sudo", "tar", "--numeric-owner", "--xattrs",
 		"--checkpoint="+strconv.Itoa(checkpointRecords), "--checkpoint-action=dot",
-		"-I", "gzip -1", "-C", home, "-cf", "-", ".")
+		"-C", home, "-cf", "-", ".")
 	if err != nil {
 		f.Close()
 		return err
@@ -236,9 +235,10 @@ func streamOut(instance, home, path string, m *meter) error {
 	return nil
 }
 
-// countEntries reads a compressed tar to its end and counts what is in it,
-// which is what makes it the archive of a whole home and not of the part of
-// one that arrived before something went wrong: a cut-off stream fails here.
+// countEntries reads a tar to its end and counts what is in it, which is what
+// makes it the archive of a whole home and not of the part of one that arrived
+// before something went wrong: a stream cut off inside a file fails to read,
+// and one cut off between files lacks the end tar always writes.
 func countEntries(path string) (int, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -246,11 +246,23 @@ func countEntries(path string) (int, error) {
 	}
 	defer f.Close()
 
-	z, err := gzip.NewReader(f)
+	// Two zero blocks end every archive tar writes, padded out with more.
+	info, err := f.Stat()
 	if err != nil {
 		return 0, err
 	}
-	r := tar.NewReader(z)
+	end := make([]byte, 1024)
+	if info.Size() < int64(len(end)) {
+		return 0, errors.New("the archive is too short to be one")
+	}
+	if _, err := f.ReadAt(end, info.Size()-int64(len(end))); err != nil {
+		return 0, err
+	}
+	if !bytes.Equal(end, make([]byte, len(end))) {
+		return 0, errors.New("the archive stops before its end")
+	}
+
+	r := tar.NewReader(f)
 	n := 0
 	for {
 		_, err := r.Next()
@@ -261,11 +273,6 @@ func countEntries(path string) (int, error) {
 			return 0, err
 		}
 		n++
-	}
-	// The gzip trailer carries a checksum of everything before it, and it is
-	// only read once the stream is drained past the tar's own end.
-	if _, err := io.Copy(io.Discard, z); err != nil {
-		return 0, err
 	}
 
 	return n, nil
@@ -299,10 +306,10 @@ func restoreHome(name, instance, pending string, progress io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// Measured in the archive as it is on the host, compressed, which is
-	// exactly what crosses into the machine.
+	// Measured in the archive as it is on the host, which is exactly what
+	// crosses into the machine.
 	m := newMeter(progress, "restoring", uint64(info.Size()))
-	_, err = guestRun(instance, countingReader{r: f, m: m}, "sudo", "tar", "--numeric-owner", "--xattrs", "-xpzf", "-", "-C", home)
+	_, err = guestRun(instance, countingReader{r: f, m: m}, "sudo", "tar", "--numeric-owner", "--xattrs", "-xpf", "-", "-C", home)
 	m.finish()
 	if err != nil {
 		return fmt.Errorf("restoring the home: %w; it is kept at %s, and up tries again", err, pending)
