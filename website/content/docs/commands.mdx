@@ -43,7 +43,7 @@ It is idempotent: it creates the cell's machine if absent, boots it if stopped, 
 
 `solitary doctor` asks the questions a cell would otherwise answer for you halfway through an `up`, or not at all:
 
-- **`limactl`** — on `PATH`, and new enough. Solitary is written against [Lima 2.0](/docs/installation).
+- **`limactl`** — on `PATH`, and new enough. Solitary is written against [Lima 2](/docs/installation), and the definitions it writes ask Lima for the release this checks: one that knows the template machines are created from, and has the security fixes solitary relies on.
 - **`hypervisor`** — whether this machine can run a guest at all. On Linux that is whether `/dev/kvm` exists _and this user can open it_; the group that owns it is the usual reason a create fails minutes in. On macOS it is `kern.hv_support`.
 - **`memory`** — what `/dev/shm` holds against what the defined cells ask for. `up` already refuses a single machine larger than the filesystem behind it, but it only ever sees one cell; whether they all fit at once is a question only doctor asks, and it is a warning rather than an error. See [a machine has to fit the host](/docs/troubleshooting#a-machine-has-to-fit-the-host).
 - **`disk`** — free space where Lima keeps machines. A disk is allocated sparsely, so what cells declare cannot be summed and the space left to grow into is the only number worth watching.
