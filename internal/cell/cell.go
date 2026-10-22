@@ -382,7 +382,68 @@ func ensureMachine(name string, c *config.Cell, progress io.Writer) (string, err
 		return "", err
 	}
 
+	// After the tunnel, since a cell that reaches everything through one
+	// reaches nothing, the archive included, until it is up.
+	if inst == nil && c.PatchNew {
+		if err := patchNew(name, instance, c, progress); err != nil {
+			return "", err
+		}
+	}
+
 	return instance, nil
+}
+
+// patchNew brings a machine that was just created up to date. It is created
+// from the image its release shipped with, already behind by every fix since,
+// and nothing is running in it yet, so this is the one moment it can be
+// restarted for a new kernel without asking anyone.
+//
+// A machine that cannot be patched still works, so a failed patch is a warning
+// and not a failed up: the cell starts, and patch can be run again by hand. A
+// machine that does not come back from the restart is up's failure, since
+// there is no cell left to start.
+func patchNew(name, instance string, c *config.Cell, progress io.Writer) error {
+	warn := func(err error) {
+		fmt.Fprintf(progress, "Warning: the new machine could not be patched: %v\n"+
+			"  The cell works without it; 'solitary patch %s' tries again.\n", err, name)
+	}
+
+	fmt.Fprintf(progress, "Patching the new machine behind %q...\n", name)
+	if err := reachArchive(name, instance, c.Network); err != nil {
+		warn(err)
+		return nil
+	}
+	if err := upgrade(instance, progress); err != nil {
+		warn(err)
+		return nil
+	}
+
+	guest, err := askGuest(instance)
+	if err != nil {
+		warn(err)
+		return nil
+	}
+	if guest.RebootRequired {
+		fmt.Fprintf(progress, "Restarting cell %q to boot what the patch installed...\n", name)
+		if err := lima.Stop(instance); err != nil {
+			return err
+		}
+		if err := lima.Start(instance, c.VM.GPU); err != nil {
+			return err
+		}
+		if err := installTunnel(instance, c.Network, progress); err != nil {
+			return err
+		}
+		if guest, err = askGuest(instance); err != nil {
+			warn(err)
+			return nil
+		}
+	}
+	if err := writeGuest(name, guest); err != nil {
+		warn(err)
+	}
+
+	return nil
 }
 
 // resolveSecrets collects the values this cell is allowed to see, asking for

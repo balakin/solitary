@@ -606,3 +606,19 @@ func TestArchiveCovers(t *testing.T) {
 		}
 	}
 }
+
+// A new machine is patched unless config.yaml says not to; only a written no
+// turns it off.
+func TestPatchNewIsOnUnlessConfigSaysNo(t *testing.T) {
+	isolate(t)
+	for config, want := range map[string]bool{"": true, "patch: true\n": true, "patch: false\n": false} {
+		writeUserConfig(t, config)
+		cell, err := CheckCell([]byte("image: alpine\n"), t.TempDir())
+		if err != nil {
+			t.Fatalf("%q: %v", config, err)
+		}
+		if cell.PatchNew != want {
+			t.Errorf("config.yaml %q: PatchNew = %v, want %v", config, cell.PatchNew, want)
+		}
+	}
+}

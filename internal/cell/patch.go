@@ -62,13 +62,8 @@ func Patch(name string, reboot func() (bool, error), progress io.Writer) (err er
 	}
 
 	fmt.Fprintf(progress, "Patching the machine behind %q...\n", name)
-	cmd, err := lima.Command(instance, "sudo", "sh", "-c", patchScript)
-	if err != nil {
+	if err := upgrade(instance, progress); err != nil {
 		return err
-	}
-	cmd.Stdout, cmd.Stderr = progress, progress
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("patching the machine: %w", err)
 	}
 
 	guest, err := askGuest(instance)
@@ -111,6 +106,21 @@ func Patch(name string, reboot func() (bool, error), progress io.Writer) (err er
 		summary += " · " + pending
 	}
 	fmt.Fprintf(progress, "Cell %q is patched: %s.\n", name, summary)
+
+	return nil
+}
+
+// upgrade runs the patch script in a running machine, showing what apt says as
+// it says it.
+func upgrade(instance string, progress io.Writer) error {
+	cmd, err := lima.Command(instance, "sudo", "sh", "-c", patchScript)
+	if err != nil {
+		return err
+	}
+	cmd.Stdout, cmd.Stderr = progress, progress
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("patching the machine: %w", err)
+	}
 
 	return nil
 }

@@ -125,6 +125,11 @@ type Cell struct {
 	// from before solitary chose the base itself. It changes nothing, and is
 	// kept only so that saying so is possible.
 	IgnoredBase string `yaml:"-"`
+
+	// PatchNew is whether up patches a machine it has just created, from
+	// config.yaml's patch. It is filled in by LoadCell rather than read from
+	// the cell: it is about this host's patience, not the cell.
+	PatchNew bool `yaml:"-"`
 }
 
 // Tag is the image reference a built cell produces. Podman qualifies locally
@@ -524,6 +529,13 @@ type UserConfig struct {
 	// one to use. A /dev/dri/by-path name is the one to give: renderD128 and
 	// renderD129 are numbered in the order the drivers loaded.
 	GPU string `yaml:"gpu"`
+
+	// Patch is whether up patches a machine it has just created, before its
+	// container starts. Unset is yes: a new machine starts from the image its
+	// release shipped with, behind by every fix since. No leaves that to
+	// unattended-upgrades and to patch run by hand, which this does not
+	// affect.
+	Patch *bool `yaml:"patch"`
 }
 
 // DefaultCommand keeps a container alive without assuming anything about the
@@ -784,6 +796,7 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 		cell.VM.GPU = user.GPU
 	}
 	cell.Git = ResolveGit(cell.Git, user.Git)
+	cell.PatchNew = user.Patch == nil || *user.Patch
 	cell.Network = ResolveNetwork(cell.Network, user.Network)
 	if err := cell.Network.validateResolvers(); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
