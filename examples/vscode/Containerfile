@@ -4,7 +4,7 @@
 FROM docker.io/library/ubuntu:24.04
 
 # The versions this cell pins. Nothing else in the repository names them.
-ARG NODE_VERSION=24.20.0
+ARG NODE_VERSION=24.22.1
 ARG NVM_VERSION=v0.40.7
 ARG OPENVSCODE_VERSION=1.109.5
 ARG GH_VERSION=2.98.0
