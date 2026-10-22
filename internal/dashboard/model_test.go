@@ -349,6 +349,105 @@ func TestAttentionIsMarkedAndExplained(t *testing.T) {
 	}
 }
 
+// The pane says what the machine runs and how far behind it is: what was last
+// seen, dated, until the running machine answers, and then the answer.
+func TestSystemLineShowsTheLastReadingThenTheLiveOne(t *testing.T) {
+	m := listed(t)
+	security, none := 7, 0
+
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude"}})
+	if view := next.(model).View(); !strings.Contains(view, "asking the machine") {
+		t.Errorf("a running cell never seen says nothing while it is asked:\n%s", view)
+	}
+
+	last := &cell.Guest{
+		AsOf: time.Now().Add(-3 * 24 * time.Hour), Release: "Ubuntu 24.04.5 LTS", Kernel: "6.8.0-142-generic",
+		Updates: &security, Security: &security, RebootRequired: true,
+	}
+	next, _ = next.Update(detailMsg{detail: cell.Detail{Name: "claude", Guest: last}})
+	view := next.(model).View()
+	for _, want := range []string{"Ubuntu 24.04.5 LTS · kernel 6.8.0-142-generic", "7 updates pending, 7 of them security · reboot required", "as last seen, 3d ago"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the last reading omits %q:\n%s", want, view)
+		}
+	}
+
+	next, _ = next.Update(guestMsg{name: "claude", guest: cell.Guest{AsOf: time.Now(), Live: true, Release: "Ubuntu 24.04.5 LTS", Updates: &none, Security: &none}})
+	view = next.(model).View()
+	if strings.Contains(view, "as last seen") || !strings.Contains(view, "0 updates pending") {
+		t.Errorf("the live answer did not replace the last reading:\n%s", view)
+	}
+
+	// An answer about a cell no longer selected does not land on this one.
+	next, _ = next.Update(guestMsg{name: "scratch", guest: cell.Guest{Live: true, Release: "Debian"}})
+	if view := next.(model).View(); strings.Contains(view, "Debian") {
+		t.Errorf("another cell's answer landed on the selected one:\n%s", view)
+	}
+}
+
+// The machine line names the base the VM was made from, next to the container
+// image above it: as recorded, with what a new machine would get when that
+// differs, and for a cell with no machine yet, what up will create it from.
+func TestMachineLineNamesTheBase(t *testing.T) {
+	m := listed(t)
+	for created, want := range map[string]string{
+		config.Base:  "· " + config.Base,
+		"ubuntu-lts": "· ubuntu-lts (new: " + config.Base + ")",
+	} {
+		next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude", CreatedFrom: created}})
+		if view := next.(model).View(); !strings.Contains(view, want) {
+			t.Errorf("created from %q: the machine line omits %q:\n%s", created, want, view)
+		}
+	}
+
+	m, _ = press(t, m, "down")
+	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "scratch"}})
+	if view := next.(model).View(); !strings.Contains(view, "· "+config.Base) {
+		t.Errorf("a cell with no machine does not say what up creates it from:\n%s", view)
+	}
+}
+
+// i opens what inspect reports about the selected cell, says it is asking until
+// the report arrives, and any key goes back.
+func TestInspectViewShowsTheReport(t *testing.T) {
+	next, _ := listed(t).Update(detailMsg{detail: cell.Detail{Name: "claude"}})
+	m := next.(model)
+
+	m, _ = press(t, m, "i")
+	if m.mode != viewingReport {
+		t.Fatalf("after i, mode = %v, want the inspect view", m.mode)
+	}
+	if view := m.View(); !strings.Contains(view, "inspect · claude") || !strings.Contains(view, "asking the machine") {
+		t.Errorf("the inspect view does not say it is asking:\n%s", view)
+	}
+
+	security := 3
+	next, _ = m.Update(reportMsg{name: "claude", report: cell.Report{
+		Host: cell.Host{Solitary: "0.17.0", Lima: "2.2.1"},
+		Cell: "claude",
+		Machine: &cell.Machine{Status: "running", CreatedFrom: "ubuntu-26.04", NewFrom: "ubuntu-26.04", Guest: &cell.Guest{
+			AsOf: time.Now(), Live: true, Release: "Ubuntu 26.04.1 LTS", Kernel: "7.0.0-34-generic", Updates: &security, Security: &security,
+		}},
+		Container: &cell.Container{Running: true, Image: "localhost/solitary-claude:latest"},
+	}})
+	m = next.(model)
+	view := m.View()
+	for _, want := range []string{"lima", "2.2.1", "Ubuntu 26.04.1 LTS · kernel 7.0.0-34-generic", "3 updates pending, 3 of them security", "localhost/solitary-claude:latest", "any key back"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the inspect view omits %q:\n%s", want, view)
+		}
+	}
+	// What the report asked the machine is what the summary says too.
+	if m.detail.Guest == nil || m.detail.Guest.Release != "Ubuntu 26.04.1 LTS" {
+		t.Errorf("detail.Guest = %+v, want the report's reading", m.detail.Guest)
+	}
+
+	m, _ = press(t, m, "x")
+	if m.mode != browsing {
+		t.Errorf("after another key, mode = %v, want back to the list", m.mode)
+	}
+}
+
 // An orphan has nothing to describe, and the pane has to say that rather than
 // render a cell whose every field is empty.
 func TestOrphanPaneSaysWhatIsLeft(t *testing.T) {

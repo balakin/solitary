@@ -17,7 +17,7 @@ func newDashboardCmd() *cobra.Command {
 			"those commands, so a build prints what a build prints.",
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return dashboard.Run()
+			return dashboard.Run(version)
 		},
 	}
 }

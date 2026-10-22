@@ -881,6 +881,16 @@ type Detail struct {
 	Network     config.Network
 	Secrets     []SecretState
 
+	// Guest is what was last seen inside the cell's machine, kept from the
+	// last time it was asked while running: a file like the rest, and dated.
+	// Nil when it never has been.
+	Guest *Guest
+
+	// CreatedFrom is the image template the cell's machine was created
+	// from, as its record has it or as up will complete a record that
+	// predates keeping it; empty when nothing was ever recorded.
+	CreatedFrom string
+
 	// Orphaned reports that no definition exists for this name and every
 	// other field is therefore empty. The machine is all that is left.
 	Orphaned bool
@@ -919,6 +929,19 @@ func Describe(name string) (Detail, error) {
 	}
 	if c.Build != "" {
 		detail.Image = "build:" + c.Build
+	}
+	if detail.Guest, err = readGuest(name); err != nil {
+		return Detail{}, err
+	}
+	// A record from before the base was kept says it the way up will once
+	// it completes the record: the machine predates solitary choosing, so it
+	// was made from what vm.base said, or from the alias that was the default.
+	record, err := config.ReadApplied(name)
+	if err != nil {
+		return Detail{}, err
+	}
+	if record.Recorded() {
+		detail.CreatedFrom = createdFrom(c, record)
 	}
 
 	if len(c.Secrets) > 0 {

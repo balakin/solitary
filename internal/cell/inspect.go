@@ -84,6 +84,54 @@ type Guest struct {
 	Packages       map[string]string `json:"packages,omitempty"`
 }
 
+// Pending says how far behind the machine's packages are, and whether a kernel
+// or library it already installed is waiting on a reboot; empty when the
+// machine said neither.
+//
+// It is shown under the system line, as part of it, so it names its own unit:
+// beside a container image, a bare "65 pending" reads as being about the image.
+func (g *Guest) Pending() string {
+	var parts []string
+	if g.Updates != nil {
+		part := fmt.Sprintf("%d updates pending", *g.Updates)
+		if *g.Updates == 1 {
+			part = "1 update pending"
+		}
+		if g.Security != nil && *g.Security > 0 {
+			part += fmt.Sprintf(", %d of them security", *g.Security)
+		}
+		parts = append(parts, part)
+	}
+	if g.RebootRequired {
+		parts = append(parts, "reboot required")
+	}
+
+	return strings.Join(parts, " · ")
+}
+
+// Behind reports whether the machine is missing security fixes it could have:
+// pending security updates, or installed ones a reboot has not applied yet.
+func (g *Guest) Behind() bool {
+	return g.RebootRequired || (g.Security != nil && *g.Security > 0)
+}
+
+// AskGuest asks a cell's running machine what inspect asks it, and keeps the
+// answer for when the machine is stopped.
+func AskGuest(name string) (Guest, error) {
+	if err := config.ValidateName(name); err != nil {
+		return Guest{}, err
+	}
+	guest, err := askGuest(config.Instance(name))
+	if err != nil {
+		return Guest{}, err
+	}
+	if err := writeGuest(name, guest); err != nil {
+		return Guest{}, err
+	}
+
+	return guest, nil
+}
+
 // Container is the cell's container, when it has one.
 type Container struct {
 	Running  bool      `json:"running"`
