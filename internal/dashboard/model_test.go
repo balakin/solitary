@@ -310,24 +310,42 @@ func TestNetworkPreview(t *testing.T) {
 	}
 }
 
-// Every other setting is applied by stopping and starting the cell, so the
-// dashboard says nothing about them. vm.provision is not: the old script has
-// already run, and only destroying the machine discards what it did.
-func TestProvisionDriftIsShown(t *testing.T) {
+// A cell that needs something done is marked in the list, so it is seen
+// without selecting it, and the pane says what and how. The marker belongs to
+// the row it is about: one cell's problem is not every cell's.
+func TestAttentionIsMarkedAndExplained(t *testing.T) {
 	m := listed(t)
-
 	next, _ := m.Update(detailMsg{detail: cell.Detail{Name: "claude"}})
-	if view := next.(model).View(); strings.Contains(view, "provision") {
-		t.Errorf("a cell whose provision script is unchanged mentions it:\n%s", view)
+	if view := next.(model).View(); strings.Contains(view, "!") || strings.Contains(view, "warning") {
+		t.Errorf("a cell with nothing to do is marked:\n%s", view)
 	}
 
-	next, _ = m.Update(detailMsg{detail: cell.Detail{Name: "claude", ProvisionChanged: true}})
+	edited := cell.Attention{What: "machine definition edited outside solitary", Fix: "stop and start the cell"}
+	next, _ = next.Update(cellsMsg{cells: []cell.Info{
+		{Name: "claude", Status: cell.StatusRunning, Attention: []cell.Attention{edited}},
+		{Name: "scratch", Status: cell.StatusUninitialized},
+	}})
 	view := next.(model).View()
-	if !strings.Contains(view, "provision") || !strings.Contains(view, "changed") {
-		t.Errorf("a changed provision script is not reported:\n%s", view)
+
+	// Only the list, the pane to the left: the detail pane beside it names the
+	// selected cell too.
+	marked := false
+	for _, line := range strings.Split(view, "\n") {
+		row, _, _ := strings.Cut(line, "││")
+		switch {
+		case strings.Contains(row, "scratch") && strings.Contains(row, "!"):
+			t.Errorf("the cell with nothing to do is marked: %q", row)
+		case strings.Contains(row, "claude") && strings.Contains(row, "!"):
+			marked = true
+		}
 	}
-	if !strings.Contains(view, "rebuilds it") {
-		t.Errorf("the dashboard does not say what applies the change:\n%s", view)
+	if !marked {
+		t.Errorf("the cell that needs attention is not marked:\n%s", view)
+	}
+	for _, want := range []string{edited.What, edited.Fix} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the pane does not say %q:\n%s", want, view)
+		}
 	}
 }
 

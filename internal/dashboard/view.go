@@ -47,11 +47,10 @@ func (m model) empty() string {
 
 // list is every cell and its state, which is the whole point of the screen.
 func (m model) list() string {
-	width := 0
+	width, statusWidth := 0, 0
 	for _, c := range m.cells {
-		if len(c.Name) > width {
-			width = len(c.Name)
-		}
+		width = max(width, len(c.Name))
+		statusWidth = max(statusWidth, len(c.Status))
 	}
 
 	rows := make([]string, 0, len(m.cells))
@@ -63,7 +62,14 @@ func (m model) list() string {
 		mark := statusStyle(c.Status).Render(statusMark(c.Status))
 		name := style.Render(fmt.Sprintf("%-*s", width, c.Name))
 		status := statusStyle(c.Status).Render(string(c.Status))
-		rows = append(rows, fmt.Sprintf("%s%s %s  %s", cursor, mark, name, status))
+		row := fmt.Sprintf("%s%s %s  %s", cursor, mark, name, status)
+		// A plain "!" rather than a warning sign: terminals disagree on
+		// whether ⚠ is one column or two, and a guess wrong by one shifts
+		// everything drawn after it.
+		if len(c.Attention) > 0 {
+			row += strings.Repeat(" ", statusWidth-len(c.Status)+2) + warnStyle.Render("!")
+		}
+		rows = append(rows, row)
 	}
 
 	return pane("cells", strings.Join(rows, "\n"))
@@ -108,6 +114,7 @@ func (m model) detailPane() string {
 	}
 
 	lines := m.about()
+	lines = append(lines, m.attentionLines()...)
 	lines = append(lines,
 		field("image", m.detail.Image),
 		field("machine", machine),
@@ -119,20 +126,34 @@ func (m model) detailPane() string {
 	if len(m.detail.Devices) > 0 {
 		lines = append(lines, field("devices", strings.Join(m.detail.Devices, ", ")))
 	}
-	if m.detail.ProvisionChanged {
-		// The one change stopping and starting the cell does not apply, so
-		// it is said here rather than left to the next up.
-		lines = append(lines,
-			field("provision", warnStyle.Render("changed since this machine was provisioned")),
-			field("", valueStyle.Render("d then u rebuilds it; the disk and home go with it")),
-		)
-	}
 	lines = append(lines, m.network()...)
 	lines = append(lines, m.vpn()...)
 	lines = append(lines, m.handoffLines()...)
 	lines = append(lines, field("secrets", m.secretsSummary()))
 
 	return pane(m.detail.Name, strings.Join(lines, "\n"))
+}
+
+// attentionLines are what the list marks the cell for, each with what to do
+// about it. They come from the listing rather than the description: the list
+// already asked Lima about every machine, and the pane would otherwise ask
+// again for the one cell it shows. Placed first, since an up typed while
+// reading further down is often the very thing that would not fix them.
+func (m model) attentionLines() []string {
+	selected := m.selected()
+	if selected.Name != m.detail.Name {
+		return nil
+	}
+
+	var lines []string
+	for _, a := range selected.Attention {
+		lines = append(lines,
+			field("warning", warnStyle.Render(a.What)),
+			field("", valueStyle.Render(a.Fix)),
+		)
+	}
+
+	return lines
 }
 
 func (m model) gpuLines() []string {

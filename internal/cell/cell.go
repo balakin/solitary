@@ -59,6 +59,10 @@ type Info struct {
 	Name   string
 	Image  string
 	Status Status
+
+	// Attention is what about the cell needs someone to act, worked out
+	// from this host alone; empty when nothing does.
+	Attention []Attention
 }
 
 // List returns every defined cell with its current state, alongside the
@@ -118,7 +122,8 @@ func Survey() ([]Info, error) {
 	for _, name := range names {
 		info := Info{Name: name, Status: StatusUninitialized}
 
-		switch c, err := config.LoadCell(name); {
+		c, err := config.LoadCell(name)
+		switch {
 		case err != nil:
 			info.Image = "(unreadable)"
 		case c.Build != "":
@@ -127,8 +132,13 @@ func Survey() ([]Info, error) {
 			info.Image = c.Image
 		}
 
+		var machine *lima.Instance
 		if inst, ok := byName[config.Instance(name)]; ok {
 			info.Status = statusOf(inst)
+			machine = &inst
+		}
+		if c != nil {
+			info.Attention = attention(name, c, machine)
 		}
 
 		infos = append(infos, info)
@@ -874,12 +884,6 @@ type Detail struct {
 	// Orphaned reports that no definition exists for this name and every
 	// other field is therefore empty. The machine is all that is left.
 	Orphaned bool
-
-	// ProvisionChanged reports that vm.provision differs from the script the
-	// machine was given. Unlike every other setting, restarting the machine
-	// does not make it match the file: the old script has already run, and
-	// only destroying the machine discards what it did.
-	ProvisionChanged bool
 }
 
 // Describe reads a cell's definition.
@@ -916,12 +920,6 @@ func Describe(name string) (Detail, error) {
 	if c.Build != "" {
 		detail.Image = "build:" + c.Build
 	}
-
-	record, err := config.ReadApplied(name)
-	if err != nil {
-		return Detail{}, err
-	}
-	detail.ProvisionChanged = record.ProvisionChanged(c.VM.Provision)
 
 	if len(c.Secrets) > 0 {
 		path, err := config.EnvFile(name)
