@@ -660,9 +660,9 @@ func (m model) help() string {
 	case managingSecrets:
 		return "↑↓ move · enter set value · esc back"
 	default:
-		// Arrows moving through a list go without saying, and the line has
-		// to fit a terminal a hundred columns wide.
-		return "⏎ shell · u up · b rebuild · s stop · e secrets · n network · i inspect · t traffic · d rm · q quit"
+		// Arrows moving through a list go without saying, and so does q
+		// quitting, and the line has to fit a terminal a hundred columns wide.
+		return "⏎ shell · u up · b rebuild · p patch · s stop · e secrets · n network · i inspect · t traffic · d rm"
 	}
 }
 

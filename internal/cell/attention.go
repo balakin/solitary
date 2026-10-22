@@ -3,6 +3,7 @@ package cell
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/balakin/solitary/internal/config"
 	"github.com/balakin/solitary/internal/lima"
@@ -33,12 +34,20 @@ func attention(name string, c *config.Cell, inst *lima.Instance) []Attention {
 	if inst == nil {
 		return found
 	}
+	running := inst.Status == lima.StatusRunning
+
+	// What the machine said when it was last asked, kept on this host, so
+	// reading it asks nothing either.
+	if guest, err := readGuest(name); err == nil && guest != nil {
+		if what := missingFixes(guest, running); what != "" {
+			found = append(found, Attention{What: what, Fix: "solitary patch " + name + " brings it up to date"})
+		}
+	}
 
 	record, err := config.ReadApplied(name)
 	if err != nil || !record.Recorded() {
 		return found
 	}
-	running := inst.Status == lima.StatusRunning
 
 	if stored, err := inst.StoredDefinition(); err == nil && record.Edited(stored) {
 		fix := "up puts back what the cell describes"
@@ -76,4 +85,22 @@ func settingsChanged(name string, c *config.Cell, record config.Applied) bool {
 	}
 
 	return record.Definition != config.Digest(rendered)
+}
+
+// missingFixes says which security fixes a machine was last seen without, or
+// nothing when it had them all. A pending reboot only counts while the machine
+// runs: a stopped one boots afresh, and that is the reboot.
+func missingFixes(g *Guest, running bool) string {
+	var parts []string
+	if g.Security != nil && *g.Security > 0 {
+		parts = append(parts, plural(*g.Security, "security update")+" pending")
+	}
+	if g.RebootRequired && running {
+		parts = append(parts, "installed fixes wait on a reboot")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return "machine: " + strings.Join(parts, "; ")
 }

@@ -267,81 +267,8 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		return err
 	}
 
-	warnIgnoredBase(name, c, progress)
-
-	// Before the definition is rendered, since the GPU is part of it.
-	c.VM.GPU = chooseGPU(name, c, progress)
-
-	rendered, err := lima.Render(name, c.VM, c.Ports, c.Network)
+	instance, err := ensureMachine(name, c, progress)
 	if err != nil {
-		return err
-	}
-
-	instance := config.Instance(name)
-	inst, err := lima.Lookup(instance)
-	if err != nil {
-		return err
-	}
-	var stored string
-	if inst != nil {
-		if err := lima.CheckIsolation(*inst); err != nil {
-			return fmt.Errorf("machine isolation check: %w", err)
-		}
-		if stored, err = inst.StoredDefinition(); err != nil {
-			return err
-		}
-	}
-
-	switch {
-	case inst == nil:
-		if err := verifyMemory(c.VM.Memory, progress); err != nil {
-			return err
-		}
-		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
-		if err := createMachine(instance, rendered, c.VM.GPU); err != nil {
-			return err
-		}
-		if err := recordMachine(name, instance, rendered, c.VM.Provision, c.VM.Base); err != nil {
-			return err
-		}
-
-	case inst.Status == lima.StatusBroken:
-		return fmt.Errorf("cell %q is broken; inspect it with 'limactl shell %s' or discard it with 'solitary rm %s'", name, instance, name)
-
-	case inst.Status == lima.StatusRunning && !lima.Reachable(instance):
-		// The machine's process is alive and Lima still calls it running, but
-		// nothing inside answers. Stopping it releases the memory and lets the
-		// next up start it cleanly.
-		return fmt.Errorf("cell %q is running but not responding.\n"+
-			"Stop it with 'solitary down %s' and start it again; if it keeps happening,\n"+
-			"check that vm.memory fits this host and look at ~/.lima/%s/ha.stderr.log",
-			name, name, instance)
-
-	case inst.Status == lima.StatusRunning:
-		warnDrift(name, c, rendered, stored, progress)
-
-	default:
-		// A stopped machine reads its definition again when it starts, so
-		// this is the moment a change to the vm block can take effect
-		// without destroying the disk that machine carries. The one such
-		// change a machine cannot take is asked about before the
-		// definition is replaced.
-		if err := verifyDisk(name, instance, c.VM.Disk); err != nil {
-			return err
-		}
-		if err := applyDrift(name, instance, c, rendered, stored, progress); err != nil {
-			return err
-		}
-		if err := verifyMemory(c.VM.Memory, progress); err != nil {
-			return err
-		}
-		fmt.Fprintf(progress, "Starting cell %q...\n", name)
-		if err := lima.Start(instance, c.VM.GPU); err != nil {
-			return err
-		}
-	}
-
-	if err := installTunnel(instance, c.Network, progress); err != nil {
 		return err
 	}
 
@@ -369,6 +296,93 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 	// whatever is running now, and unconditionally, since a container that
 	// did not need replacing may still predate this.
 	return installArtifacts(instance)
+}
+
+// ensureMachine is the half of up below the container: the machine created or
+// started as the cell describes it, and its tunnel up. patch needs the machine
+// without the container, so this stops where the container begins.
+//
+// c.VM.GPU is filled in on the way, since it is part of the definition.
+func ensureMachine(name string, c *config.Cell, progress io.Writer) (string, error) {
+	warnIgnoredBase(name, c, progress)
+
+	// Before the definition is rendered, since the GPU is part of it.
+	c.VM.GPU = chooseGPU(name, c, progress)
+
+	rendered, err := lima.Render(name, c.VM, c.Ports, c.Network)
+	if err != nil {
+		return "", err
+	}
+
+	instance := config.Instance(name)
+	inst, err := lima.Lookup(instance)
+	if err != nil {
+		return "", err
+	}
+	var stored string
+	if inst != nil {
+		if err := lima.CheckIsolation(*inst); err != nil {
+			return "", fmt.Errorf("machine isolation check: %w", err)
+		}
+		if stored, err = inst.StoredDefinition(); err != nil {
+			return "", err
+		}
+	}
+
+	switch {
+	case inst == nil:
+		if err := verifyMemory(c.VM.Memory, progress); err != nil {
+			return "", err
+		}
+		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
+		if err := createMachine(instance, rendered, c.VM.GPU); err != nil {
+			return "", err
+		}
+		if err := recordMachine(name, instance, rendered, c.VM.Provision, c.VM.Base); err != nil {
+			return "", err
+		}
+
+	case inst.Status == lima.StatusBroken:
+		return "", fmt.Errorf("cell %q is broken; inspect it with 'limactl shell %s' or discard it with 'solitary rm %s'", name, instance, name)
+
+	case inst.Status == lima.StatusRunning && !lima.Reachable(instance):
+		// The machine's process is alive and Lima still calls it running, but
+		// nothing inside answers. Stopping it releases the memory and lets the
+		// next up start it cleanly.
+		return "", fmt.Errorf("cell %q is running but not responding.\n"+
+			"Stop it with 'solitary down %s' and start it again; if it keeps happening,\n"+
+			"check that vm.memory fits this host and look at ~/.lima/%s/ha.stderr.log",
+			name, name, instance)
+
+	case inst.Status == lima.StatusRunning:
+		warnDrift(name, c, rendered, stored, progress)
+
+	default:
+		// A stopped machine reads its definition again when it starts, so
+		// this is the moment a change to the vm block can take effect
+		// without destroying the disk that machine carries. The one such
+		// change a machine cannot take is asked about before the
+		// definition is replaced.
+		if err := verifyDisk(name, instance, c.VM.Disk); err != nil {
+			return "", err
+		}
+		if err := applyDrift(name, instance, c, rendered, stored, progress); err != nil {
+			return "", err
+		}
+		if err := verifyMemory(c.VM.Memory, progress); err != nil {
+			return "", err
+		}
+		fmt.Fprintf(progress, "Starting cell %q...\n", name)
+		if err := lima.Start(instance, c.VM.GPU); err != nil {
+			return "", err
+		}
+	}
+
+	if err := installTunnel(instance, c.Network, progress); err != nil {
+		return "", err
+	}
+
+	return instance, nil
 }
 
 // resolveSecrets collects the values this cell is allowed to see, asking for
