@@ -95,7 +95,8 @@ image: docker.io/library/ubuntu:24.04
 
 # Overrides for the machine this cell runs in. Anything omitted falls back to
 # ~/.config/solitary/config.yaml, then to the defaults built into solitary
-# (ubuntu-lts, 2 CPUs, 4GiB memory, 20GiB disk).
+# (2 CPUs, 4GiB memory, 20GiB disk). The machine's system is not among them:
+# solitary chooses it, an Ubuntu LTS release.
 #
 # vm:
 #   cpus: 4
@@ -162,10 +163,17 @@ func Digest(rendered string) string {
 // editor — can hand the machine settings no cell asked for. Lima itself leaves
 // it alone between writes, so a file that no longer matches was edited by
 // someone else.
+//
+// Base is the image template the machine was created from, and unlike the rest
+// it never changes once written: a definition handed to an existing machine
+// names images, but Lima reads them only to make a disk, and the disk is the
+// one the machine was created with. It is what says how far behind the base
+// solitary creates machines from today a machine is.
 type Applied struct {
 	Definition string
 	Provision  string
 	Stored     string
+	Base       string
 }
 
 // NewApplied summarises a rendering for the record.
@@ -202,7 +210,7 @@ func WriteApplied(name string, record Applied) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
 	}
-	content := fmt.Sprintf("definition %s\nprovision %s\nstored %s\n", record.Definition, record.Provision, record.Stored)
+	content := fmt.Sprintf("definition %s\nprovision %s\nstored %s\nbase %s\n", record.Definition, record.Provision, record.Stored, record.Base)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -240,6 +248,8 @@ func ReadApplied(name string) (Applied, error) {
 			record.Provision = strings.TrimSpace(value)
 		case field == "stored":
 			record.Stored = strings.TrimSpace(value)
+		case field == "base":
+			record.Base = strings.TrimSpace(value)
 		case !named && field != "":
 			// The older format: the definition's digest and nothing else.
 			record.Definition = field

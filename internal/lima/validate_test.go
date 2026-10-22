@@ -25,7 +25,7 @@ func TestRenderedDefinitionsPassLimactlValidate(t *testing.T) {
 	}{
 		"defaults":  {vm: config.Defaults()},
 		"withPorts": {vm: config.Defaults(), ports: []int{8080, 3000}},
-		"provision": {vm: config.VM{Base: "ubuntu-lts", CPUs: 4, Memory: "8GiB", Disk: "40GiB", Provision: "echo hello\necho world"}},
+		"provision": {vm: config.VM{Base: config.Base, CPUs: 4, Memory: "8GiB", Disk: "40GiB", Provision: "echo hello\necho world"}},
 		"restricted": {vm: config.Defaults(), network: config.Network{
 			Allow: []string{"github.com", "api.anthropic.com", "10.1.2.0/24"},
 		}},

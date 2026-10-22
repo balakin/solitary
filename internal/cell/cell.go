@@ -257,6 +257,8 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		return err
 	}
 
+	warnIgnoredBase(name, c, progress)
+
 	// Before the definition is rendered, since the GPU is part of it.
 	c.VM.GPU = chooseGPU(name, c, progress)
 
@@ -289,7 +291,7 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		if err := createMachine(instance, rendered, c.VM.GPU); err != nil {
 			return err
 		}
-		if err := recordMachine(name, instance, rendered, c.VM.Provision); err != nil {
+		if err := recordMachine(name, instance, rendered, c.VM.Provision, c.VM.Base); err != nil {
 			return err
 		}
 
@@ -1246,6 +1248,12 @@ func applyDrift(name, instance string, c *config.Cell, rendered, stored string, 
 	changed := record.Definition != config.Digest(rendered)
 	edited := record.Edited(stored)
 	if record.Recorded() && record.Stored != "" && !changed && !edited {
+		if record.Base == "" {
+			// A record from before the base was kept. Completing it says
+			// nothing new to the machine, so the machine is left alone.
+			record.Base = createdFrom(c, record)
+			return config.WriteApplied(name, record)
+		}
 		return nil
 	}
 
@@ -1264,13 +1272,40 @@ func applyDrift(name, instance string, c *config.Cell, rendered, stored string, 
 		return err
 	}
 
-	return recordMachine(name, instance, rendered, c.VM.Provision)
+	return recordMachine(name, instance, rendered, c.VM.Provision, createdFrom(c, record))
+}
+
+// createdFrom is the image template the machine a record describes was created
+// from. A record that does not say predates solitary choosing, when a machine
+// was created from vm.base, or from the alias that was its default.
+func createdFrom(c *config.Cell, record config.Applied) string {
+	switch {
+	case record.Base != "":
+		return record.Base
+	case c.IgnoredBase != "":
+		return c.IgnoredBase
+	default:
+		return config.LegacyBase
+	}
+}
+
+// warnIgnoredBase says that a vm.base still written down decides nothing any
+// more, so that nobody keeps editing it and waiting for a different machine.
+func warnIgnoredBase(name string, c *config.Cell, w io.Writer) {
+	if c.IgnoredBase == "" {
+		return
+	}
+
+	fmt.Fprintf(w, "Warning: vm.base (%q) is no longer read for %q.\n", c.IgnoredBase, name)
+	fmt.Fprintf(w, "         solitary chooses the system a machine is created from: %s for a\n", config.Base)
+	fmt.Fprintf(w, "         new one. Remove vm.base from cell.yaml or ~/.config/solitary/config.yaml.\n")
 }
 
 // recordMachine records what a machine was just given, together with the
-// definition Lima stored for it. What Lima stores is resolved from what was
-// rendered, so it is read back rather than worked out.
-func recordMachine(name, instance, rendered, provision string) error {
+// definition Lima stored for it and the template it was created from. What
+// Lima stores is resolved from what was rendered, so it is read back rather
+// than worked out.
+func recordMachine(name, instance, rendered, provision, base string) error {
 	inst, err := lima.Lookup(instance)
 	if err != nil {
 		return err
@@ -1285,6 +1320,7 @@ func recordMachine(name, instance, rendered, provision string) error {
 
 	record := config.NewApplied(rendered, provision)
 	record.Stored = config.Digest(stored)
+	record.Base = base
 
 	return config.WriteApplied(name, record)
 }

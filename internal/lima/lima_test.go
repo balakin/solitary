@@ -55,7 +55,7 @@ func TestRenderGolden(t *testing.T) {
 		},
 		{
 			name:   "provision and ports",
-			vm:     config.VM{Base: "ubuntu-lts", CPUs: 4, Memory: "8GiB", Disk: "40GiB", Provision: "apt-get update\napt-get install -y build-essential"},
+			vm:     config.VM{Base: config.Base, CPUs: 4, Memory: "8GiB", Disk: "40GiB", Provision: "apt-get update\napt-get install -y build-essential"},
 			ports:  []int{8080, 3000},
 			golden: "provision-ports.yaml",
 		},
@@ -77,7 +77,7 @@ func TestRenderGolden(t *testing.T) {
 		},
 		{
 			name:   "gpu",
-			vm:     config.VM{Base: "ubuntu-lts", CPUs: 2, Memory: "4GiB", Disk: "20GiB", GPU: "/dev/dri/by-path/pci-0000:01:00.0-render"},
+			vm:     config.VM{Base: config.Base, CPUs: 2, Memory: "4GiB", Disk: "20GiB", GPU: "/dev/dri/by-path/pci-0000:01:00.0-render"},
 			golden: "gpu.yaml",
 		},
 	}

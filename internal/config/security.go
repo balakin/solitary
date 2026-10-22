@@ -38,6 +38,8 @@ func (v VM) Validate() error {
 	if v.GPU != "" && !ValidGPU(v.GPU) {
 		return fmt.Errorf("vm: unsafe host GPU path")
 	}
+	// Rendered into the definition, so held to a template name even though
+	// solitary chose it.
 	if !baseName.MatchString(v.Base) {
 		return fmt.Errorf("vm.base: %q must be an image template name containing letters, digits, dots, underscores or dashes", v.Base)
 	}

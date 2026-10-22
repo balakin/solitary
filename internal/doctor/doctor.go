@@ -123,7 +123,8 @@ func checkLimactl() Check {
 			Name:   "limactl",
 			Status: Fail,
 			Detail: fmt.Sprintf("%s is version %s, older than the %s solitary is written against", bin, version, lima.MinVersion),
-			Fix:    "Upgrade Lima. Machines created by an older one keep working; new ones may not be created at all.",
+			Fix: "Upgrade Lima. The definitions solitary writes ask for this version, so an older\n" +
+				"Lima refuses to create a cell, and to start one solitary has written a definition to.",
 		}
 	}
 

@@ -330,7 +330,7 @@ func homeMapping(instance string, opts RunOptions) (string, []string, error) {
 	view, err := mountHomeView(instance, opts.HostHome, rule)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w; a cell with a user needs a machine whose mount supports X-mount.idmap, "+
-			"which a current vm.base has, or no user", err)
+			"which a machine solitary creates now has, or no user", err)
 	}
 
 	return view, []string{"--user", process}, nil

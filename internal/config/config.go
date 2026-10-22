@@ -119,6 +119,11 @@ type Cell struct {
 	// in by LoadCell rather than read from the file.
 	BuildPath string `yaml:"-"`
 	Dir       string `yaml:"-"`
+
+	// IgnoredBase is a vm.base the cell or the user-wide config still sets,
+	// from before solitary chose the base itself. It changes nothing, and is
+	// kept only so that saying so is possible.
+	IgnoredBase string `yaml:"-"`
 }
 
 // Tag is the image reference a built cell produces. Podman qualifies locally
@@ -254,7 +259,11 @@ func (s Secrets) RequiredNames() []string {
 // VM describes the Lima machine backing a cell. Every field is optional: values
 // fall back to the user-wide config, then to the defaults built into the binary.
 type VM struct {
-	// Base names the Lima image template, e.g. ubuntu-lts.
+	// Base names the Lima image template a new machine is created from. It is
+	// solitary's choice rather than the cell's — the guest is the part of a
+	// cell solitary is built against, provisions and patches — so resolving a
+	// definition always yields Base, and what a cell.yaml or config.yaml still
+	// says here only survives as Cell.IgnoredBase, to be warned about.
 	Base string `yaml:"base,omitempty"`
 
 	CPUs   int    `yaml:"cpus,omitempty"`
@@ -520,11 +529,25 @@ type UserConfig struct {
 // image. Cells that run a server instead set command: in cell.yaml.
 const DefaultCommand = "sleep infinity"
 
+// Base is the Lima image template every new machine is created from: one
+// Ubuntu LTS release, named exactly rather than through Lima's ubuntu-lts
+// alias, which Lima resolves to whichever release its own version knows — so
+// the same solitary would otherwise build different machines on different
+// hosts. Moving it is a decision a release makes, and the Lima it needs is
+// what lima.MinVersion and the template's minimumLimaVersion require.
+const Base = "ubuntu-26.04"
+
+// LegacyBase is what a machine was created from when its record predates
+// solitary choosing: the ubuntu-lts alias, unless a vm.base said otherwise. It
+// names the alias and not a release, because the alias moved with Lima and the
+// release a machine actually runs is only known by asking it.
+const LegacyBase = "ubuntu-lts"
+
 // Defaults returns the settings compiled into the binary, used when neither the
 // cell nor the user-wide config specifies a value.
 func Defaults() VM {
 	return VM{
-		Base:   "ubuntu-lts",
+		Base:   Base,
 		CPUs:   2,
 		Memory: "4GiB",
 		Disk:   "20GiB",
@@ -532,7 +555,8 @@ func Defaults() VM {
 }
 
 // Resolve merges the three layers, most specific first: the cell's own vm
-// block, then the user-wide config, then defaults.
+// block, then the user-wide config, then defaults. Base is the exception, and
+// always comes from defaults: it is not a layer anyone above them sets.
 func Resolve(cell, user, defaults VM) VM {
 	str := func(layers ...string) string {
 		for _, v := range layers {
@@ -552,7 +576,7 @@ func Resolve(cell, user, defaults VM) VM {
 	}
 
 	return VM{
-		Base:      str(cell.Base, user.Base, defaults.Base),
+		Base:      defaults.Base,
 		CPUs:      num(cell.CPUs, user.CPUs, defaults.CPUs),
 		Memory:    str(cell.Memory, user.Memory, defaults.Memory),
 		Disk:      str(cell.Disk, user.Disk, defaults.Disk),
@@ -692,6 +716,18 @@ func parseCell(data []byte, dir string, tunnel bool) (*Cell, error) {
 	user, err := LoadUserConfig()
 	if err != nil {
 		return nil, err
+	}
+	// Still held to a template name although it is not used: a definition
+	// can come from someone else's repository, and one that carries something
+	// else in this field is not one to accept quietly.
+	for _, written := range []string{cell.VM.Base, user.VM.Base} {
+		if written != "" && !baseName.MatchString(written) {
+			return nil, fmt.Errorf("vm.base: %q must be an image template name containing letters, digits, dots, underscores or dashes", written)
+		}
+	}
+	cell.IgnoredBase = cell.VM.Base
+	if cell.IgnoredBase == "" {
+		cell.IgnoredBase = user.VM.Base
 	}
 	cell.VM = Resolve(cell.VM, user.VM, Defaults())
 	if err := cell.VM.Validate(); err != nil {

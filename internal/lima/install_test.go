@@ -80,13 +80,25 @@ func TestBinaryNotInstalled(t *testing.T) {
 }
 
 func TestMinVersionIsWhatTheDocsSay(t *testing.T) {
-	// The installation page states the floor; a check that disagrees with it
-	// would fail installs the docs call supported.
+	// The installation page states the major line, and doctor the exact floor:
+	// a patch release in prose is the number that goes stale. They still have
+	// to agree on the line, or the docs would call supported what doctor
+	// refuses.
 	data, err := os.ReadFile(filepath.Join("..", "..", "website", "content", "docs", "installation.mdx"))
 	if err != nil {
 		t.Skip("installation docs not available")
 	}
-	if !strings.Contains(string(data), "Lima](https://lima-vm.io) "+MinVersion) {
-		t.Errorf("installation.mdx does not state Lima %s as the minimum", MinVersion)
+	major, _, _ := strings.Cut(MinVersion, ".")
+	if !strings.Contains(string(data), "Lima](https://lima-vm.io) "+major+"**") {
+		t.Errorf("installation.mdx does not state Lima %s as the major line required", major)
+	}
+}
+
+// The template is what Lima itself checks, and doctor is what says so ahead
+// of time; one of them drifting from the other is an install that doctor
+// passes and Lima refuses, or the reverse.
+func TestMinVersionIsWhatTheTemplateRequires(t *testing.T) {
+	if !strings.Contains(cellTemplate, "\nminimumLimaVersion: "+MinVersion+"\n") {
+		t.Errorf("cell.yaml.tmpl does not require Lima %s", MinVersion)
 	}
 }

@@ -11,16 +11,16 @@ import (
 )
 
 func TestResolvePrefersMostSpecificLayer(t *testing.T) {
-	defaults := VM{Base: "ubuntu-lts", CPUs: 2, Memory: "4GiB", Disk: "20GiB"}
-	user := VM{CPUs: 4, Memory: "8GiB"}
-	cell := VM{Memory: "16GiB"}
+	defaults := VM{Base: Base, CPUs: 2, Memory: "4GiB", Disk: "20GiB"}
+	user := VM{Base: "debian-12", CPUs: 4, Memory: "8GiB"}
+	cell := VM{Base: "ubuntu-22.04", Memory: "16GiB"}
 
 	got := Resolve(cell, user, defaults)
 
 	want := VM{
-		Base:   "ubuntu-lts", // only the defaults set it
-		CPUs:   4,            // user config wins over defaults
-		Memory: "16GiB",      // the cell wins over both
+		Base:   Base,    // solitary's choice, whatever the layers above say
+		CPUs:   4,       // user config wins over defaults
+		Memory: "16GiB", // the cell wins over both
 		Disk:   "20GiB",
 	}
 	if got != want {
@@ -447,6 +447,39 @@ func TestCellCannotNameAHostGPU(t *testing.T) {
 	}
 	if cell.VM.GPU != "" {
 		t.Errorf("VM.GPU = %q, want it left to the host", cell.VM.GPU)
+	}
+}
+
+// A vm.base written before solitary chose the base is kept only to be warned
+// about: the machine is created from solitary's base all the same. The cell's
+// own wins over the user-wide one, as every other setting does, so the warning
+// names the line someone would actually go and delete.
+func TestVMBaseIsIgnoredButRemembered(t *testing.T) {
+	isolate(t)
+
+	cell, err := CheckCell([]byte("image: alpine\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if cell.VM.Base != Base || cell.IgnoredBase != "" {
+		t.Errorf("Base, IgnoredBase = %q, %q, want %q and nothing ignored", cell.VM.Base, cell.IgnoredBase, Base)
+	}
+
+	writeUserConfig(t, "vm:\n  base: debian-12\n")
+	cell, err = CheckCell([]byte("image: alpine\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if cell.VM.Base != Base || cell.IgnoredBase != "debian-12" {
+		t.Errorf("Base, IgnoredBase = %q, %q, want %q and the user-wide base ignored", cell.VM.Base, cell.IgnoredBase, Base)
+	}
+
+	cell, err = CheckCell([]byte("image: alpine\nvm:\n  base: ubuntu-lts\n"), t.TempDir())
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if cell.VM.Base != Base || cell.IgnoredBase != "ubuntu-lts" {
+		t.Errorf("Base, IgnoredBase = %q, %q, want %q and the cell's base ignored", cell.VM.Base, cell.IgnoredBase, Base)
 	}
 }
 
