@@ -410,8 +410,9 @@ func checkProxy() Check {
 
 // checkMachines compares the machines on this host with the cells defined for
 // them. The two drift apart in ways nothing else reports: a cell renamed by
-// renaming its directory leaves its old machine behind, and a machine whose
-// disk grew once cannot be given a smaller vm.disk afterwards.
+// renaming its directory leaves its old machine behind, a machine whose disk
+// grew once cannot be given a smaller vm.disk afterwards, and a definition
+// edited outside solitary is only noticed by the up that puts it back.
 func checkMachines() Check {
 	instances, err := lima.List()
 	if err != nil {
@@ -429,18 +430,45 @@ func checkMachines() Check {
 		}
 	}
 
-	return machinesStatus(instances, defined, sizes)
+	edited := make(map[string]bool)
+	for _, m := range defined {
+		for _, inst := range instances {
+			if inst.Name == config.Instance(m.name) && storedEdited(m.name, inst) {
+				edited[inst.Name] = true
+			}
+		}
+	}
+
+	return machinesStatus(instances, defined, sizes, edited)
+}
+
+// storedEdited reports whether a cell's machine holds a definition solitary
+// did not leave there. A machine that cannot be read, or whose record never
+// kept the definition, is not reported: neither is a finding, and up deals
+// with both.
+func storedEdited(name string, inst lima.Instance) bool {
+	record, err := config.ReadApplied(name)
+	if err != nil {
+		return false
+	}
+	stored, err := inst.StoredDefinition()
+	if err != nil {
+		return false
+	}
+
+	return record.Edited(stored)
 }
 
 // machinesStatus is the judgement checkMachines makes, separated from the host
-// it asks about so it can be exercised against hosts this one is not.
-func machinesStatus(instances []lima.Instance, defined []machine, sizes map[string]uint64) Check {
+// it asks about so it can be exercised against hosts this one is not. edited
+// names the machines whose stored definition was changed outside solitary.
+func machinesStatus(instances []lima.Instance, defined []machine, sizes map[string]uint64, edited map[string]bool) Check {
 	cellOf := make(map[string]machine, len(defined))
 	for _, m := range defined {
 		cellOf[config.Instance(m.name)] = m
 	}
 
-	var orphans, shrunk []string
+	var orphans, shrunk, changed []string
 	for _, inst := range instances {
 		m, ok := cellOf[inst.Name]
 		if !ok {
@@ -448,6 +476,9 @@ func machinesStatus(instances []lima.Instance, defined []machine, sizes map[stri
 				orphans = append(orphans, inst.Name)
 			}
 			continue
+		}
+		if edited[inst.Name] {
+			changed = append(changed, m.name)
 		}
 
 		actual, ok := sizes[inst.Name]
@@ -477,6 +508,13 @@ func machinesStatus(instances []lima.Instance, defined []machine, sizes map[stri
 			"A cell is named by its directory, so renaming one leaves its machine behind,",
 			"holding the disk it was given. 'solitary ls' shows them as orphaned;",
 			"'solitary rm --orphans' discards them all.")
+	}
+	if len(changed) > 0 {
+		detail = append(detail, fmt.Sprintf("machine definition edited outside solitary: %s", strings.Join(changed, ", ")))
+		fix = append(fix,
+			"up puts back what the cell describes when the machine is stopped, so",
+			"'solitary down <name> && solitary up <name>' restores it. Settings a machine",
+			"needs belong in cell.yaml; 'limactl edit' is undone at the next up.")
 	}
 	if len(detail) == 0 {
 		return Check{

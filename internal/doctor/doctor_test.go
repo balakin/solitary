@@ -320,6 +320,7 @@ func TestMachinesStatus(t *testing.T) {
 		instances []lima.Instance
 		defined   []machine
 		sizes     map[string]uint64
+		edited    map[string]bool
 		want      Status
 		detail    string
 	}{
@@ -380,11 +381,30 @@ func TestMachinesStatus(t *testing.T) {
 			defined:   []machine{{name: "a", disk: "20GiB"}},
 			want:      OK,
 		},
+		{
+			// 'limactl edit' writes the file a machine boots from, and
+			// nothing but the next up would notice.
+			name:      "a definition edited outside solitary",
+			instances: []lima.Instance{{Name: "solitary-a"}},
+			defined:   []machine{{name: "a", disk: "20GiB"}},
+			edited:    map[string]bool{"solitary-a": true},
+			want:      Warn,
+			detail:    "edited outside solitary: a",
+		},
+		{
+			// A machine no cell names has no record to compare with, so
+			// it is reported as an orphan and nothing else.
+			name:      "an edited machine with no cell",
+			instances: []lima.Instance{{Name: "solitary-old"}},
+			edited:    map[string]bool{"solitary-old": true},
+			want:      Warn,
+			detail:    "with no cell: solitary-old",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := machinesStatus(tt.instances, tt.defined, tt.sizes)
+			got := machinesStatus(tt.instances, tt.defined, tt.sizes, tt.edited)
 			if got.Status != tt.want {
 				t.Errorf("machinesStatus() = %q (%s), want %q", got.Status, got.Detail, tt.want)
 			}
@@ -405,6 +425,7 @@ func TestMachinesStatusFixesBoth(t *testing.T) {
 		[]lima.Instance{{Name: "solitary-a"}, {Name: "solitary-old"}},
 		[]machine{{name: "a", disk: "20GiB"}},
 		map[string]uint64{"solitary-a": 50 * gib},
+		nil,
 	)
 
 	for _, want := range []string{"solitary rm <name>", "solitary rm --orphans"} {

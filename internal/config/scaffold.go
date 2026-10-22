@@ -155,9 +155,17 @@ func Digest(rendered string) string {
 // already changed the disk, and a definition without it does not undo that. So
 // what it is worth saying about the two differs, and telling them apart needs
 // them recorded apart.
+//
+// Stored is the definition as Lima keeps it in the machine's directory, which
+// is not what was rendered: Lima resolves it on the way in. It is the file the
+// machine boots from, and anything that can write it — 'limactl edit', an
+// editor — can hand the machine settings no cell asked for. Lima itself leaves
+// it alone between writes, so a file that no longer matches was edited by
+// someone else.
 type Applied struct {
 	Definition string
 	Provision  string
+	Stored     string
 }
 
 // NewApplied summarises a rendering for the record.
@@ -179,6 +187,12 @@ func (a Applied) ProvisionChanged(provision string) bool {
 	return a.Provision != "" && a.Provision != Digest(provision)
 }
 
+// Edited reports whether the definition a machine stores is no longer the one
+// solitary left there. A record that never kept it cannot tell, and says no.
+func (a Applied) Edited(stored string) bool {
+	return a.Stored != "" && a.Stored != Digest(stored)
+}
+
 // WriteApplied records what a cell's machine was given.
 func WriteApplied(name string, record Applied) error {
 	path, err := AppliedFile(name)
@@ -188,7 +202,7 @@ func WriteApplied(name string, record Applied) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
 	}
-	content := fmt.Sprintf("definition %s\nprovision %s\n", record.Definition, record.Provision)
+	content := fmt.Sprintf("definition %s\nprovision %s\nstored %s\n", record.Definition, record.Provision, record.Stored)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -224,6 +238,8 @@ func ReadApplied(name string) (Applied, error) {
 			record.Definition = strings.TrimSpace(value)
 		case field == "provision":
 			record.Provision = strings.TrimSpace(value)
+		case field == "stored":
+			record.Stored = strings.TrimSpace(value)
 		case !named && field != "":
 			// The older format: the definition's digest and nothing else.
 			record.Definition = field

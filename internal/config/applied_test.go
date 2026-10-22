@@ -25,6 +25,7 @@ func TestAppliedRecordRoundTrip(t *testing.T) {
 	}
 
 	want := NewApplied("rendered definition", "apt-get install -y ripgrep")
+	want.Stored = Digest("stored definition")
 	if err := WriteApplied("cell", want); err != nil {
 		t.Fatalf("WriteApplied() error = %v", err)
 	}
@@ -44,6 +45,21 @@ func TestAppliedRecordRoundTrip(t *testing.T) {
 	}
 	if !got.ProvisionChanged("apt-get install -y ripgrep fd-find") {
 		t.Error("ProvisionChanged() = false for a script that was edited")
+	}
+	if got.Edited("stored definition") {
+		t.Error("Edited() = true for the definition that was recorded")
+	}
+	if !got.Edited("stored definition\nssh:\n  forwardAgent: true\n") {
+		t.Error("Edited() = false for a definition that was changed")
+	}
+}
+
+// A record that never kept the stored definition cannot tell an edited one
+// apart, and must not claim every definition it sees was edited.
+func TestAppliedRecordWithoutStoredSaysNothingWasEdited(t *testing.T) {
+	record := NewApplied("rendered definition", "")
+	if record.Edited("anything at all") {
+		t.Error("Edited() = true for a record that says nothing about the stored definition")
 	}
 }
 

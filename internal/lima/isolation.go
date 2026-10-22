@@ -14,14 +14,25 @@ func CheckIsolation(instance Instance) error {
 	if err := checkGlobalConfig(); err != nil {
 		return err
 	}
-	if instance.Dir == "" {
-		return errors.New("cannot inspect machine isolation: Lima did not report its directory")
-	}
-	data, err := os.ReadFile(filepath.Join(instance.Dir, "lima.yaml"))
+	stored, err := instance.StoredDefinition()
 	if err != nil {
 		return err
 	}
-	return checkDefinition(string(data))
+	return checkDefinition(stored)
+}
+
+// StoredDefinition is the definition a machine boots from: the one Lima keeps
+// in the machine's directory and reads again at every start.
+func (i Instance) StoredDefinition() (string, error) {
+	if i.Dir == "" {
+		return "", fmt.Errorf("cannot read the definition of %s: Lima did not report its directory", i.Name)
+	}
+	data, err := os.ReadFile(filepath.Join(i.Dir, "lima.yaml"))
+	if err != nil {
+		return "", fmt.Errorf("reading the definition of %s: %w", i.Name, err)
+	}
+
+	return string(data), nil
 }
 
 // Global Lima defaults can merge lists into an explicit empty mounts list.
