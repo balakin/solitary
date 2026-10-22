@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -69,6 +70,10 @@ func qemuCommand() (key, command string, err error) {
 // machine definition can ask for. An older QEMU also lacks the KVM guest PAT
 // option Venus needs on Intel hosts. Ask before starting so a cell that wanted
 // a GPU can start without one instead of dying in Lima's log.
+//
+// The answer is kept for as long as the binary is the same file: asking takes
+// three runs of qemu, and the dashboard asks about every running GPU cell at
+// every refresh. A qemu replaced on disk is a different file, and asked again.
 func GPUSupport() error {
 	_, command, err := qemuCommand()
 	if err != nil {
@@ -79,6 +84,35 @@ func GPUSupport() error {
 		return fmt.Errorf("QEMU_SYSTEM_X86_64 does not name a QEMU binary")
 	}
 	bin := fields[0]
+
+	key := bin
+	if path, err := exec.LookPath(bin); err == nil {
+		if info, err := os.Stat(path); err == nil {
+			key = fmt.Sprintf("%s\x00%d\x00%d", path, info.Size(), info.ModTime().UnixNano())
+		}
+	}
+	gpuSupport.Lock()
+	defer gpuSupport.Unlock()
+	if known, ok := gpuSupport.known[key]; ok {
+		return known
+	}
+	err = probeGPUSupport(bin)
+	if gpuSupport.known == nil {
+		gpuSupport.known = make(map[string]error)
+	}
+	gpuSupport.known[key] = err
+
+	return err
+}
+
+// gpuSupport is what GPUSupport has already found out, by qemu binary.
+var gpuSupport struct {
+	sync.Mutex
+	known map[string]error
+}
+
+// probeGPUSupport asks a qemu binary itself what GPUSupport reports.
+func probeGPUSupport(bin string) error {
 	version, err := exec.Command(bin, "-device", "virtio-gpu-gl-pci,venus=on", "-version").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("checking %s version for GPU support: %w", bin, err)

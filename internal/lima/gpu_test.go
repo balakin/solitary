@@ -135,6 +135,46 @@ func TestGPUSupportAcceptsQEMU11WithVenus(t *testing.T) {
 	}
 }
 
+// Asking runs qemu three times, and the dashboard asks at every refresh, so
+// the answer is kept — but only for the file that gave it: a qemu upgraded in
+// place is asked again rather than judged by the one it replaced.
+func TestGPUSupportAsksEachBinaryOnce(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("QEMU GPU mode is tested on Linux x86_64")
+	}
+	dir := t.TempDir()
+	bin, runs := filepath.Join(dir, "qemu-system-x86_64"), filepath.Join(dir, "runs")
+	qemu := func(version string) {
+		t.Helper()
+		script := "#!/bin/sh\necho run >> " + runs + "\nprintf 'QEMU emulator version " + version + "\\n'\n"
+		if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	counted := func() int {
+		data, _ := os.ReadFile(runs)
+		return strings.Count(string(data), "run")
+	}
+	t.Setenv("QEMU_SYSTEM_X86_64", bin)
+
+	qemu("10.2.2")
+	first, second := GPUSupport(), GPUSupport()
+	if first == nil || second == nil || first.Error() != second.Error() {
+		t.Fatalf("GPUSupport() = %v, then %v; want the same refusal twice", first, second)
+	}
+	if n := counted(); n != 1 {
+		t.Errorf("qemu ran %d times for two questions about one binary, want 1", n)
+	}
+
+	qemu("10.10.10")
+	if err := GPUSupport(); err == nil || !strings.Contains(err.Error(), "QEMU 10") {
+		t.Errorf("GPUSupport() = %v after the binary was replaced", err)
+	}
+	if n := counted(); n != 2 {
+		t.Errorf("qemu ran %d times in all, want a replaced binary asked again", n)
+	}
+}
+
 func TestGPUQEMUArgsMovesLimasAccelerator(t *testing.T) {
 	args := []string{"-device", "virtio-gpu-gl-pci,venus=on", "-machine", "q35,accel=kvm,usb=off", "-smp", "4"}
 	want := []string{"-accel", "kvm,honor-guest-pat=on", "-device", "virtio-gpu-gl-pci,venus=on", "-machine", "q35,usb=off", "-smp", "4"}
