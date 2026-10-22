@@ -14,7 +14,7 @@ description: Every field in cell.yaml and config.yaml.
 
 A cell's name is the name of its **directory**, never a field inside the file, so the two can never disagree. `solitary init <name>` creates the directory and a commented `cell.yaml`.
 
-`config.yaml` holds `vm:`, `git:` and `network:` blocks used as the defaults for every cell, and `gpu:`, which says which of the host's GPUs a cell that asks for one renders with — see [`gpu`](#gpu). A cell that sets `network.allow` **replaces** the user-wide list rather than adding to it: what a cell may reach should be readable in one place.
+`config.yaml` holds `vm:`, `git:` and `network:` blocks used as the defaults for every cell, `gpu:`, which says which of the host's GPUs a cell that asks for one renders with — see [`gpu`](#gpu) — and `patch:`, which says whether a new machine is patched as it is created — see [patching a new machine](#patching-a-new-machine). A cell that sets `network.allow` **replaces** the user-wide list rather than adding to it: what a cell may reach should be readable in one place.
 
 ## A complete cell
 
@@ -222,6 +222,18 @@ The `vm` block describes settings a machine reads at boot. Change it while a cel
 `provision` is the exception. The new script runs at the next start, but what the old one did is already on the machine's disk, and nothing undoes it — a package it installed stays installed. `up` warns when the script changed, and the dashboard says so in the cell's detail view; only `rm` then `up` gets a machine built by the current script alone, and that discards the disk and the cell's home with it. See [changing a cell](/docs/concepts#changing-a-cell) for which settings land in which layer.
 
 The system a machine runs is not among these settings. solitary creates every machine from one Ubuntu LTS release, named in its own source rather than through Lima's moving `ubuntu-lts` alias, because the guest is the part of a cell solitary is built and tested against: the firewall, the tunnel and the idmapped home all run there. A machine keeps the release it was created with; a newer solitary creates new machines from a newer one. `vm.base`, which used to choose, is no longer read — `up` says so while a definition still sets it.
+
+### Patching a new machine
+
+A machine is created from the image its release shipped with, which is behind by every fix published since — often dozens of security updates. So `up` [patches](/docs/commands#patch-updates-the-machine) a machine it has just created before the container starts, restarting it when a new kernel needs that; nothing is running in it yet, so there is nobody to ask. It adds a minute or two to a wait that is already a few minutes long. A machine that cannot be patched still starts, with a warning.
+
+It is a setting of `config.yaml` alone, since it is about this host rather than any cell:
+
+```yaml
+patch: false # leave new machines as their image left them
+```
+
+That leaves new machines to `unattended-upgrades`, which installs security fixes while a machine runs, and to `solitary patch`, which this does not affect.
 
 ### `git`
 

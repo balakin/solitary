@@ -74,6 +74,8 @@ The machine under a cell is Ubuntu, and Ubuntu's own `unattended-upgrades` insta
 - **A running cell keeps running.** Services the upgrade touched are restarted the way Ubuntu restarts them, which never includes the session the container runs in. When what was installed needs a reboot, `patch` asks first, since a reboot ends everything in the container; `--reboot` answers yes, and without a terminal to ask on it says what is left to do instead. The container comes back up with the machine, and the home is kept.
 - **A stopped cell is patched with its machine alone** and stopped again. Its container never starts, and its next start is the reboot.
 
+`up` does the same to a machine it has just created, before the container starts, unless [`config.yaml` says not to](/docs/configuration#patching-a-new-machine).
+
 The container's system is not touched: it comes from the image, and [`up --rebuild`](/docs/concepts#updating-the-tools-in-a-cell) is what updates that.
 
 A cell with `network.allow` reaches [Ubuntu's archive](/docs/networking#allow-lists) for this whatever the list says. Any other source the machine's apt fetches from — one a `vm.provision` script added, say — has to be listed, and `patch` names the ones that are not before it starts rather than failing halfway through. It never adds them itself.
