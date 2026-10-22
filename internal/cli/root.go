@@ -38,6 +38,7 @@ func newRootCmd() *cobra.Command {
 		newDownCmd(),
 		newRmCmd(),
 		newLsCmd(),
+		newInspectCmd(),
 		newDoctorCmd(),
 		newFetchCmd(),
 		newSendCmd(),

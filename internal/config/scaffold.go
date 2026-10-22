@@ -259,14 +259,17 @@ func ReadApplied(name string) (Applied, error) {
 	return record, nil
 }
 
-// RemoveApplied forgets what a cell's machine was created from.
+// RemoveApplied forgets what a cell's machine was created from, and what was
+// last seen inside it: both describe a machine that is gone.
 func RemoveApplied(name string) error {
-	path, err := AppliedFile(name)
-	if err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("removing %s: %w", path, err)
+	for _, file := range []func(string) (string, error){AppliedFile, GuestFile} {
+		path, err := file(name)
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("removing %s: %w", path, err)
+		}
 	}
 
 	return nil

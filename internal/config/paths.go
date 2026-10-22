@@ -92,6 +92,17 @@ func AppliedFile(name string) (string, error) {
 	return filepath.Join(dir, "cells", name+".applied"), nil
 }
 
+// GuestFile keeps what was last seen inside a cell's machine — its release,
+// kernel, pending updates — so that a stopped cell can still say, with the
+// date it was true.
+func GuestFile(name string) (string, error) {
+	dir, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "cells", name+".guest.json"), nil
+}
+
 // UserConfigFile is the user-wide defaults file.
 func UserConfigFile() (string, error) {
 	root, err := Root()
