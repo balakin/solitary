@@ -65,7 +65,7 @@ func attention(name string, c *config.Cell, inst *lima.Instance) []Attention {
 	if record.ProvisionChanged(c.VM.Provision) {
 		found = append(found, Attention{
 			What: "vm.provision changed since the machine was provisioned",
-			Fix:  "rm then up rebuilds it; the disk and home go with it",
+			Fix:  "up --new-machine rebuilds it; the home is carried across",
 		})
 	}
 

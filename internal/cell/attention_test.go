@@ -104,7 +104,7 @@ func TestAttentionReportsAChangedProvisionScript(t *testing.T) {
 	c.VM.Provision = "apt-get install -y ripgrep fd-find"
 
 	found := attention("probe", c, inst)
-	if len(found) != 1 || !strings.Contains(found[0].What, "vm.provision") || !strings.Contains(found[0].Fix, "rm then up") {
+	if len(found) != 1 || !strings.Contains(found[0].What, "vm.provision") || !strings.Contains(found[0].Fix, "--new-machine") {
 		t.Errorf("attention() = %+v, want the provision script and how to apply it", found)
 	}
 }

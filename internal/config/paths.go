@@ -103,6 +103,17 @@ func GuestFile(name string) (string, error) {
 	return filepath.Join(dir, "cells", name+".guest.json"), nil
 }
 
+// HomeArchive is where up --new-machine keeps a cell's home while its machine
+// is replaced: the one copy of it between the old machine being destroyed and
+// the new one being given it back, so it is kept until that has happened.
+func HomeArchive(name string) (string, error) {
+	dir, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "cells", name+".home.tar.gz"), nil
+}
+
 // UserConfigFile is the user-wide defaults file.
 func UserConfigFile() (string, error) {
 	root, err := Root()

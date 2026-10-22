@@ -43,6 +43,7 @@ func TestWriteReport(t *testing.T) {
 		"qemu      11.0.5 (/usr/bin/qemu-system-x86_64)",
 		"machine    stopped",
 		"created   ubuntu-lts (new machines: ubuntu-26.04)",
+		"          'solitary up --new-machine probe' moves it, home included",
 		"system    Ubuntu 24.04.5 LTS · kernel 6.8.0-142-generic",
 		"          23 updates pending, 7 of them security · reboot required",
 		"lists     refreshed 3 days ago · unattended-upgrades enabled",
