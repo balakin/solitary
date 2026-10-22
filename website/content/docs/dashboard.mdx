@@ -43,9 +43,16 @@ It does nothing the commands cannot, and the slow ones it runs _as_ those comman
 
 The list appears as soon as Lima says which machines are up. A running machine is then asked what its container is doing, each on its own, and shows `loading` until it answers — a machine that is [busy or unreachable](/docs/troubleshooting) can take the better part of a minute to, and the rest of the list does not wait on it. A loading cell can be looked at, its allow list included, but not acted on: what `u`, `s` or `⏎` would do depends on the answer. After that, every refresh shows what the machine last said while it is asked again.
 
-## The provision row
+## Warnings
 
-A cell whose `vm.provision` changed since its machine was provisioned says so in its detail view. It is the one setting stopping and starting the cell does not apply: the old script has already run, and only `d` then `u` — destroying the machine and its disk — gets one built by the current script alone. Every other change to `vm`, `ports` or `network` is applied by a restart, so the dashboard leaves those to `up`.
+A cell that needs something done has a `!` after its status in the list, so it is seen without being selected, and its detail view opens with a `warning` row for each thing, followed by what to do about it. `solitary ls` prints the same under its table. Each one is something that will not right itself:
+
+- **The machine's definition was edited outside solitary**, with `limactl edit` or by hand. `u` on a stopped cell puts back what the cell describes; a running one needs `s` first.
+- **A running machine holds settings that changed since it started.** `s` then `u` applies them. A stopped machine is not marked for this: `u` applies them on the way up without being asked.
+- **`vm.provision` changed since the machine was provisioned.** It is the one setting stopping and starting the cell does not apply: the old script has already run, and only `d` then `u` — destroying the machine and its disk — gets one built by the current script alone.
+- **`vm.base` is still set.** solitary chooses the system a machine is created from, so the line does nothing; removing it is the fix.
+
+All of it is worked out from files on this host — the definition, the record of what the machine was given, and the definition Lima keeps for it — so the list can afford it for every cell at every refresh without asking any machine.
 
 ## The inbox and outbox rows
 
