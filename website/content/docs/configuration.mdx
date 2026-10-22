@@ -202,13 +202,12 @@ IPv6 entries are refused in `allow`, `resolvers`, and a tunnel's `Endpoint`. Res
 
 Every field is optional and falls back to `config.yaml`, then to the defaults built into the binary:
 
-| Field       | Default      | Meaning                                                                                                                                     |
-| ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `base`      | `ubuntu-lts` | The Lima image template.                                                                                                                    |
-| `cpus`      | `2`          |                                                                                                                                             |
-| `memory`    | `4GiB`       | On Linux this must fit `/dev/shm`; see [troubleshooting](/docs/troubleshooting).                                                            |
-| `disk`      | `20GiB`      | Grows at the next boot. It cannot shrink: a value below what the machine already has is refused, naming both ways out.                      |
-| `provision` | —            | A shell script run once, as root, after the built-in podman setup. A value here **replaces** the user-wide one rather than appending to it. |
+| Field       | Default | Meaning                                                                                                                                     |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cpus`      | `2`     |                                                                                                                                             |
+| `memory`    | `4GiB`  | On Linux this must fit `/dev/shm`; see [troubleshooting](/docs/troubleshooting).                                                            |
+| `disk`      | `20GiB` | Grows at the next boot. It cannot shrink: a value below what the machine already has is refused, naming both ways out.                      |
+| `provision` | —       | A shell script run once, as root, after the built-in podman setup. A value here **replaces** the user-wide one rather than appending to it. |
 
 ```yaml
 vm:
@@ -221,6 +220,8 @@ vm:
 The `vm` block describes settings a machine reads at boot. Change it while a cell is running and `up` warns that the running cell still uses the old ones; `down` then `up` applies them without touching the disk.
 
 `provision` is the exception. The new script runs at the next start, but what the old one did is already on the machine's disk, and nothing undoes it — a package it installed stays installed. `up` warns when the script changed, and the dashboard says so in the cell's detail view; only `rm` then `up` gets a machine built by the current script alone, and that discards the disk and the cell's home with it. See [changing a cell](/docs/concepts#changing-a-cell) for which settings land in which layer.
+
+The system a machine runs is not among these settings. solitary creates every machine from one Ubuntu LTS release, named in its own source rather than through Lima's moving `ubuntu-lts` alias, because the guest is the part of a cell solitary is built and tested against: the firewall, the tunnel and the idmapped home all run there. A machine keeps the release it was created with; a newer solitary creates new machines from a newer one. `vm.base`, which used to choose, is no longer read — `up` says so while a definition still sets it.
 
 ### `git`
 
@@ -236,7 +237,7 @@ Write it once in `config.yaml` and every cell commits as you.
 
 ### Input and boundary checks
 
-`vm.base` is an image template name containing letters, digits, dots, underscores or dashes. `build` and `network.vpn` must be relative paths inside the cell directory; symlink components are refused. Build reads remain confined to that directory.
+A `vm.base` left in a definition is still held to an image template name — letters, digits, dots, underscores or dashes — though it is ignored. `build` and `network.vpn` must be relative paths inside the cell directory; symlink components are refused. Build reads remain confined to that directory.
 
 Allow entries must be IPv4 addresses/CIDRs or ASCII DNS names with labels of at most 63 characters, up to 253 characters overall. Punycode names, private single-label names and an optional trailing dot are supported. Tunnel endpoint ports must be integers from 1 to 65535. WireGuard shell hooks and `SaveConfig` are refused; the latter could overwrite the managed configuration.
 

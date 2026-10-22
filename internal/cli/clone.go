@@ -165,7 +165,11 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 	}
 	fmt.Fprintf(out, "  image    %s\n", image)
 	fmt.Fprintf(out, "  machine  %d cpus · %s · %s\n", c.VM.CPUs, c.VM.Memory, c.VM.Disk)
-	fmt.Fprintf(out, "  base     %s\n", c.VM.Base)
+	if c.IgnoredBase != "" {
+		// Shown because the author wrote it, and said to be ignored because
+		// whoever installs this would otherwise expect that machine.
+		fmt.Fprintf(out, "  base     %s (ignored: solitary chooses the machine's system)\n", c.IgnoredBase)
+	}
 	fmt.Fprintln(out, "  command:")
 	for _, line := range strings.Split(c.Command, "\n") {
 		fmt.Fprintf(out, "    %s\n", line)

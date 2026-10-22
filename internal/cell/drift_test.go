@@ -194,3 +194,78 @@ func TestApplyDriftRewritesAMachineItCannotVerify(t *testing.T) {
 		t.Errorf("applyDrift() wrote %q for a machine with no known change", out.String())
 	}
 }
+
+// A record from before the base was kept is completed without touching the
+// machine: it was created from the alias that was the default then, or from
+// the vm.base its cell still names, and a matching definition needs nothing
+// written to say so.
+func TestApplyDriftCompletesTheBaseOfAnOlderRecord(t *testing.T) {
+	for name, tt := range map[string]struct {
+		ignored, want string
+	}{
+		"the old default":   {want: config.LegacyBase},
+		"a written vm.base": {ignored: "ubuntu-24.04", want: "ubuntu-24.04"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			isolate(t)
+
+			c := cellWith("")
+			c.IgnoredBase = tt.ignored
+			record := config.NewApplied("definition", "")
+			record.Stored = config.Digest("stored")
+			if err := config.WriteApplied("probe", record); err != nil {
+				t.Fatal(err)
+			}
+
+			var out bytes.Buffer
+			if err := applyDrift("probe", "solitary-probe", c, "definition", "stored", &out); err != nil {
+				t.Fatalf("applyDrift() error = %v, want the record completed without reaching Lima", err)
+			}
+			if out.Len() != 0 {
+				t.Errorf("applyDrift() wrote %q for a machine that matches", out.String())
+			}
+
+			got, err := config.ReadApplied("probe")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Base != tt.want {
+				t.Errorf("Base = %q, want %q", got.Base, tt.want)
+			}
+			if got.Stored != record.Stored || got.Definition != record.Definition {
+				t.Errorf("record = %+v, want the rest of %+v kept", got, record)
+			}
+		})
+	}
+}
+
+// The base a machine was created from is what says how old it is, so a record
+// that has one keeps it — a vm.base written since changes nothing.
+func TestCreatedFromKeepsARecordedBase(t *testing.T) {
+	c := cellWith("")
+	c.IgnoredBase = "debian-12"
+
+	if got := createdFrom(c, config.Applied{Base: config.Base}); got != config.Base {
+		t.Errorf("createdFrom() = %q, want the recorded %q", got, config.Base)
+	}
+}
+
+// A vm.base still written down is said to do nothing, naming where it is and
+// what solitary creates machines from instead; one that is not written down
+// is not mentioned at all.
+func TestWarnIgnoredBase(t *testing.T) {
+	var out bytes.Buffer
+	warnIgnoredBase("probe", cellWith(""), &out)
+	if out.Len() != 0 {
+		t.Errorf("warnIgnoredBase() wrote %q with no vm.base", out.String())
+	}
+
+	c := cellWith("")
+	c.IgnoredBase = "ubuntu-lts"
+	warnIgnoredBase("probe", c, &out)
+	for _, want := range []string{`vm.base ("ubuntu-lts") is no longer read`, config.Base, "Remove vm.base"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("warnIgnoredBase() = %q, want it to contain %q", out.String(), want)
+		}
+	}
+}

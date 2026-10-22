@@ -74,7 +74,7 @@ The image itself runs exactly as it was built, so a cell with a user starts as q
 
 ### A user needs a current machine
 
-The view is an idmapped mount, made by the machine's root before the container starts, and the machine's `mount` has to understand the `X-mount.idmap` option to make it. The default `vm.base` does, and so does any recent distribution. A machine made from an older template cannot give a user its home, and `up` refuses to start a cell with a user there rather than start it with a home the user cannot write.
+The view is an idmapped mount, made by the machine's root before the container starts, and the machine's `mount` has to understand the `X-mount.idmap` option to make it. Every machine solitary creates now does. A machine made from an older template cannot give a user its home, and `up` refuses to start a cell with a user there rather than start it with a home the user cannot write.
 
 A machine keeps the distribution it was created with, whatever Lima or solitary later ship. Moving a cell to a newer one means `solitary rm` and `solitary up`, and `rm` discards the home, so [fetch](/docs/artifacts) or push anything you want to keep first. A cell that runs as root has no such requirement.
 

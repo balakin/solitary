@@ -8,9 +8,10 @@ import (
 	"regexp"
 )
 
-// MinVersion is the oldest Lima solitary is written against, as the
-// installation docs state it.
-const MinVersion = "2.0"
+// MinVersion is the oldest Lima solitary is written against. The template's
+// minimumLimaVersion holds the same, so Lima refuses a definition this would
+// warn about; the installation docs name only its major line.
+const MinVersion = "2.1.3"
 
 // Binary is the limactl solitary would run, or ErrNotInstalled.
 func Binary() (string, error) {

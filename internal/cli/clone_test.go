@@ -17,13 +17,15 @@ func TestDescribeStagedShowsWhatTheCellRuns(t *testing.T) {
 		Image:   "ubuntu:24.04",
 		Command: "sleep infinity",
 		User:    "cell",
-		VM:      config.VM{Base: "ubuntu-lts", CPUs: 2, Memory: "1GiB", Disk: "10GiB", Provision: "echo provisioned"},
+		VM:      config.VM{Base: config.Base, CPUs: 2, Memory: "1GiB", Disk: "10GiB", Provision: "echo provisioned"},
 		Network: config.Network{Allow: []string{"example.com"}, Resolvers: []string{"host"}},
+		// Written by the author, and not what the machine will be made of.
+		IgnoredBase: "ubuntu-lts",
 	}
 
 	var out bytes.Buffer
 	describeStaged(&out, &clone.Staged{Cell: c, Source: clone.Source{Display: "fixture"}}, "probe")
-	for _, want := range []string{"echo provisioned", "sleep infinity", "user", "resolvers", "host", "ubuntu-lts"} {
+	for _, want := range []string{"echo provisioned", "sleep infinity", "user", "resolvers", "host", "ubuntu-lts (ignored"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("describeStaged() omits %q:\n%s", want, out.String())
 		}
