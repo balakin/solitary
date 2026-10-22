@@ -179,7 +179,9 @@ func saveHome(name, instance string, c *config.Cell, running bool, partial, save
 	}
 
 	fmt.Fprintf(progress, "Saving the home of %q (%s, %d entries) to the host...\n", name, host.FormatSize(bytesUsed), want)
-	if err := streamOut(instance, home, partial); err != nil {
+	// What tar counts is the archive before compression: the home itself,
+	// and a 512-byte header for each entry in it.
+	if err := streamOut(instance, home, partial, newMeter(progress, "saving", bytesUsed+512*uint64(want))); err != nil {
 		return err
 	}
 
@@ -200,24 +202,32 @@ func saveHome(name, instance string, c *config.Cell, running bool, partial, save
 // streamOut writes the home as a compressed tar to path. Run as root with
 // numeric owners, so that a file a cell's other users own keeps its owner: the
 // new machine maps the same ids the old one did.
-func streamOut(instance, home, path string) error {
+//
+// Compressed at gzip's fastest: it runs on one of the machine's cores, and
+// for a home of any size it is what the save waits on — a smaller archive
+// that takes three times as long is not the better trade for a file that
+// lives for a few minutes.
+func streamOut(instance, home, path string, m *meter) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return fmt.Errorf("creating %s: %w", path, err)
 	}
 
-	cmd, err := lima.Command(instance, "sudo", "tar", "--numeric-owner", "--xattrs", "-C", home, "-czf", "-", ".")
+	cmd, err := lima.Command(instance, "sudo", "tar", "--numeric-owner", "--xattrs",
+		"--checkpoint="+strconv.Itoa(checkpointRecords), "--checkpoint-action=dot",
+		"-I", "gzip -1", "-C", home, "-cf", "-", ".")
 	if err != nil {
 		f.Close()
 		return err
 	}
-	var stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = f, &stderr
+	stderr := &checkpoints{m: m}
+	cmd.Stdout, cmd.Stderr = f, stderr
 	runErr := cmd.Run()
+	m.finish()
 	syncErr := f.Sync()
 	closeErr := f.Close()
 	if runErr != nil {
-		return fmt.Errorf("saving the home: %w\n%s", runErr, strings.TrimSpace(stderr.String()))
+		return fmt.Errorf("saving the home: %w\n%s", runErr, strings.TrimSpace(string(stderr.other)))
 	}
 	if err := errors.Join(syncErr, closeErr); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
@@ -285,7 +295,16 @@ func restoreHome(name, instance, pending string, progress io.Writer) error {
 		return err
 	}
 	defer f.Close()
-	if _, err := guestRun(instance, f, "sudo", "tar", "--numeric-owner", "--xattrs", "-xpzf", "-", "-C", home); err != nil {
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	// Measured in the archive as it is on the host, compressed, which is
+	// exactly what crosses into the machine.
+	m := newMeter(progress, "restoring", uint64(info.Size()))
+	_, err = guestRun(instance, countingReader{r: f, m: m}, "sudo", "tar", "--numeric-owner", "--xattrs", "-xpzf", "-", "-C", home)
+	m.finish()
+	if err != nil {
 		return fmt.Errorf("restoring the home: %w; it is kept at %s, and up tries again", err, pending)
 	}
 
