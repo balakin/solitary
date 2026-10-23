@@ -1,16 +1,21 @@
 # The toolset for the claude cell. The VM around it is the boundary; this is
-# replaceable tooling, so everything here is installed from a pinned version and
-# nothing here holds a credential.
-FROM docker.io/library/ubuntu:24.04
+# replaceable tooling, and nothing here holds a credential.
+#
+# Nothing here is pinned. Every build takes the newest of each — the newest
+# Ubuntu LTS and tmux from it, Node's newest LTS line, the latest nvm, Neovim,
+# lazygit, gh and Catppuccin's tmux theme, and LazyVim with the latest of its
+# plugins — so a cell is brought up to date by rebuilding it, never by editing
+# this file. Each step proves its tool runs before the build moves on, so an
+# upstream release that breaks one fails the build, and the image you already
+# have is kept.
+FROM docker.io/library/ubuntu:latest
 
-# The versions this cell pins. Nothing else in the repository names them.
-ARG NODE_VERSION=24.22.1
-ARG NVM_VERSION=v0.40.7
-ARG NVIM_VERSION=v0.12.5
-ARG LAZYGIT_VERSION=0.64.1
-ARG GH_VERSION=2.98.0
-ARG TMUX_VERSION=3.7c
-ARG CATPPUCCIN_TMUX_VERSION=v2.3.0
+# GitHub CLI's apt repository is signed by this key, as cli.github.com's own
+# install page lists it. It is the one thing written down here: a release
+# changes nothing below, and a new key is a change worth noticing, so a
+# keyring without it fails the build rather than being trusted because it
+# arrived over HTTPS.
+ARG GH_KEY_FINGERPRINT=7F38BBB59D064DBCB3D84D725612B36462313325
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -30,13 +35,16 @@ ENV PATH=/opt/nvm/current/bin:/usr/local/bin:$PATH
 # by the next one and fetched again after it — and an update that is not in the
 # image is one nobody chose. Tools are updated by rebuilding instead:
 # `solitary up --rebuild`, or b in the dashboard, builds this file again without
-# a cache, so what is pinned above stays pinned and what is not comes in at its
-# latest. gh and npm only announce updates, but there is nothing they could
-# announce that the cell can act on.
+# a cache, and everything in it comes in at its latest. gh and npm only
+# announce updates, but there is nothing they could announce that the cell can
+# act on.
 ENV DISABLE_AUTOUPDATER=1 \
     GH_NO_UPDATE_NOTIFIER=1 \
     NPM_CONFIG_UPDATE_NOTIFIER=false
 
+# tmux is Ubuntu's: the one in the current LTS knows every option tmux.conf
+# sets, extended-keys-format included, and a config that tmux does not change
+# under has nothing to gain from a newer one.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       bash-completion \
@@ -45,111 +53,122 @@ RUN apt-get update \
       curl \
       fd-find \
       git \
+      gnupg \
       jq \
       less \
       ncurses-term \
       procps \
       ripgrep \
+      tmux \
       unzip \
       xz-utils \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && tmux -V
+
+# Prints the tag of a GitHub repository's latest release; see the script.
+COPY --chmod=0755 latest-tag /usr/local/bin/latest-tag
 
 # nvm lives in /opt rather than in the home, because the cell's home is a
 # directory on the machine that is mounted over /home/cell at start: anything
 # this image writes under there would be hidden the moment the container runs.
 # PROFILE=/dev/null keeps the installer from editing a shell rc that the seeded
 # ~/.bashrc owns.
+#
+# Node is its newest LTS line. corepack left Node after 24, so it is installed
+# from npm wherever Node no longer carries it.
 RUN mkdir -p "$NVM_DIR" \
- && curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" \
+ && nvm_version="$(latest-tag https://github.com/nvm-sh/nvm)" \
+ && curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${nvm_version}/install.sh" \
     | PROFILE=/dev/null bash \
  && . "$NVM_DIR/nvm.sh" \
- && nvm install "$NODE_VERSION" \
- && nvm alias default "$NODE_VERSION" \
- && ln -s "$NVM_DIR/versions/node/v${NODE_VERSION}" "$NVM_DIR/current" \
+ && nvm install --lts \
+ && nvm alias default 'lts/*' \
+ && ln -s "$NVM_DIR/versions/node/$(nvm version default)" "$NVM_DIR/current" \
+ && { command -v corepack >/dev/null || npm install -g corepack; } \
  && corepack enable \
  && node --version
 
-RUN npm install -g @anthropic-ai/claude-code \
- && claude --version
+# tree-sitter's CLI is what nvim-treesitter compiles parsers with. Installed
+# here, it is on PATH when LazyVim looks for it below; left out, LazyVim
+# installs it through Mason, and its build hook and its config both start that
+# install at once — the second fails with "Package is already installing" and
+# takes nvim-treesitter's setup down with it for that run.
+RUN npm install -g @anthropic-ai/claude-code tree-sitter-cli \
+ && claude --version \
+ && tree-sitter --version
 
-# Neovim: Ubuntu ships one far too old for LazyVim.
+# Neovim's latest release rather than Ubuntu's. LazyVim and its plugins are
+# taken at their latest below, and they move their minimum Neovim with Neovim
+# itself; a Neovim held at the release an LTS shipped would be left behind by
+# them at some rebuild nobody chose. Its releases publish no checksums, so HTTPS
+# from GitHub is all that vouches for the archive.
 RUN arch="$(uname -m)" \
  && case "$arch" in \
       x86_64)  nvim_arch=x86_64 ;; \
       aarch64) nvim_arch=arm64 ;; \
       *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
     esac \
+ && tag="$(latest-tag https://github.com/neovim/neovim)" \
  && curl -fsSL -o /tmp/nvim.tar.gz \
-      "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-${nvim_arch}.tar.gz" \
+      "https://github.com/neovim/neovim/releases/download/${tag}/nvim-linux-${nvim_arch}.tar.gz" \
  && tar -C /opt -xzf /tmp/nvim.tar.gz \
  && ln -s "/opt/nvim-linux-${nvim_arch}/bin/nvim" /usr/local/bin/nvim \
  && rm /tmp/nvim.tar.gz \
  && nvim --version | head -n 1
 
 # lazygit drives LazyVim's <leader>gg, which is only mapped when the binary is
-# there.
+# there. Its latest release, verified against the checksums published beside
+# the archive.
 RUN arch="$(uname -m)" \
  && case "$arch" in \
       x86_64)  lg_arch=x86_64 ;; \
       aarch64) lg_arch=arm64 ;; \
       *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
     esac \
- && curl -fsSL -o /tmp/lazygit.tar.gz \
-      "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_linux_${lg_arch}.tar.gz" \
- && tar -C /tmp -xzf /tmp/lazygit.tar.gz lazygit \
+ && tag="$(latest-tag https://github.com/jesseduffield/lazygit)" \
+ && version="${tag#v}" \
+ && base="https://github.com/jesseduffield/lazygit/releases/download/${tag}" \
+ && archive="lazygit_${version}_linux_${lg_arch}.tar.gz" \
+ && curl -fsSL -o "/tmp/${archive}" "${base}/${archive}" \
+ && curl -fsSL -o /tmp/lazygit.sha256 "${base}/checksums.txt" \
+ && (cd /tmp && grep " ${archive}\$" lazygit.sha256 | sha256sum -c -) \
+ && tar -C /tmp -xzf "/tmp/${archive}" lazygit \
  && install -m755 /tmp/lazygit /usr/local/bin/lazygit \
- && rm /tmp/lazygit.tar.gz /tmp/lazygit \
+ && rm "/tmp/${archive}" /tmp/lazygit.sha256 /tmp/lazygit \
  && lazygit --version
 
 # gh, so the agent can open pull requests and read issues without a browser: a
 # cell cannot open one on the host, so GITHUB_TOKEN from cell.yaml is how it
-# authenticates. Verified against the checksums published beside the archive.
-RUN arch="$(uname -m)" \
- && case "$arch" in \
-      x86_64)  gh_arch=amd64 ;; \
-      aarch64) gh_arch=arm64 ;; \
-      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
-    esac \
- && base="https://github.com/cli/cli/releases/download/v${GH_VERSION}" \
- && curl -fsSL -o /tmp/gh.tar.gz "${base}/gh_${GH_VERSION}_linux_${gh_arch}.tar.gz" \
- && curl -fsSL -o /tmp/gh.sha256 "${base}/gh_${GH_VERSION}_checksums.txt" \
- && echo "$(grep "gh_${GH_VERSION}_linux_${gh_arch}\.tar\.gz$" /tmp/gh.sha256 | cut -d' ' -f1)  /tmp/gh.tar.gz" \
-    | sha256sum -c - \
- && tar -C /tmp -xzf /tmp/gh.tar.gz \
- && install -m755 "/tmp/gh_${GH_VERSION}_linux_${gh_arch}/bin/gh" /usr/local/bin/gh \
- && rm -rf /tmp/gh.tar.gz /tmp/gh.sha256 "/tmp/gh_${GH_VERSION}_linux_${gh_arch}" \
+# authenticates. From GitHub's own apt repository, so apt verifies every
+# package against GitHub's signing key — once the keyring is shown to hold the
+# key named at the top of this file.
+RUN keyring=/etc/apt/keyrings/githubcli-archive-keyring.gpg \
+ && mkdir -p -m 755 /etc/apt/keyrings \
+ && curl -fsSL -o "$keyring" https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+ && chmod 644 "$keyring" \
+ && if ! gpg --show-keys --with-colons "$keyring" | grep -q "^fpr:*${GH_KEY_FINGERPRINT}:"; then \
+      echo "GitHub CLI's keyring no longer holds ${GH_KEY_FINGERPRINT}; check cli.github.com and update GH_KEY_FINGERPRINT" >&2; \
+      exit 1; \
+    fi \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=$keyring] https://cli.github.com/packages stable main" \
+    > /etc/apt/sources.list.d/github-cli.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends gh \
+ && rm -rf /var/lib/apt/lists/* \
  && gh --version
-
-# tmux, built from source. Ubuntu ships 3.4, which does not know
-# extended-keys-format; tmux stops reading a config file at the first unknown
-# option, so on 3.4 everything below that line — the theme, the key bindings,
-# the plugins — is silently skipped.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends libevent-dev libncurses-dev bison pkg-config \
- && curl -fsSL -o /tmp/tmux.tar.gz \
-      "https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz" \
- && tar -C /tmp -xzf /tmp/tmux.tar.gz \
- && cd "/tmp/tmux-${TMUX_VERSION}" \
- && ./configure \
- && make -j"$(nproc)" \
- && make install \
- && cd / \
- && rm -rf /tmp/tmux.tar.gz "/tmp/tmux-${TMUX_VERSION}" /var/lib/apt/lists/* \
- && tmux -V
 
 # tmux is configured system-wide rather than seeded: /etc/tmux.conf is read
 # before anything in the home, so a rebuilt image brings a new theme to a cell
-# whose home is years old, and a ~/.tmux.conf still overrides it. The plugins
-# are cloned here rather than installed by TPM on first run, so a fresh cell has
-# a working status bar without pressing anything.
-ENV TMUX_PLUGIN_MANAGER_PATH=/etc/tmux/plugins/
-
-RUN mkdir -p /etc/tmux/plugins \
- && git clone --depth 1 https://github.com/tmux-plugins/tpm /etc/tmux/plugins/tpm \
- && git clone --depth 1 https://github.com/tmux-plugins/tmux-sensible /etc/tmux/plugins/tmux-sensible \
- # Pinned: the theme is the visible half of this config, and it should not
- # change because an image was rebuilt on a different day.
- && git clone --depth 1 --branch "${CATPPUCCIN_TMUX_VERSION}" https://github.com/catppuccin/tmux /etc/tmux/plugins/tmux
+# whose home is years old, and a ~/.tmux.conf still overrides it.
+#
+# The theme is the one plugin, and tmux.conf loads it itself: a plugin manager
+# exists to fetch plugins on first run, and this one is fetched here, so a
+# fresh cell has a working status bar without pressing anything. Its latest
+# release rather than its main branch, so the look changes when Catppuccin
+# publishes a release, not because an image was rebuilt on a different day.
+RUN tag="$(latest-tag https://github.com/catppuccin/tmux)" \
+ && git clone --depth 1 --branch "$tag" https://github.com/catppuccin/tmux /etc/tmux/catppuccin \
+ && test -f /etc/tmux/catppuccin/catppuccin.tmux
 
 # tmux is the quietest of them: given a config file it cannot read, it starts
 # anyway with none of this applied and reports nothing.

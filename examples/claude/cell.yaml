@@ -23,7 +23,7 @@ command: cell-init && exec sleep infinity
 vm:
   cpus: 4
   memory: 6GiB
-  # Neovim's plugins and Mason's packages are baked into the image, so the
+  # Neovim's plugins and treesitter parsers are baked into the image, so the
   # build is the large thing here rather than the home.
   disk: 40GiB
 # Claude signs in inside the cell, and the cell's home survives a container
