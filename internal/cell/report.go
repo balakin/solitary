@@ -72,6 +72,9 @@ func (r Report) Rows(now time.Time) []Row {
 		if pending := g.Pending(); pending != "" {
 			rows = append(rows, Row{Value: pending, Warn: g.Behind()})
 		}
+		if r := supportOf(releaseOf(g, m.CreatedFrom), now); r.Describe() != "" {
+			rows = append(rows, Row{Label: "support", Value: r.Describe(), Warn: r.Warns()})
+		}
 		add("lists", lists(g, now))
 		if g.DiskSize > 0 {
 			add("disk", fmt.Sprintf("%s of %s", host.FormatSize(uint64(g.DiskUsed)), host.FormatSize(uint64(g.DiskSize))))

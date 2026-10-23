@@ -278,6 +278,8 @@ func up(name string, rebuild bool, progress io.Writer) error {
 		return err
 	}
 
+	warnRelease(name, progress)
+
 	// A move that stopped between destroying the old machine and saying so
 	// left its home as saved; with no machine left, it is the home.
 	if err := claimSavedHome(name, progress); err != nil {

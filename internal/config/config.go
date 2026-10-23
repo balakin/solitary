@@ -18,6 +18,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
@@ -549,6 +550,20 @@ const DefaultCommand = "sleep infinity"
 // hosts. Moving it is a decision a release makes, and the Lima it needs is
 // what lima.MinVersion and the template's minimumLimaVersion require.
 const Base = "ubuntu-26.04"
+
+// SupportEnds is when Canonical stops publishing fixes for each Ubuntu LTS
+// release in standard support, as ubuntu.com/about/release-cycle lists them.
+// That page names a month and no day, so the end is the month's last day. It
+// is compiled in rather than fetched: a stopped cell is asked about too, and
+// nothing about a release's end needs the network to say. A release missing
+// from here is reported as unknown, never as unsupported; adding the next one
+// is part of moving Base to it.
+var SupportEnds = map[string]time.Time{
+	"20.04": time.Date(2025, time.May, 31, 0, 0, 0, 0, time.UTC),
+	"22.04": time.Date(2027, time.May, 31, 0, 0, 0, 0, time.UTC),
+	"24.04": time.Date(2029, time.May, 31, 0, 0, 0, 0, time.UTC),
+	"26.04": time.Date(2031, time.May, 31, 0, 0, 0, 0, time.UTC),
+}
 
 // LegacyBase is what a machine was created from when its record predates
 // solitary choosing: the ubuntu-lts alias, unless a vm.base said otherwise. It

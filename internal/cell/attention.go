@@ -44,6 +44,13 @@ func attention(name string, c *config.Cell, inst *lima.Instance) []Attention {
 		}
 	}
 
+	if r := machineRelease(name); r.Warns() {
+		found = append(found, Attention{
+			What: "machine: " + r.Describe(),
+			Fix:  "solitary up --new-machine " + name + " moves it to " + newRelease() + ", home included",
+		})
+	}
+
 	record, err := config.ReadApplied(name)
 	if err != nil || !record.Recorded() {
 		return found
