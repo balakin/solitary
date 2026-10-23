@@ -1,7 +1,7 @@
 description: >-
-  An editor in a cell: openvscode-server reached from the host's browser on
-  port 9797, with claude, node from nvm, corepack, and the extensions a web
-  project wants. The network is left open, and 3000, 5173 and 8080 reach the
+  An editor in a cell: code-server reached from the host's browser on port
+  9797, with claude, node from nvm, corepack, and the extensions a web project
+  wants. The network is left open, and 3000, 5173 and 8080 reach the
   host so a dev server started inside is one you can open.
 
 # Try it:
@@ -9,32 +9,39 @@ description: >-
 #   solitary clone balakin/solitary/examples/vscode
 #   solitary up vscode
 #   solitary exec vscode editor-url
-#   Open the URL it prints: the editor requires its connection token.
+#   Open the URL it prints, and sign in with the password beside it.
 #
 # See https://solitary.balakin.io/docs/guides-examples
 
 build: ./Containerfile
 
-# cell-init seeds the home the first time the container starts, and
+# cell-init seeds the home the first time the container starts — the editor's
+# settings among it — and writes the password the editor asks for.
 # seed-extensions makes sure the editor's own list names the extensions a
-# rebuilt image added — it reads that list, not the directories beside it. The
-# editor's settings are not seeded at all: the web workbench keeps those in the
-# viewer's browser, so the image sets defaults instead (see the Containerfile).
-# The server is the container's life, so it runs in the foreground.
+# rebuilt image added: it reads that list, not the directories beside it. The
+# server is the container's life, so it runs in the foreground.
 #
-# 9797 rather than openvscode-server's own 3000: that port belongs to whatever
-# dev server you are here to work on. It is written twice — change --port and
-# ports: together.
-# The two directory flags are the defaults spelled out: they are where
-# cell-init seeds the settings and the extensions, and naming them here means
-# the editor cannot look somewhere else.
+# 9797 rather than code-server's own 8080: that port belongs to whatever dev
+# server you are here to work on. It is written twice — change --bind-addr and
+# ports: together. The two directory flags are code-server's defaults spelled
+# out: they are where cell-init seeds the settings and the extensions, and
+# naming them here means the editor cannot look somewhere else. It checks
+# GitHub for a newer release every six hours unless told not to, and a newer
+# release reaches this cell by rebuilding it, not by a notice.
+#
+# Workspace trust is off because the cell is the boundary it stands in for.
+# Left on, the editor opens the home in Restricted Mode and disables every
+# extension in it — the theme, Claude Code, ESLint, Prettier — to keep code in
+# an unfamiliar folder from running on your machine. Nothing in a cell runs on
+# your machine, and the agent beside the editor runs code in it all day.
 command: >
   cell-init && seed-extensions
-  && exec /opt/openvscode-server/bin/openvscode-server
-  --host 0.0.0.0 --port 9797
-  --connection-token-file "$HOME/.openvscode-server/connection-token"
-  --user-data-dir "$HOME/.openvscode-server/data"
-  --extensions-dir "$HOME/.openvscode-server/extensions"
+  && exec code-server
+  --bind-addr 0.0.0.0:9797
+  --config "$HOME/.config/code-server/config.yaml"
+  --user-data-dir "$HOME/.local/share/code-server"
+  --extensions-dir "$HOME/.local/share/code-server/extensions"
+  --disable-telemetry --disable-update-check --disable-workspace-trust
 
 # Naming any port at all turns off forwarding every port the cell listens on,
 # so a dev server started inside the editor does not reach the host until it is

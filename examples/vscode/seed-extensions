@@ -13,8 +13,8 @@
 # if you uninstall it — take it out of the Containerfile instead.
 set -eu
 
-SKEL=/opt/cell-skel/.openvscode-server/extensions
-DEST="$HOME/.openvscode-server/extensions"
+SKEL=/opt/cell-skel/.local/share/code-server/extensions
+DEST="$HOME/.local/share/code-server/extensions"
 
 # Nothing to reconcile before the first start: cell-init has just copied the
 # whole store in, list and all.

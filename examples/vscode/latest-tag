@@ -1,0 +1,20 @@
+#!/bin/sh
+# Print the tag of a GitHub repository's latest release, for the Containerfile
+# to build from.
+#
+# Read from the redirect github.com answers releases/latest with, rather than
+# from the API: the API allows an anonymous caller sixty requests an hour, and
+# a build that runs out of them fails for a reason nothing in it can fix.
+# releases/latest is the newest release that is neither a draft nor marked a
+# pre-release, which is the one to build from.
+set -eu
+
+url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$1/releases/latest")
+tag=${url##*/}
+case "$tag" in
+"" | latest | releases)
+	echo "latest-tag: $1 has no release to build from" >&2
+	exit 1
+	;;
+esac
+echo "$tag"

@@ -20,17 +20,22 @@ tar -C "$SKEL" -cf - . | tar -C "$HOME" -xf - --skip-old-files
 
 echo "cell-init: $HOME seeded from $SKEL"
 
-# Persist a random access token in the cell's home. Never disable authentication
-# just because the editor is forwarded to host localhost.
-mkdir -p "$HOME/.openvscode-server"
+# code-server's config, holding a random password the editor's login page asks
+# for. Written once and kept in the home, so the password survives the
+# container being replaced. Never turned off because the editor is only
+# forwarded to the host's localhost: anything on the host can open localhost,
+# and the editor is a shell in the cell.
+config="$HOME/.config/code-server/config.yaml"
+mkdir -p "$(dirname "$config")"
 node -e '
 const fs = require("node:fs");
 const crypto = require("node:crypto");
+const password = crypto.randomBytes(24).toString("base64url");
 try {
-  fs.writeFileSync(process.argv[1], crypto.randomBytes(32).toString("base64url"), { flag: "wx", mode: 0o600 });
+  fs.writeFileSync(process.argv[1], `auth: password\npassword: ${password}\n`, { flag: "wx", mode: 0o600 });
 } catch (error) {
   if (error.code !== "EEXIST") throw error;
 }
-if (fs.statSync(process.argv[1]).size === 0) throw new Error("editor connection token is empty");
+if (!/^password: \S+$/m.test(fs.readFileSync(process.argv[1], "utf8"))) throw new Error("the editor has no password");
 fs.chmodSync(process.argv[1], 0o600);
-' "$HOME/.openvscode-server/connection-token"
+' "$config"
