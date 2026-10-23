@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.1](https://github.com/balakin/solitary/compare/v0.17.0...v0.17.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* hand a cell's devices to its user when it names one ([ee0ab75](https://github.com/balakin/solitary/commit/ee0ab75d0912cbb1f7d59da92c5cd051d8ca144f))
+
 ## [0.17.0](https://github.com/balakin/solitary/compare/v0.16.5...v0.17.0) (2026-10-23)
 
 
