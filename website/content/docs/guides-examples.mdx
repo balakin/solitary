@@ -53,7 +53,9 @@ secrets:
 
 Sign claude in once inside the cell. The cell's home is a directory on the machine rather than in the container, so the login survives every change that replaces the container — a new image, an edited `Containerfile`, a rotated secret. It does not survive `solitary rm`, which discards the machine's disk and the home with it. Declaring `ANTHROPIC_API_KEY` under `secrets:` is the other way round: the value is held on the host, so it outlives the cell entirely. See [changing a cell](/docs/concepts#changing-a-cell).
 
-claude does not update itself in either cell: both images set `DISABLE_AUTOUPDATER`, and silence the update notices of `gh` and `npm`. The container is started over from the image at every boot, so an update downloaded inside it would be downloaded again after every restart. Run `solitary up --rebuild claude` — or press `b` in the dashboard — to build the image again with the latest claude in it. What the `Containerfile` pins stays pinned until you change it. See [updating the tools in a cell](/docs/concepts#updating-the-tools-in-a-cell).
+claude does not update itself in either cell: both images set `DISABLE_AUTOUPDATER`, and silence the update notices of `gh` and `npm`. The container is started over from the image at every boot, so an update downloaded inside it would be downloaded again after every restart. Run `solitary up --rebuild claude` — or press `b` in the dashboard — to build the image again with the latest claude in it, and the latest of everything else. See [updating the tools in a cell](/docs/concepts#updating-the-tools-in-a-cell).
+
+Nothing in the `claude` image is pinned either, but not everything in it follows its own upstream. tmux is Ubuntu's: the current LTS ships one that knows every option the config sets, and the config does not change under it. Neovim is the opposite — its latest release, because LazyVim and its plugins are taken at their latest and move their minimum Neovim along with Neovim, so a Neovim held at what an LTS shipped would be left behind by them at some rebuild. The theme, Catppuccin, is its latest release rather than its main branch, so the look changes when Catppuccin publishes one rather than whenever the image is rebuilt; `tmux.conf` loads it directly, with no plugin manager.
 
 Each tmux window's tab shows what claude in it is doing: 🤖 while it works, 💬 when it is waiting for you — a permission to grant, a question to answer — and ✅ when it has finished. Run one claude per window and the tabs say which one needs you without visiting each. 💬 and ✅ clear as soon as you look at the window, and one never appears on the window you are already looking at; 🤖 stays until claude moves on, and the mark goes when claude exits. It is claude's own hooks in the seeded `~/.claude/settings.json` that do it, calling `agent-status`, a short script in the image that sets a tmux window option `/etc/tmux.conf` shows. A home seeded before the marks existed keeps the settings it had, so copy the `hooks` block from the example's `settings.json` into yours to get them.
 
@@ -158,6 +160,7 @@ network:
     - security.ubuntu.com
     - github.com
     - githubusercontent.com
+    - cli.github.com
     - nodejs.org
     - registry.npmjs.org
     # while it runs
@@ -166,7 +169,7 @@ network:
     - sentry.io
 ```
 
-For `vscode`, the same list plus `cli.github.com`, where `gh` is installed from, and `open-vsx.org` — needed at build time for the extensions, and again at run time if you install one from inside the editor. Either way, add whatever the code you work on has to reach.
+For `vscode`, the same list plus `open-vsx.org` — needed at build time for the extensions, and again at run time if you install one from inside the editor. Either way, add whatever the code you work on has to reach.
 
 A domain covers its subdomains, and setting `allow` at all makes the cell default-deny. [Network policy](/docs/guides-network-policy) covers what the cell sees when a request is refused.
 
@@ -174,7 +177,7 @@ A domain covers its subdomains, and setting `allow` at all makes the cell defaul
 
 A cloned cell is a copy. Edit its `cell.yaml` or its `Containerfile` under `~/.config/solitary/cells/<name>/` and run `up` again — the image rebuilds when the build context changed, and the cell's home is kept.
 
-The versions `claude` pins live in the `ARG` lines at the top of its `Containerfile`, which is the one place to change to move Neovim or node. `vscode` pins nothing: a rebuild moves all of it.
+Neither example pins a version: a rebuild moves all of it. The one value written down in each `Containerfile` is the fingerprint of GitHub CLI's signing key, which a new key has to replace.
 
 To take an updated definition from here without losing your `.env` or anything else you added:
 
