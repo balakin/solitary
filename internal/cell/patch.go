@@ -25,6 +25,12 @@ var patchScript string
 // installed may need. A running cell keeps running unless the patch needs a
 // reboot and reboot says yes, since a reboot ends everything in the container.
 func Patch(name string, reboot func() (bool, error), progress io.Writer) (err error) {
+	unlock, err := lockCell(name)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
 	c, err := config.LoadCell(name)
 	if err != nil {
 		return err
@@ -90,7 +96,7 @@ func Patch(name string, reboot func() (bool, error), progress io.Writer) (err er
 		if err := lima.Stop(instance); err != nil {
 			return err
 		}
-		if err := Up(name, false, progress); err != nil {
+		if err := up(name, false, progress); err != nil {
 			return err
 		}
 		if guest, err = askGuest(instance); err != nil {

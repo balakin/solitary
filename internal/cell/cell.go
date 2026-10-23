@@ -262,8 +262,25 @@ func statusOf(inst lima.Instance) Status {
 // container is replaced, which every boot of the machine does. The home is
 // kept either way.
 func Up(name string, rebuild bool, progress io.Writer) error {
+	unlock, err := lockCell(name)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	return up(name, rebuild, progress)
+}
+
+// up is Up for a caller that already holds the cell's lock.
+func up(name string, rebuild bool, progress io.Writer) error {
 	c, err := config.LoadCell(name)
 	if err != nil {
+		return err
+	}
+
+	// A move that stopped between destroying the old machine and saying so
+	// left its home as saved; with no machine left, it is the home.
+	if err := claimSavedHome(name, progress); err != nil {
 		return err
 	}
 
@@ -1500,9 +1517,11 @@ func SetSecrets(name string, progress io.Writer) error {
 // The definition is not read: stopping a machine needs nothing from it, and an
 // orphaned machine is the one most worth being able to stop.
 func Down(name string, progress io.Writer) error {
-	if err := config.ValidateName(name); err != nil {
+	unlock, err := lockCell(name)
+	if err != nil {
 		return err
 	}
+	defer unlock()
 
 	instance := config.Instance(name)
 	inst, err := lima.Lookup(instance)
@@ -1525,9 +1544,11 @@ func Down(name string, progress io.Writer) error {
 // Remove destroys a cell's machine. The definition and the secrets file stay on
 // the host, so up rebuilds an equivalent cell.
 func Remove(name string, progress io.Writer) error {
-	if err := config.ValidateName(name); err != nil {
+	unlock, err := lockCell(name)
+	if err != nil {
 		return err
 	}
+	defer unlock()
 
 	instance := config.Instance(name)
 	inst, err := lima.Lookup(instance)
