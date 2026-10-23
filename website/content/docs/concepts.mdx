@@ -67,6 +67,8 @@ The machine under the container is solitary's choice — an Ubuntu LTS release �
 
 [`inspect`](/docs/commands#inspect-reports-what-a-cell-runs-on) and the [dashboard](/docs/dashboard#the-system-rows) say how far behind a machine is, and a machine missing security fixes is [marked](/docs/dashboard#warnings) until it has them.
 
+A release is only patched for as long as Ubuntu supports it: five years of standard support for each LTS, ending in May. solitary knows those dates without asking anyone, so a stopped cell is judged too. `inspect` says how long a machine's release has left; once that is under six months, `up` warns at every start and the dashboard [marks](/docs/dashboard#warnings) the cell, until it moves to a new machine. Nothing is ever refused — when to move a cell is yours to decide.
+
 ### A new machine
 
 Patching keeps a machine on its release; it never moves it to the next one, and it never removes anything. For either, the machine is replaced:
