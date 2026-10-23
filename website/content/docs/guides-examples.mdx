@@ -6,7 +6,7 @@ description: Two complete cells to clone — a terminal setup around claude, and
 The repository holds two cell definitions that are meant to be run rather than read. Each is a `cell.yaml`, the `Containerfile` it builds from, and a `skel/` directory of dotfiles.
 
 - **`claude`** — a terminal working environment: claude, Neovim with LazyVim, tmux, [workmux](https://github.com/raine/workmux), `gh`, and node from nvm with corepack enabled.
-- **`vscode`** — an editor reached from the host's browser: openvscode-server with the extensions a web project wants, a dark theme, and the ports a dev server listens on, plus claude, `gh`, node and corepack.
+- **`vscode`** — an editor reached from the host's browser: [code-server](https://github.com/coder/code-server) with the extensions a web project wants, a dark theme, and the ports a dev server listens on, plus claude, `gh`, node and corepack.
 
 ## Take one
 
@@ -75,15 +75,15 @@ solitary clone balakin/solitary/examples/vscode
 solitary up vscode
 ```
 
-Then open the authenticated URL described below: the bare `http://localhost:9797` is refused without the connection token. The port is 9797 rather than openvscode-server's own 3000 because 3000 belongs to whatever dev server you are there to work on; it is written twice in `cell.yaml`, in `--port` and in `ports:`, and the two move together.
+Then open the editor and sign in: `http://localhost:9797` opens on a login page. The port is 9797 rather than code-server's own 8080 because 8080 belongs to whatever dev server you are there to work on; it is written twice in `cell.yaml`, in `--bind-addr` and in `ports:`, and the two move together.
 
-The server requires a random connection token, kept in the cell's home. Print the authenticated URL and open it on the host:
+The editor asks for a random password, kept in the cell's home. Print the address and the password:
 
 ```sh
 solitary exec vscode editor-url
 ```
 
-The token is generated once per cell, the first time it starts, and kept in the cell's home like the claude login: it survives a stop and start, a new image, `up --rebuild` and a rotated secret, so the URL stays the same, and only `solitary rm` (which discards the home) or deleting `~/.openvscode-server/connection-token` yourself makes a new one. `editor-url` is a script in the image that reads the port and the token file from the running server's own arguments, so the port stays written in the two places above and no third. Forwarding to **host localhost** limits network exposure, but other local users and processes can connect; keep authentication enabled. See [ports](/docs/configuration#ports).
+The password is generated once per cell, the first time it starts, and kept in the cell's home like the claude login: it survives a stop and start, a new image, `up --rebuild` and a rotated secret, and only `solitary rm` (which discards the home) or deleting `~/.config/code-server/config.yaml` yourself makes a new one. `editor-url` is a script in the image that reads the port and the config file from the running server's own arguments, so the port stays written in the two places above and no third. Forwarding to **host localhost** limits network exposure, but other local users and processes can connect; keep authentication enabled. See [ports](/docs/configuration#ports).
 
 That same forward is the thing to remember when you start a dev server inside the editor. Naming any port at all turns off forwarding every port the cell listens on, so the cell names the three a web project reaches for first alongside the editor's:
 
@@ -101,15 +101,15 @@ Anything listening on another port needs it added here, and `ports` is read when
 
 Eight extensions are installed at build time, from Open VSX: Claude Code, ESLint, Prettier, Tailwind CSS, EditorConfig, [oxc](https://oxc.rs) and Astro, plus GitHub's themes. Claude Code's extension is there as well as the CLI — it drives the same agent from inside the editor, against the cell's own installation.
 
-The editor's defaults — a dark theme, format on save, Prettier formatting while ESLint only fixes, and telemetry off — are built into the image, from `editor-defaults.json` beside the `Containerfile`:
+The editor's settings — a dark theme, format on save, Prettier formatting while ESLint only fixes, and telemetry off — are an ordinary `settings.json`, seeded into the cell's home with the rest of the dotfiles:
 
-```json title="examples/vscode/editor-defaults.json"
+```jsonc title="examples/vscode/skel/.local/share/code-server/User/settings.json"
 {
   "workbench.colorTheme": "GitHub Dark Default",
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
+    "source.fixAll.eslint": "explicit",
   },
   "eslint.format.enable": false,
   "editor.tabSize": 2,
@@ -117,17 +117,23 @@ The editor's defaults — a dark theme, format on save, Prettier formatting whil
   "files.insertFinalNewline": true,
   "terminal.integrated.defaultProfile.linux": "bash",
   "workbench.startupEditor": "none",
-  "telemetry.telemetryLevel": "off"
+  "telemetry.telemetryLevel": "off",
 }
 ```
 
-Not as a settings file, because that would not work. The web workbench keeps its user data in the **viewer's browser** — IndexedDB, per origin — rather than in the server's `--user-data-dir`, so a `settings.json` placed inside the cell is never read by the editor, and openvscode-server has no flag for defaults either: its `product.overrides.json` is read only by a development build. What upstream does define is `configurationDefaults`, one of the options the page hands to `create()`, and nothing sets it — so the `Containerfile` injects it into the workbench bootstrap and checks that the result still parses. A bundle that no longer matches fails the build rather than quietly dropping the defaults.
+code-server keeps settings on the server, in the cell, not in the browser. So they are the cell's: the same in every browser you open it from, changed from inside the editor like anywhere else, and kept from then on — a rebuilt image never touches a settings file that is already there, and `solitary rm` discards it with the home.
 
-They are defaults, so anything you change in the editor is kept in your browser and still wins. That is the catch worth knowing, and it runs the other way too: those changes are per browser and per origin, they are not in the cell, and `solitary rm` does not clear them. Reset the site's data in the browser to get back to the defaults.
+Workspace trust is turned off, with `--disable-workspace-trust`. Left on, the editor opens the home in Restricted Mode and disables every extension in it, the theme included, to keep code in an unfamiliar folder from running on your machine. In a cell, nothing runs on your machine, and the agent beside the editor runs code in the cell all day; the cell is the boundary workspace trust stands in for.
 
-Extensions are the opposite — they live on the server, so the cell does own them. They are seeded into its home the first time the container starts rather than left in the image, so an extension you install from inside the editor stays installed and a rebuilt image does not remove it.
+Extensions live on the server too. They are seeded into the home the first time the container starts rather than left in the image, so an extension you install from inside the editor stays installed and a rebuilt image does not remove it.
 
 They need one thing more, which `seed-extensions` does at every start: the editor reads `extensions.json` and ignores any directory not named in it, so a home seeded before the image gained an extension would hold the directory and never show the extension. The two lists are merged, and the home's entry wins wherever both name one, so a version you installed yourself is left alone. An extension the image ships comes back if you uninstall it — take it out of the `Containerfile` instead.
+
+### Nothing in it is pinned
+
+Every build takes the newest of everything: the newest Ubuntu LTS, Node's newest LTS line, the latest nvm, `gh` from GitHub's own signed apt repository, the latest code-server, Claude Code and the extensions. So `solitary up --rebuild vscode` — `b` in the dashboard — is how this cell is brought up to date, and there is nothing in its `Containerfile` to edit for it. The one thing written down is the fingerprint of GitHub CLI's signing key; a keyring without it fails the build rather than being trusted because it arrived over HTTPS.
+
+Each step runs the tool it installed before the build moves on, so an upstream release that breaks one fails the rebuild — and the image you already have keeps running until the next one succeeds.
 
 ## How the dotfiles get there
 
@@ -161,7 +167,7 @@ network:
     - sentry.io
 ```
 
-For `vscode`, the same list plus `open-vsx.org` — needed at build time for the extensions, and again at run time if you install one from inside the editor. Either way, add whatever the code you work on has to reach.
+For `vscode`, the same list plus `cli.github.com`, where `gh` is installed from, and `open-vsx.org` — needed at build time for the extensions, and again at run time if you install one from inside the editor. Either way, add whatever the code you work on has to reach.
 
 A domain covers its subdomains, and setting `allow` at all makes the cell default-deny. [Network policy](/docs/guides-network-policy) covers what the cell sees when a request is refused.
 
@@ -169,7 +175,7 @@ A domain covers its subdomains, and setting `allow` at all makes the cell defaul
 
 A cloned cell is a copy. Edit its `cell.yaml` or its `Containerfile` under `~/.config/solitary/cells/<name>/` and run `up` again — the image rebuilds when the build context changed, and the cell's home is kept.
 
-The versions each cell pins live in the `ARG` lines at the top of its `Containerfile`, which is the one place to change to move Neovim, node or the editor.
+The versions `claude` pins live in the `ARG` lines at the top of its `Containerfile`, which is the one place to change to move Neovim or node. `vscode` pins nothing: a rebuild moves all of it.
 
 To take an updated definition from here without losing your `.env` or anything else you added:
 
