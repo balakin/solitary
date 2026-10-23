@@ -107,7 +107,7 @@ An editor in a cell, from nothing:
 solitary clone balakin/solitary/examples/vscode
 solitary up vscode --detach
 solitary exec vscode editor-url
-# Open the URL it prints: the editor requires its connection token.
+# Open the URL it prints and sign in with the password beside it.
 ```
 
 That is VS Code with Claude Code beside it, running in the cell and reached

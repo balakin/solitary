@@ -143,9 +143,9 @@ solitary: cell "claude" is busy with another solitary command (process 4242); tr
 
 Commands that change a cell — `up`, `patch`, `down`, `rm`, a move to a new machine, and the dashboard keys that run them — take it for as long as they run, so that two of them never change one machine at once. The other one is still running, often in another terminal or behind the dashboard; it lets go when it ends, however it ends, so a command that was killed never leaves a cell locked. `shell`, `exec`, `ls` and `inspect` are never refused.
 
-## The editor will not open without a token
+## The editor asks for a password
 
-The `vscode` example cell requires a connection token, so `http://localhost:9797` on its own is refused. `solitary exec vscode editor-url` prints the address with the token in it. The token itself is `~/.openvscode-server/connection-token` inside the cell. The token is created the first time the cell starts and kept in its home, so it survives a stop and start, a new image, `up --rebuild` and a rotated secret. Only `solitary rm` changes it, or deleting the file: the next start creates a new one, and a bookmarked URL stops working. Authentication stays on even though the port reaches host localhost only: other users and processes on the host can reach it too.
+The `vscode` example cell signs in with a password, so `http://localhost:9797` opens on a login page. `solitary exec vscode editor-url` prints the address and the password. The password itself is in `~/.config/code-server/config.yaml` inside the cell. It is created the first time the cell starts and kept in its home, so it survives a stop and start, a new image, `up --rebuild` and a rotated secret. Only `solitary rm` changes it, or deleting the file: the next start creates a new one. Authentication stays on even though the port reaches host localhost only: other users and processes on the host can reach it too.
 
 ## Permission denied inside a cell
 

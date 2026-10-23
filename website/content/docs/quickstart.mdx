@@ -16,13 +16,13 @@ solitary up vscode --detach
 
 `clone` shows you what the definition asks for — its image, its machine, the secrets it wants, what it may reach — and installs a copy only after you say yes. `up` then creates the machine and builds the image **inside it**, so nothing in that `Containerfile` runs on your host. Expect the first build to take a while; it is downloading an editor and its extensions.
 
-When it finishes, print the editor's address with its connection token and open it:
+When it finishes, print the editor's address and its password:
 
 ```sh
 solitary exec vscode editor-url
 ```
 
-The editor is on **http://localhost:9797**, and refuses a visit without the token. The forward reaches host localhost; the token protects access from other local processes and users.
+The editor is on **http://localhost:9797**; open it and sign in with the password. The forward reaches host localhost only, and the password keeps out other local processes and users.
 
 ```sh
 solitary shell vscode      # a shell in the same cell

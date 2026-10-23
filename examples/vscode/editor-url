@@ -1,25 +1,27 @@
 #!/bin/sh
-# Print the address the editor opens at, connection token included.
+# Print the address the editor opens at, and the password its login page asks
+# for.
 #
-# Both halves are read from the running server's own arguments rather than
-# written here: the port is already named twice in cell.yaml, in --port and in
-# ports:, and a third copy would be the one nobody remembers to move. The
-# forward keeps the number, so the port the server listens on is the one the
-# host opens.
+# The port is read from the running server's own arguments rather than written
+# here: it is already named twice in cell.yaml, in --bind-addr and in ports:,
+# and a third copy would be the one nobody remembers to move. The forward keeps
+# the number, so the port the server listens on is the one the host opens. The
+# password is read from the config file the same arguments name.
 set -eu
 
 for cmdline in /proc/[0-9]*/cmdline; do
 	args=$(tr '\0' '\n' < "$cmdline" 2>/dev/null) || continue
 	case "$args" in
-	*--connection-token-file*) ;;
+	*code-server*--config*) ;;
 	*) continue ;;
 	esac
 
-	port=$(printf '%s\n' "$args" | sed -n '/^--port$/{n;p;q;}')
-	token_file=$(printf '%s\n' "$args" | sed -n '/^--connection-token-file$/{n;p;q;}')
-	[ -n "$port" ] && [ -n "$token_file" ] || continue
+	bind=$(printf '%s\n' "$args" | sed -n '/^--bind-addr$/{n;p;q;}')
+	config=$(printf '%s\n' "$args" | sed -n '/^--config$/{n;p;q;}')
+	[ -n "$bind" ] && [ -n "$config" ] || continue
 
-	echo "http://localhost:$port/?tkn=$(cat "$token_file")"
+	echo "http://localhost:${bind##*:}/"
+	echo "password: $(sed -n 's/^password: *//p' "$config")"
 	exit 0
 done
 
