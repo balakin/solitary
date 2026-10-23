@@ -350,6 +350,9 @@ func ensureMachine(name string, c *config.Cell, progress io.Writer) (string, err
 	}
 	var stored string
 	if inst != nil {
+		if err := refuseNewerTemplate(name); err != nil {
+			return "", err
+		}
 		if err := lima.CheckIsolation(*inst); err != nil {
 			return "", fmt.Errorf("machine isolation check: %w", err)
 		}
@@ -364,7 +367,18 @@ func ensureMachine(name string, c *config.Cell, progress io.Writer) (string, err
 			return "", err
 		}
 		fmt.Fprintf(progress, "Creating cell %q (this takes a few minutes the first time)...\n", name)
+		// Recorded before the machine exists as well as after: a create
+		// that is killed leaves a machine behind and never returns here, and
+		// without this its base would later be taken for the oldest one.
+		// What Lima stores is not known yet, and a record without it is one
+		// the next start of a stopped machine writes out again in full.
+		provisional := config.NewApplied(rendered, c.VM.Provision)
+		provisional.Base, provisional.Template = c.VM.Base, lima.TemplateVersion
+		if err := config.WriteApplied(name, provisional); err != nil {
+			return "", err
+		}
 		if err := createMachine(instance, rendered, c.VM.GPU); err != nil {
+			_ = config.RemoveApplied(name)
 			return "", err
 		}
 		if err := recordMachine(name, instance, rendered, c.VM.Provision, c.VM.Base); err != nil {
@@ -1378,10 +1392,13 @@ func applyDrift(name, instance string, c *config.Cell, rendered, stored string, 
 	changed := record.Definition != config.Digest(rendered)
 	edited := record.Edited(stored)
 	if record.Recorded() && record.Stored != "" && !changed && !edited {
-		if record.Base == "" {
-			// A record from before the base was kept. Completing it says
-			// nothing new to the machine, so the machine is left alone.
+		if record.Base == "" || record.Template < lima.TemplateVersion {
+			// A record from before the base was kept, or from a template
+			// that renders this cell the same as the current one. Completing
+			// it says nothing new to the machine, so the machine is left
+			// alone.
 			record.Base = createdFrom(c, record)
+			record.Template = lima.TemplateVersion
 			return config.WriteApplied(name, record)
 		}
 		return nil
@@ -1419,6 +1436,20 @@ func createdFrom(c *config.Cell, record config.Applied) string {
 	}
 }
 
+// refuseNewerTemplate stops an older solitary from touching a machine a newer
+// one set up. Its template is what the machine's firewall, tunnel and home
+// were made by; handing it an older one would quietly take back whatever the
+// newer one added — a rule, a fix — on a machine its owner believes has it.
+func refuseNewerTemplate(name string) error {
+	record, err := config.ReadApplied(name)
+	if err != nil || record.Template <= lima.TemplateVersion {
+		return err
+	}
+
+	return fmt.Errorf("the machine behind %q was set up by a newer solitary (template %d; this one has %d).\n"+
+		"Update solitary with 'solitary update' before changing it", name, record.Template, lima.TemplateVersion)
+}
+
 // warnIgnoredBase says that a vm.base still written down decides nothing any
 // more, so that nobody keeps editing it and waiting for a different machine.
 func warnIgnoredBase(name string, c *config.Cell, w io.Writer) {
@@ -1451,6 +1482,7 @@ func recordMachine(name, instance, rendered, provision, base string) error {
 	record := config.NewApplied(rendered, provision)
 	record.Stored = config.Digest(stored)
 	record.Base = base
+	record.Template = lima.TemplateVersion
 
 	return config.WriteApplied(name, record)
 }
