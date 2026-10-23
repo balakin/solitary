@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.17.0](https://github.com/balakin/solitary/compare/v0.16.5...v0.17.0) (2026-10-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* vm.base is no longer read. A cell.yaml or config.yaml that sets it gets a warning from up, and its machines are created from solitary's base. Existing machines keep the system they were created with. Lima older than 2.1.3 refuses the definitions solitary writes.
+
+### Features
+
+* add inspect, which reports what a cell runs on outside its container ([ddcb08b](https://github.com/balakin/solitary/commit/ddcb08bbd12ff60ebf320e0e5018ae4e4f978dbf))
+* add patch, which installs every update a cell's machine is missing ([a6c17b6](https://github.com/balakin/solitary/commit/a6c17b69bbe390f43a7cddc7ee197a2a3a225db8))
+* add up --new-machine, which replaces a cell's machine and keeps its home ([81c3133](https://github.com/balakin/solitary/commit/81c3133f501289ac14e4fc452646fb3d5b90feeb))
+* choose the machine's base in solitary rather than in cell.yaml ([e3196b4](https://github.com/balakin/solitary/commit/e3196b43cd3db7d059483b7f169cdc678de3f8f0))
+* **dashboard:** show what a cell's machine runs, and inspect's report with i ([a6c1711](https://github.com/balakin/solitary/commit/a6c1711410bf205c299acbcbaf5b7ff9c2e470dc))
+* mark cells that need attention in the dashboard and in ls ([8734dce](https://github.com/balakin/solitary/commit/8734dced9cae7388e4fe7ddb27eb5aceda6f68af))
+* **network:** let a restricted machine's apt reach Ubuntu's archive ([43ce5c6](https://github.com/balakin/solitary/commit/43ce5c61183d1774703e24a50a4c1e2af1684e86))
+* patch a machine up has just created, unless config.yaml says no ([1f4dfb3](https://github.com/balakin/solitary/commit/1f4dfb3d167d5ffb44aa1e27b98ff46e06a8166e))
+* record the template version, and refuse to downgrade a machine ([2af23a8](https://github.com/balakin/solitary/commit/2af23a89d8cf111b09588fff10e87cd96a3f3478))
+* save a moving home uncompressed ([d414bf1](https://github.com/balakin/solitary/commit/d414bf15c75128144eaf17c2eb1c1631d1c0ab32))
+* show progress while a home is saved and restored, and compress it faster ([f52da61](https://github.com/balakin/solitary/commit/f52da61a3d29e84ca9b39178cd7e859256988bb2))
+* warn when a machine's Ubuntu release stops getting fixes ([d09a0c7](https://github.com/balakin/solitary/commit/d09a0c7fd3d8cc84815a49bc9a0fd45e158d6a9c))
+
+
+### Bug Fixes
+
+* **deps:** require Go 1.26.10 to build ([2455f9d](https://github.com/balakin/solitary/commit/2455f9dd5622b7e39aa7936cf02ebca075f5582f))
+* let rm discard a home a move left on the host, and say so first ([20dc829](https://github.com/balakin/solitary/commit/20dc829b00d8b7c4280e62c9856208d98c40f09a))
+* make moving a home safe against interruption and a second command ([41034ee](https://github.com/balakin/solitary/commit/41034eeb8f08f4763f8f9b4769423d39fe2cdf80))
+* restore a machine definition edited outside solitary ([b013db1](https://github.com/balakin/solitary/commit/b013db172b4f72624187f277933f4eb2498aeffa))
+
 ## [0.16.5](https://github.com/balakin/solitary/compare/v0.16.4...v0.16.5) (2026-10-22)
 
 
