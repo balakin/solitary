@@ -69,3 +69,22 @@ func TestViewRuleNeedsSubordinateIDs(t *testing.T) {
 		t.Error("viewRule() mapped a user on a machine with no subordinate ids")
 	}
 }
+
+// A cell's user is one of the subordinate ids on the machine, and a device is
+// handed to that id rather than to the machine's user, which inside the
+// container is root.
+func TestDeviceOwnerIsTheUsersMachineID(t *testing.T) {
+	got, err := deviceOwner(rootless, 1001)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 101000 {
+		t.Errorf("deviceOwner(1001) = %d, want 101000", got)
+	}
+}
+
+func TestDeviceOwnerRefusesAnUnmappableUser(t *testing.T) {
+	if _, err := deviceOwner(rootless, 70000); err == nil || !strings.Contains(err.Error(), "70000") {
+		t.Errorf("deviceOwner() error = %v, want one naming the id", err)
+	}
+}

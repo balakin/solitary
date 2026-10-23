@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
@@ -334,6 +335,45 @@ func homeMapping(instance string, opts RunOptions) (string, []string, error) {
 	}
 
 	return view, []string{"--user", process}, nil
+}
+
+// DeviceOwner reports who a device handed to a cell has to belong to on the
+// machine: the machine's id for the user the cell's work happens as. It is
+// empty when that user is root, because the container's root is the machine's
+// own user and a device handed to that user is already the cell's.
+//
+// A cell that names a user runs under podman's default table, where that user
+// is one of the machine's subordinate ids rather than the machine's user — so
+// a device handed to the machine's user arrives owned by the container's root,
+// and the user the cell's work happens as cannot open it.
+func DeviceOwner(instance, image, user string) (string, error) {
+	if user == "" {
+		declared, err := imageUser(instance, image)
+		if err != nil {
+			return "", err
+		}
+		user = declared
+	}
+	if isRoot(user) {
+		return "", nil
+	}
+
+	uid, _, err := lookupUser(instance, image, user)
+	if err != nil {
+		return "", err
+	}
+
+	m, err := readIDMappings(instance)
+	if err != nil {
+		return "", err
+	}
+
+	owner, err := deviceOwner(m, uid)
+	if err != nil {
+		return "", err
+	}
+
+	return strconv.Itoa(owner), nil
 }
 
 // imageUser reports the user an image declares, empty when it declares none.

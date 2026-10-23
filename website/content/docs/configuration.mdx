@@ -152,7 +152,7 @@ devices:
 
 The node has to be one the machine already has, so this is not a way to reach the host's hardware — it is for what the guest kernel offers. `/dev/kvm` is the one worth naming: where the host allows nested virtualisation, it lets a cell run a virtual machine of its own.
 
-Passing the node through is only half of what is needed, and `up` does the other half. The container is rootless, so its root is the machine's user on the other side; a node the guest kernel left to `root` is one the cell would get and be unable to open. So each declared node is handed to that user at every `up` — every one, because a reboot makes the nodes again as the distribution says. The group is left alone and nothing is made world-readable.
+Passing the node through is only half of what is needed, and `up` does the other half. The container is rootless, so whoever the cell works as is someone else on the machine; a node the guest kernel left to `root` is one the cell would get and be unable to open. So each declared node is handed to that someone at every `up`: the machine's user for a cell that works as root, and the id the cell's [`user`](#user) runs as on the machine for one that names a user. Every `up`, because a reboot makes the nodes again as the distribution says. The group is left alone and nothing is made world-readable.
 
 A device is fixed once a container is created, so changing this list replaces the container the way changing `image` or `secrets` does.
 

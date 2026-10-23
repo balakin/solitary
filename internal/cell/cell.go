@@ -611,7 +611,7 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, rebuil
 		fmt.Fprintln(progress, "Machine memory changed; replacing the container.")
 	}
 
-	if err := ensureDevices(instance, c.Devices); err != nil {
+	if err := ensureDevices(instance, ref, c); err != nil {
 		return err
 	}
 
@@ -650,27 +650,43 @@ func ensureContainer(name, instance string, c *config.Cell, env []string, rebuil
 
 // ensureDevices makes the devices a cell declares openable from inside it.
 //
-// Passing a node through is only half of it: the container is rootless, so its
-// root is the machine's user on the other side, and a node the guest kernel
-// left to root — /dev/kvm is root:kvm and group-readable — is a node the cell
-// gets and cannot open. So each one is handed to that user.
+// Passing a node through is only half of it: the container is rootless, so
+// whoever the cell's work happens as is somebody else on the machine, and a
+// node the guest kernel left to root — /dev/kvm is root:kvm and group-readable
+// — is a node the cell gets and cannot open. So each one is handed to that
+// user's machine id: the machine's user for a cell that works as root, and the
+// subordinate id podman puts a cell's user on for one that names a user.
 //
 // This runs on every up rather than once, because the nodes do not survive the
 // machine being rebooted: udev makes them again at boot, owned as the
 // distribution says. Ownership is the whole of it — the group is left alone,
 // and nothing is made world-readable.
-func ensureDevices(instance string, devices []string) error {
-	for _, device := range devices {
+func ensureDevices(instance, image string, c *config.Cell) error {
+	if len(c.Devices) == 0 {
+		return nil
+	}
+
+	owner, err := podman.DeviceOwner(instance, image, c.User)
+	if err != nil {
+		return err
+	}
+	// The machine's user is asked for by name in the machine's own shell; a
+	// cell's user is a number DeviceOwner worked out, so neither carries
+	// anything a shell would take for more than an id.
+	chown := `sudo chown "$(id -un)" `
+	if owner != "" {
+		chown = "sudo chown " + owner + " "
+	}
+
+	for _, device := range c.Devices {
 		if _, err := lima.Exec(instance, "test", "-e", device); err != nil {
 			return fmt.Errorf("the machine has no %s: a cell can only be given a device its guest kernel has", device)
 		}
 		// The path is checked against config.devicePath when the definition
 		// is read, so it holds nothing a shell would take for more than a
 		// path.
-		if _, err := lima.Exec(instance, "sh", "-c",
-			`sudo chown "$(id -un)" `+device,
-		); err != nil {
-			return fmt.Errorf("handing %s to the machine's user: %w", device, err)
+		if _, err := lima.Exec(instance, "sh", "-c", chown+device); err != nil {
+			return fmt.Errorf("handing %s to the cell's user: %w", device, err)
 		}
 	}
 
