@@ -126,6 +126,15 @@ Warning: vm.provision for "claude" changed since its machine was provisioned.
 
 The dashboard reports the same thing in the cell's detail view. Editing the script is usually fine — the new one runs on top, and adding a package is not undone by anything. Removing or replacing what an earlier script did is what needs the [new machine](/docs/concepts#a-new-machine). See [changing a cell](/docs/concepts#changing-a-cell).
 
+## A machine set up by a newer solitary
+
+```text
+solitary: the machine behind "claude" was set up by a newer solitary (template 3; this one has 2).
+Update solitary with 'solitary update' before changing it
+```
+
+Every machine records the version of the template solitary set it up from — what its firewall, tunnel and home were made by. A solitary older than that refuses to start or patch the machine rather than hand it its older template, which would quietly take back whatever the newer one added. It happens when two solitary binaries share one host — a release and a source build, say, or one on `PATH` and one in a script. `solitary update` brings the older one level; `down`, `rm` and everything that only reads a cell still work.
+
 ## A cell that is busy
 
 ```text
