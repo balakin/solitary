@@ -78,17 +78,39 @@ func viewRule(m idMappings, uid, gid int) (string, error) {
 // homeRule reads the table rootless containers start with in this machine
 // and works out the view rule for a user of the image.
 func homeRule(instance string, uid, gid int) (string, error) {
+	m, err := readIDMappings(instance)
+	if err != nil {
+		return "", err
+	}
+
+	return viewRule(m, uid, gid)
+}
+
+// readIDMappings reads the table rootless containers start with in this
+// machine.
+func readIDMappings(instance string) (idMappings, error) {
 	out, err := lima.Exec(instance, "podman", "info", "--format", "{{json .Host.IDMappings}}")
 	if err != nil {
-		return "", fmt.Errorf("reading the ids podman maps: %w", err)
+		return idMappings{}, fmt.Errorf("reading the ids podman maps: %w", err)
 	}
 
 	var m idMappings
 	if err := json.Unmarshal(out, &m); err != nil {
-		return "", fmt.Errorf("reading the ids podman maps: %w", err)
+		return idMappings{}, fmt.Errorf("reading the ids podman maps: %w", err)
 	}
 
-	return viewRule(m, uid, gid)
+	return m, nil
+}
+
+// deviceOwner is the machine's id for a user of the container, which is who a
+// device has to belong to on the machine for that user to open it inside.
+func deviceOwner(m idMappings, uid int) (int, error) {
+	owner, ok := machineID(m.UIDs, uid)
+	if !ok {
+		return 0, fmt.Errorf("the cell's user has the id %d, which is outside the ids a rootless container can map", uid)
+	}
+
+	return owner, nil
 }
 
 // mountHomeView makes a second door onto the home, through which it belongs
