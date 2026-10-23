@@ -55,6 +55,12 @@ func attention(name string, c *config.Cell, inst *lima.Instance) []Attention {
 	if err != nil || !record.Recorded() {
 		return found
 	}
+	if record.Template > lima.TemplateVersion {
+		return append(found, Attention{
+			What: "machine set up by a newer solitary",
+			Fix:  "solitary update installs one that can change it",
+		})
+	}
 
 	if stored, err := inst.StoredDefinition(); err == nil && record.Edited(stored) {
 		fix := "up puts back what the cell describes"

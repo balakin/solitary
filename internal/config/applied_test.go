@@ -27,6 +27,7 @@ func TestAppliedRecordRoundTrip(t *testing.T) {
 	want := NewApplied("rendered definition", "apt-get install -y ripgrep")
 	want.Stored = Digest("stored definition")
 	want.Base = Base
+	want.Template = 7
 	if err := WriteApplied("cell", want); err != nil {
 		t.Fatalf("WriteApplied() error = %v", err)
 	}

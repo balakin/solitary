@@ -152,3 +152,27 @@ func TestAttentionNamesMissingSecurityFixes(t *testing.T) {
 		}
 	}
 }
+
+// A machine a newer solitary set up is left alone, and says why.
+func TestANewerTemplateIsRefusedAndMarked(t *testing.T) {
+	c, inst, _ := attentionFixture(t, lima.StatusStopped)
+	if err := refuseNewerTemplate("probe"); err != nil {
+		t.Fatalf("refuseNewerTemplate() on this solitary's own record: %v", err)
+	}
+
+	record, err := config.ReadApplied("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Template = lima.TemplateVersion + 1
+	if err := config.WriteApplied("probe", record); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := refuseNewerTemplate("probe"); err == nil || !strings.Contains(err.Error(), "solitary update") {
+		t.Errorf("refuseNewerTemplate() = %v, want a refusal naming solitary update", err)
+	}
+	if got := whats(attention("probe", c, inst)); got != "machine set up by a newer solitary" {
+		t.Errorf("attention() = %q", got)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/balakin/solitary/internal/cell"
+	"github.com/balakin/solitary/internal/host"
 )
 
 func newRmCmd() *cobra.Command {
@@ -39,7 +40,7 @@ func newRmCmd() *cobra.Command {
 			name := args[0]
 
 			if !force {
-				ok, err := confirm(cmd, fmt.Sprintf("Destroy the machine behind %q? Everything inside it is lost. [y/N] ", name))
+				ok, err := confirm(cmd, removePrompt(name)+" ")
 				if err != nil {
 					return err
 				}
@@ -106,6 +107,18 @@ func removeOrphans(cmd *cobra.Command, force bool) error {
 	}
 
 	return nil
+}
+
+// removePrompt asks before rm, naming a home a move left on the host when
+// there is one: it goes too, and it is the kind of thing someone forgets is
+// there.
+func removePrompt(name string) string {
+	size, waiting := cell.WaitingHome(name)
+	if !waiting {
+		return fmt.Sprintf("Destroy the machine behind %q? Everything inside it is lost. [y/N]", name)
+	}
+	return fmt.Sprintf("Destroy the machine behind %q? Everything inside it is lost, including the home\n"+
+		"saved from its previous machine (%s). [y/N]", name, host.FormatSize(uint64(size)))
 }
 
 func machineCount(n int) string {

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -169,11 +170,16 @@ func Digest(rendered string) string {
 // names images, but Lima reads them only to make a disk, and the disk is the
 // one the machine was created with. It is what says how far behind the base
 // solitary creates machines from today a machine is.
+//
+// Template is the version of solitary's template the definition was rendered
+// from, so that a machine a newer solitary set up is not handed an older
+// template by an older one. Zero is a record from before it was kept.
 type Applied struct {
 	Definition string
 	Provision  string
 	Stored     string
 	Base       string
+	Template   int
 }
 
 // NewApplied summarises a rendering for the record.
@@ -210,7 +216,8 @@ func WriteApplied(name string, record Applied) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
 	}
-	content := fmt.Sprintf("definition %s\nprovision %s\nstored %s\nbase %s\n", record.Definition, record.Provision, record.Stored, record.Base)
+	content := fmt.Sprintf("definition %s\nprovision %s\nstored %s\nbase %s\ntemplate %d\n",
+		record.Definition, record.Provision, record.Stored, record.Base, record.Template)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -250,6 +257,10 @@ func ReadApplied(name string) (Applied, error) {
 			record.Stored = strings.TrimSpace(value)
 		case field == "base":
 			record.Base = strings.TrimSpace(value)
+		case field == "template":
+			// A version that does not parse is one this solitary cannot
+			// have written, and is read as unknown rather than as newer.
+			record.Template, _ = strconv.Atoi(strings.TrimSpace(value))
 		case !named && field != "":
 			// The older format: the definition's digest and nothing else.
 			record.Definition = field

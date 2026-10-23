@@ -20,6 +20,13 @@ import (
 //go:embed templates/cell.yaml.tmpl
 var cellTemplate string
 
+// TemplateVersion numbers the template above, and is recorded with every
+// machine it is rendered for. It goes up by one whenever the template changes
+// — a test pins each version to the template's digest, so a change that does
+// not move it fails — and it is how solitary tells a machine a newer solitary
+// set up, which an older one must not hand its older template to.
+const TemplateVersion = 1
+
 // ParamCell is the Lima parameter the cell's name is written into, and the
 // closest thing a machine has to a label: Lima has no field for metadata, and
 // refuses a parameter nothing reads, so this one is read by the provision

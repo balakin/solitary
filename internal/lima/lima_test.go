@@ -1,6 +1,8 @@
 package lima
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -480,5 +482,24 @@ func TestRenderAddsNoArchiveToAnUnrestrictedCell(t *testing.T) {
 	}
 	if strings.Contains(rendered, "archive4") {
 		t.Error("Render() of an unrestricted cell names the archive set")
+	}
+}
+
+// templateDigests is the sha256 of the template at each TemplateVersion. A
+// change to the template fails this until TemplateVersion goes up by one and
+// the new digest is added here — which is what lets a record say which
+// template a machine has.
+var templateDigests = map[int]string{
+	1: "9b3c6ea6eef4f61cb8562e3f545ad975b2cfa7bcd585baddd585a74fa53fdd19",
+}
+
+func TestTemplateVersionPinsTheTemplate(t *testing.T) {
+	sum := sha256.Sum256([]byte(cellTemplate))
+	got := hex.EncodeToString(sum[:])
+	want, known := templateDigests[TemplateVersion]
+	if !known || got != want {
+		t.Errorf("the template's digest is %s, and TemplateVersion %d pins %q.\n"+
+			"A changed template needs TemplateVersion raised to %d and that digest added to templateDigests.",
+			got, TemplateVersion, want, TemplateVersion+1)
 	}
 }
