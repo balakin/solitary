@@ -50,6 +50,12 @@ func homeArchives(name string) (partial, saved, pending string, err error) {
 // it again, or by any up, which restores a waiting home before it starts the
 // container.
 func NewMachine(name string, progress io.Writer) error {
+	unlock, err := lockCell(name)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
 	c, err := config.LoadCell(name)
 	if err != nil {
 		return err
@@ -65,18 +71,11 @@ func NewMachine(name string, progress io.Writer) error {
 	}
 
 	switch {
-	case exists(pending):
+	case exists(pending) || (exists(saved) && inst == nil):
+		// up claims a home left as saved itself, so either way it is up's
+		// to finish.
 		fmt.Fprintf(progress, "The home saved from %q's old machine is still waiting for its new one; finishing that.\n", name)
-		return Up(name, false, progress)
-
-	case exists(saved) && inst == nil:
-		// Saved and verified, and the machine destroyed, but stopped before
-		// the archive could say so.
-		if err := os.Rename(saved, pending); err != nil {
-			return fmt.Errorf("keeping the saved home: %w", err)
-		}
-		fmt.Fprintf(progress, "The home saved from %q's old machine is still waiting for its new one; finishing that.\n", name)
-		return Up(name, false, progress)
+		return up(name, false, progress)
 
 	case inst == nil:
 		return fmt.Errorf("cell %q has no machine to replace; 'solitary up %s' creates one", name, name)
@@ -107,7 +106,33 @@ func NewMachine(name string, progress io.Writer) error {
 		return fmt.Errorf("keeping the saved home: %w", err)
 	}
 
-	return Up(name, false, progress)
+	return up(name, false, progress)
+}
+
+// claimSavedHome makes a saved home the waiting one when the machine it was
+// saved from is gone: a move stopped after destroying the old machine and
+// before the rename that says so. While that machine is still there, a saved
+// home is older than the one in it, and left for the next move to discard —
+// restoring it would undo whatever the cell did since.
+func claimSavedHome(name string, progress io.Writer) error {
+	_, saved, pending, err := homeArchives(name)
+	if err != nil {
+		return err
+	}
+	if !exists(saved) || exists(pending) {
+		return nil
+	}
+	inst, err := lima.Lookup(config.Instance(name))
+	if err != nil || inst != nil {
+		return err
+	}
+
+	if err := os.Rename(saved, pending); err != nil {
+		return fmt.Errorf("keeping the saved home: %w", err)
+	}
+	fmt.Fprintf(progress, "The home saved from %q's old machine was never given a new one; it goes into this one.\n", name)
+
+	return nil
 }
 
 // saveHome reads a cell's home out of its machine into an archive on the host,

@@ -114,6 +114,16 @@ func HomeArchive(name string) (string, error) {
 	return filepath.Join(dir, "cells", name+".home.tar"), nil
 }
 
+// LockFile is held by whichever solitary command is changing a cell, so that a
+// second one refuses rather than changing it at the same time.
+func LockFile(name string) (string, error) {
+	dir, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "cells", name+".lock"), nil
+}
+
 // UserConfigFile is the user-wide defaults file.
 func UserConfigFile() (string, error) {
 	root, err := Root()
