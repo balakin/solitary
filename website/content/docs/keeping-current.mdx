@@ -1,0 +1,59 @@
+---
+title: Keeping a cell current
+description: Who updates each layer of a cell, and how to move one onto a new machine.
+---
+
+A cell is layers, and each one is kept current by something different. None of it needs a cell opened up and fixed by hand:
+
+| Layer                      | Kept current by                                                                       | Costs                                          |
+| -------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| solitary                   | [`solitary update`](/docs/commands#update-keeps-the-binary-current)                   | nothing a cell notices                         |
+| Lima and QEMU, on the host | your package manager, or however you installed them                                   | nothing a cell notices                         |
+| the machine's packages     | `unattended-upgrades` on its own, [`solitary patch`](#patching-a-machine) all at once | a reboot, now and then, which `patch` asks for |
+| the machine's release      | [`up --new-machine`](#moving-to-a-new-machine)                                        | a new disk; the home comes across              |
+| the container's image      | [`up --rebuild`](/docs/concepts#updating-the-tools-in-a-cell)                         | the container is replaced; the home is kept    |
+| the home                   | you — [back it up](#backing-up-a-home) like any other work                            | —                                              |
+
+[`inspect`](/docs/commands#inspect-reports-what-a-cell-runs-on) reports all of them in one place: what the host runs, what the machine runs and how far behind it is, and what the container was created from. The [dashboard](/docs/dashboard) shows the same and marks a cell that needs one of these done.
+
+## The host
+
+The host is what stands between a guest and everything else, so it is the first thing to keep patched. solitary updates itself; Lima and QEMU come from wherever you installed them, and QEMU in particular is updated on its own schedule, apart from Lima. `inspect` with no cell names the versions of all three, and [`doctor`](/docs/commands#doctor-checks-the-host) says when Lima is older than solitary needs.
+
+## Patching a machine
+
+Every machine is Ubuntu, and Ubuntu's `unattended-upgrades` runs in each one, installing security fixes a day or so after they are published — but only while the machine runs, and never the reboot a new kernel needs.
+
+`solitary patch <name>` installs everything the machine is missing, at once. A running cell keeps running, and is restarted only if what was installed needs it and you say yes; a stopped one is patched with its container left stopped, and stopped again. A cell with an allow list reaches Ubuntu's archive for this whatever the list says, from apt alone — the container gains nothing by it.
+
+A new machine is patched before its container first starts, since it is created from an image that is already behind; `patch: false` in `config.yaml` [turns that off](/docs/configuration#patching-a-new-machine). A machine last seen missing security fixes is [marked](/docs/dashboard#warnings) until it has them, and `p` in the dashboard patches it.
+
+## Moving to a new machine
+
+Patching keeps a machine on its release. Each Ubuntu LTS release gets five years of fixes, and solitary knows when each one ends: `inspect` says how long a machine's release has left, and from six months before the end `up` warns at every start and the dashboard marks the cell. Nothing is refused.
+
+```sh
+solitary up --new-machine claude
+```
+
+replaces the machine with one on the release new machines get, patched, and carries the home across through the host — everything else on the old disk stays behind, which also makes this the way to get a machine built by the current `vm.provision` alone. The old machine is destroyed only after its home has been saved and read back in full, and a move that stops halfway is finished by the next `up`. `m` does it from the dashboard. See [a new machine](/docs/concepts#a-new-machine) for what happens to the home on the way, and what `rm` does to one left waiting.
+
+The host needs room for the home while it is on its way: the save is not compressed, so it takes about the home's own size, and solitary refuses to start a move that would not fit.
+
+## Backing up a home
+
+The home is the one part of a cell solitary does not rebuild, and nothing outside the cell holds a copy of it. A move carries it across, but `rm` destroys it, and so does losing the host. Back it up the way work leaves a cell — published by the cell, collected by the host:
+
+```sh
+solitary exec claude sh -c 'tar czf /tmp/home.tgz --exclude=./outbox -C ~ . && artifact /tmp/home.tgz'
+solitary fetch claude home.tgz
+```
+
+The outbox is left out so that a backup does not contain the last one. Putting a home back works the other way round, and suits a cell on another host as well as this one:
+
+```sh
+solitary send claude home.tgz
+solitary exec claude sh -c 'tar xzf ~/inbox/home.tgz -C ~'
+```
+
+Anything that should outlive the cell belongs somewhere else as well — a repository pushed from inside the cell is already a copy of the work in it.
