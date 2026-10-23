@@ -79,7 +79,7 @@ solitary up --new-machine claude
 
 The home goes to the host and back. It is read out of the old machine into one compressed archive under `~/.local/state/solitary`, readable by you alone and never unpacked on the host, then read back in full; only once every file in the home is accounted for is the old machine destroyed. The new one is created from the release solitary uses now, patched, and given the home before the container starts. Owners and permissions come with it, so a cell whose user is not root finds its files as it left them.
 
-A move that stops halfway loses nothing. Until the old machine is gone, it is untouched; after that, the archive is the home, and it stays on the host until a new machine has it — the next `up`, whichever flag it is run with, finishes the move before it starts the container.
+A move that stops halfway loses nothing. Until the old machine is gone, it is untouched; after that, the archive is the home, and it stays on the host until a new machine has it — the next `up`, whichever flag it is run with, finishes the move before it starts the container. `rm` is the one thing that discards it: it destroys a machine's home, and a home waiting on the host is that home. It says so before it does.
 
 Only the home comes across. The disk's other contents — what `vm.provision` set up, anything installed with `apt` by hand, the images — are the machine's, and the new machine builds its own. That is also what makes this the way to get a machine built by the current `vm.provision` alone without starting over.
 
