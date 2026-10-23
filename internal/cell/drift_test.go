@@ -69,7 +69,7 @@ func TestWarnDriftReportsAChangedProvisionScript(t *testing.T) {
 	warnDrift("probe", cellWith("apt-get install -y ripgrep fd-find"), "definition", "", &out)
 
 	got := out.String()
-	for _, want := range []string{"vm.provision", "nothing undoes it", "solitary rm probe && solitary up probe"} {
+	for _, want := range []string{"vm.provision", "nothing undoes it", "solitary up --new-machine probe"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("warnDrift() = %q, want it to contain %q", got, want)
 		}

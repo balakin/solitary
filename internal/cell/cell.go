@@ -272,6 +272,16 @@ func Up(name string, rebuild bool, progress io.Writer) error {
 		return err
 	}
 
+	// A home carried across from a replaced machine goes in before any
+	// container is started over the directory it belongs in.
+	if _, _, pending, err := homeArchives(name); err != nil {
+		return err
+	} else if exists(pending) {
+		if err := restoreHome(name, instance, pending, progress); err != nil {
+			return err
+		}
+	}
+
 	if c.VM.GPU != "" {
 		c.Devices = withGuestGPU(instance, name, c.Devices, progress)
 	}
@@ -383,8 +393,14 @@ func ensureMachine(name string, c *config.Cell, progress io.Writer) (string, err
 	}
 
 	// After the tunnel, since a cell that reaches everything through one
-	// reaches nothing, the archive included, until it is up.
-	if inst == nil && c.PatchNew {
+	// reaches nothing, the archive included, until it is up. A machine still
+	// waiting for the home of the one it replaced counts as new: the move
+	// that created it stopped before it could be patched.
+	_, _, pending, err := homeArchives(name)
+	if err != nil {
+		return "", err
+	}
+	if (inst == nil || exists(pending)) && c.PatchNew {
 		if err := patchNew(name, instance, c, progress); err != nil {
 			return "", err
 		}
@@ -1311,9 +1327,8 @@ func warnProvision(name string, c *config.Cell, record config.Applied, w io.Writ
 	fmt.Fprintf(w, "Warning: vm.provision for %q changed since its machine was provisioned.\n", name)
 	fmt.Fprintf(w, "         The new script runs at the next start, but what the old one did is\n")
 	fmt.Fprintf(w, "         already on the machine's disk and nothing undoes it. For a machine\n")
-	fmt.Fprintf(w, "         built by this script alone — discarding the disk, and the cell's home\n")
-	fmt.Fprintf(w, "         with it:\n")
-	fmt.Fprintf(w, "           solitary rm %s && solitary up %s\n", name, name)
+	fmt.Fprintf(w, "         built by this script alone, keeping the cell's home:\n")
+	fmt.Fprintf(w, "           solitary up --new-machine %s\n", name)
 }
 
 // applyDrift gives a stopped machine the definition the cell now describes.
@@ -1545,6 +1560,10 @@ func Remove(name string, progress io.Writer) error {
 	}
 
 	fmt.Fprintf(progress, "The definition and secrets for %q are kept; 'solitary up %s' rebuilds it.\n", name, name)
+	if _, _, pending, err := homeArchives(name); err == nil && exists(pending) {
+		fmt.Fprintf(progress, "The home saved when its machine was last replaced is kept at %s,\n"+
+			"and the next up puts it in the new machine.\n", pending)
+	}
 
 	return nil
 }

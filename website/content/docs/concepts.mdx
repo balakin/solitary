@@ -31,11 +31,11 @@ The cell's home directory lives on the VM disk. It survives a stopped machine an
 
 A cell is edited by editing `cell.yaml` and running `up` again. What that costs depends on which of the three layers the setting belongs to:
 
-| Layer     | Settings                                                        | Applied by                             |
-| --------- | --------------------------------------------------------------- | -------------------------------------- |
-| Container | `image`, `build`, `command`, `secrets`, `git`                   | `up` — the container is replaced       |
-| Machine   | `vm`, `ports`, `network`, `gpu`                                 | The next boot: `down` then `up`        |
-| Disk      | what `vm.provision` did, and everything the cell has done since | `rm` then `up` — the disk goes with it |
+| Layer     | Settings                                                        | Applied by                                                         |
+| --------- | --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Container | `image`, `build`, `command`, `secrets`, `git`                   | `up` — the container is replaced                                   |
+| Machine   | `vm`, `ports`, `network`, `gpu`                                 | The next boot: `down` then `up`                                    |
+| Disk      | what `vm.provision` did, and everything the cell has done since | `up --new-machine` — a new disk, with only the home carried across |
 
 `up` says which one it is: it replaces a container without being asked, warns when a running machine is holding settings that changed, and applies them itself when the machine is stopped.
 
@@ -43,7 +43,7 @@ The machine's own definition is not one of the files to edit. Lima keeps it in t
 
 Removing a setting is applied like adding one. A machine that was restricted or tunnelled has its resolver, firewall and tunnel taken back out at the next boot, so the guest matches the definition in both directions — the machine is not left enforcing an allow list nothing describes any more.
 
-`vm.provision` is the exception, and the reason the third row exists. The script runs in the machine and changes its disk; the disk survives every change short of `rm`. A new script runs at the next start, but nothing undoes what the old one did, so a machine built by the current script alone is a machine created again from scratch. Both `up` and the dashboard say so when the script changes.
+`vm.provision` is the exception, and the reason the third row exists. The script runs in the machine and changes its disk; the disk survives every change short of `rm`. A new script runs at the next start, but nothing undoes what the old one did, so a machine built by the current script alone is a machine created again from scratch — which [`up --new-machine`](#a-new-machine) does without losing the home. Both `up` and the dashboard say so when the script changes.
 
 ## Updating the tools in a cell
 
@@ -66,6 +66,20 @@ The [examples](/docs/guides-examples) turn the self-updaters off in their images
 The machine under the container is solitary's choice — an Ubuntu LTS release — and so is keeping it patched. Ubuntu's `unattended-upgrades` runs in every machine and installs security fixes while it is up; [`solitary patch`](/docs/commands#patch-updates-the-machine) installs everything it is missing at once, and restarts it when a fix needs that. The disk and the home stay where they are: patching updates the system on that disk, it does not replace it.
 
 [`inspect`](/docs/commands#inspect-reports-what-a-cell-runs-on) and the [dashboard](/docs/dashboard#the-system-rows) say how far behind a machine is, and a machine missing security fixes is [marked](/docs/dashboard#warnings) until it has them.
+
+### A new machine
+
+Patching keeps a machine on its release; it never moves it to the next one, and it never removes anything. For either, the machine is replaced:
+
+```sh
+solitary up --new-machine claude
+```
+
+The home goes to the host and back. It is read out of the old machine into one compressed archive under `~/.local/state/solitary`, readable by you alone and never unpacked on the host, then read back in full; only once every file in the home is accounted for is the old machine destroyed. The new one is created from the release solitary uses now, patched, and given the home before the container starts. Owners and permissions come with it, so a cell whose user is not root finds its files as it left them.
+
+A move that stops halfway loses nothing. Until the old machine is gone, it is untouched; after that, the archive is the home, and it stays on the host until a new machine has it — the next `up`, whichever flag it is run with, finishes the move before it starts the container.
+
+Only the home comes across. The disk's other contents — what `vm.provision` set up, anything installed with `apt` by hand, the images — are the machine's, and the new machine builds its own. That is also what makes this the way to get a machine built by the current `vm.provision` alone without starting over.
 
 ## How it works
 

@@ -501,7 +501,7 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	name := m.selected().Name
 
 	switch msg.String() {
-	case "enter", "u", "b", "p", "s", "d", "e", "t":
+	case "enter", "u", "b", "m", "p", "s", "d", "e", "t":
 		if m.selected().Status == statusLoading {
 			m.failure = fmt.Errorf("cell %q is still being asked what it is doing; it can be acted on once it answers", name)
 			return m, nil
@@ -556,6 +556,25 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			command: "up",
 			args:    []string{"--detach", "--rebuild"},
 			notice:  fmt.Sprintf("Cell %q is rebuilt.", name),
+		}
+		return m.clear(), nil
+
+	case "m":
+		if name == "" {
+			return m, nil
+		}
+		if m.selected().Status == cell.StatusUninitialized {
+			m.failure = fmt.Errorf("cell %q has no machine to replace: press u to create one", name)
+			return m, nil
+		}
+		m.mode = confirming
+		// --force because the dashboard has already asked.
+		m.asking = question{
+			prompt:  fmt.Sprintf("Replace the machine behind %q? Its home is carried across; the rest of its disk is not. [y/N]", name),
+			verb:    "replace",
+			command: "up",
+			args:    []string{"--detach", "--new-machine", "--force"},
+			notice:  fmt.Sprintf("Cell %q is on a new machine.", name),
 		}
 		return m.clear(), nil
 

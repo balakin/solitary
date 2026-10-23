@@ -61,6 +61,9 @@ func (r Report) Rows(now time.Time) []Row {
 		created += " (new machines: " + m.NewFrom + ")"
 	}
 	add("created", created)
+	if m.CreatedFrom != m.NewFrom && !runsBase(m.Guest, m.NewFrom) {
+		add("", "'solitary up --new-machine "+r.Cell+"' moves it, home included")
+	}
 
 	if g := m.Guest; g != nil {
 		add("system", strings.TrimSpace(g.Release+" · kernel "+g.Kernel))
@@ -118,6 +121,15 @@ func (r Report) Rows(now time.Time) []Row {
 	}
 
 	return rows
+}
+
+// runsBase reports whether a machine was last seen running the release a base
+// names. A machine created from Lima's ubuntu-lts alias may well be on the
+// release solitary now names exactly, and then there is nothing to move to.
+func runsBase(g *Guest, base string) bool {
+	release, ok := strings.CutPrefix(base, "ubuntu-")
+
+	return ok && g != nil && strings.HasPrefix(g.Release, "Ubuntu "+release)
 }
 
 // lists says when the package lists the counts are measured against were last
