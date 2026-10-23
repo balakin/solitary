@@ -109,6 +109,38 @@ func NewMachine(name string, progress io.Writer) error {
 	return up(name, false, progress)
 }
 
+// WaitingHome reports a home a move saved on the host for a machine that has
+// not been given it yet, and its size: what rm would destroy besides the
+// machine, which is worth saying before it does.
+func WaitingHome(name string) (size int64, ok bool) {
+	_, saved, pending, err := homeArchives(name)
+	if err != nil {
+		return 0, false
+	}
+	for _, path := range []string{pending, saved} {
+		if info, err := os.Stat(path); err == nil {
+			return info.Size(), true
+		}
+	}
+
+	return 0, false
+}
+
+// removeHomeArchives deletes every file a move keeps a home in.
+func removeHomeArchives(name string) error {
+	partial, saved, pending, err := homeArchives(name)
+	if err != nil {
+		return err
+	}
+	for _, path := range []string{partial, saved, pending} {
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("removing %s: %w", path, err)
+		}
+	}
+
+	return nil
+}
+
 // claimSavedHome makes a saved home the waiting one when the machine it was
 // saved from is gone: a move stopped after destroying the old machine and
 // before the rename that says so. While that machine is still there, a saved

@@ -1589,12 +1589,25 @@ func Remove(name string, progress io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if inst == nil {
+	_, moving := WaitingHome(name)
+	switch {
+	case inst != nil:
+		fmt.Fprintf(progress, "Destroying the machine behind %q...\n", name)
+		if err := lima.Delete(instance); err != nil {
+			return err
+		}
+	case moving:
+		// A move stopped between machines: the home on the host is all
+		// that is left of the machine, and it goes the way the machine would.
+	default:
 		return fmt.Errorf("cell %q has no machine to remove", name)
 	}
 
-	fmt.Fprintf(progress, "Destroying the machine behind %q...\n", name)
-	if err := lima.Delete(instance); err != nil {
+	// Whatever a move left behind goes with the machine. rm means the home
+	// is lost, and an archive of it kept here would be put back into the
+	// next machine by the next up — the fresh start rm is for, quietly
+	// undone.
+	if err := removeHomeArchives(name); err != nil {
 		return err
 	}
 
@@ -1615,10 +1628,6 @@ func Remove(name string, progress io.Writer) error {
 	}
 
 	fmt.Fprintf(progress, "The definition and secrets for %q are kept; 'solitary up %s' rebuilds it.\n", name, name)
-	if _, _, pending, err := homeArchives(name); err == nil && exists(pending) {
-		fmt.Fprintf(progress, "The home saved when its machine was last replaced is kept at %s,\n"+
-			"and the next up puts it in the new machine.\n", pending)
-	}
 
 	return nil
 }

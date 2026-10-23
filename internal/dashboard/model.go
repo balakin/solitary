@@ -19,6 +19,7 @@ import (
 
 	"github.com/balakin/solitary/internal/cell"
 	"github.com/balakin/solitary/internal/config"
+	"github.com/balakin/solitary/internal/host"
 	"github.com/balakin/solitary/internal/secrets"
 )
 
@@ -606,7 +607,7 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// --force because the dashboard has already asked, so the command
 		// must not ask again from behind a suspended screen.
 		m.asking = question{
-			prompt:  fmt.Sprintf("Destroy the machine behind %q? Everything inside it is lost. [y/N]", name),
+			prompt:  removePrompt(name),
 			verb:    "destroy",
 			command: "rm",
 			args:    []string{"--force"},
@@ -982,6 +983,16 @@ func tunnelStatus(name string) tea.Cmd {
 
 func tick() tea.Cmd {
 	return tea.Tick(refreshEvery, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
+// removePrompt asks before d, naming a home a move left on the host: it goes
+// with the machine, and it is the kind of thing someone forgets is there.
+func removePrompt(name string) string {
+	if size, waiting := cell.WaitingHome(name); waiting {
+		return fmt.Sprintf("Destroy %q's machine and the home saved from its last one (%s)? All of it is lost. [y/N]",
+			name, host.FormatSize(uint64(size)))
+	}
+	return fmt.Sprintf("Destroy the machine behind %q? Everything inside it is lost. [y/N]", name)
 }
 
 // run hands the terminal to solitary's own command for as long as it takes.
