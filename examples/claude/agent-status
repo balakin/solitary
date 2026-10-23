@@ -1,0 +1,38 @@
+#!/bin/sh
+# Mark the tmux window Claude Code runs in with what it is doing: 🤖 while it
+# works, 💬 when it waits for you, ✅ when it is done. Called by the hooks in
+# ~/.claude/settings.json; /etc/tmux.conf shows the mark in the window's tab
+# and clears 💬 and ✅ once you look at the window.
+#
+# Outside tmux there is no window to mark, and a hook must never fail a turn,
+# so it says nothing and exits cleanly.
+set -eu
+
+case "${1:-}" in
+working) mark="🤖" ;;
+waiting) mark="💬" ;;
+done) mark="✅" ;;
+clear) mark="" ;;
+*)
+	echo "usage: agent-status working|waiting|done|clear" >&2
+	exit 2
+	;;
+esac
+
+[ -n "${TMUX_PANE:-}" ] || exit 0
+command -v tmux >/dev/null 2>&1 || exit 0
+
+if [ -z "$mark" ]; then
+	tmux set-option -uw -t "$TMUX_PANE" @agent_status 2>/dev/null || true
+	exit 0
+fi
+
+# A mark that asks to be seen is not set on the window you are looking at:
+# you have seen it. Only one an attached client shows counts as seen.
+if [ "$mark" != "🤖" ] &&
+	[ "$(tmux display-message -p -t "$TMUX_PANE" '#{&&:#{session_attached},#{&&:#{window_active},#{pane_active}}}' 2>/dev/null)" = 1 ]; then
+	tmux set-option -uw -t "$TMUX_PANE" @agent_status 2>/dev/null || true
+	exit 0
+fi
+
+tmux set-option -w -t "$TMUX_PANE" @agent_status "$mark" 2>/dev/null || true

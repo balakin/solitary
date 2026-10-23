@@ -5,7 +5,7 @@ description: Two complete cells to clone — a terminal setup around claude, and
 
 The repository holds two cell definitions that are meant to be run rather than read. Each is a `cell.yaml`, the `Containerfile` it builds from, and a `skel/` directory of dotfiles.
 
-- **`claude`** — a terminal working environment: claude, Neovim with LazyVim, tmux, [workmux](https://github.com/raine/workmux), `gh`, and node from nvm with corepack enabled.
+- **`claude`** — a terminal working environment: claude, Neovim with LazyVim, tmux with each window marked by what claude in it is doing, `gh`, and node from nvm with corepack enabled.
 - **`vscode`** — an editor reached from the host's browser: [code-server](https://github.com/coder/code-server) with the extensions a web project wants, a dark theme, and the ports a dev server listens on, plus claude, `gh`, node and corepack.
 
 ## Take one
@@ -35,7 +35,6 @@ The first `up` builds the image inside the cell's own machine, so nothing in eit
 claude       the agent, from npm
 nvim         LazyVim, plugins and treesitter parsers preinstalled
 tmux         Catppuccin theme, status line at the top, mouse on, | and - to split
-workmux      one agent per git worktree, each in its own tmux window
 node, pnpm   node from nvm, pnpm through corepack
 gh           the GitHub CLI, authenticated from GITHUB_TOKEN
 lazygit, rg, fd, jq
@@ -56,7 +55,7 @@ Sign claude in once inside the cell. The cell's home is a directory on the machi
 
 claude does not update itself in either cell: both images set `DISABLE_AUTOUPDATER`, and silence the update notices of `gh` and `npm`. The container is started over from the image at every boot, so an update downloaded inside it would be downloaded again after every restart. Run `solitary up --rebuild claude` — or press `b` in the dashboard — to build the image again with the latest claude in it. What the `Containerfile` pins stays pinned until you change it. See [updating the tools in a cell](/docs/concepts#updating-the-tools-in-a-cell).
 
-workmux has its sandbox turned off in this cell, deliberately. It can put each worktree in a Lima VM of its own, which is the isolation solitary has already provided, and it cannot nest: the cell is the sandbox.
+Each tmux window's tab shows what claude in it is doing: 🤖 while it works, 💬 when it is waiting for you — a permission to grant, a question to answer — and ✅ when it has finished. Run one claude per window and the tabs say which one needs you without visiting each. 💬 and ✅ clear as soon as you look at the window, and one never appears on the window you are already looking at; 🤖 stays until claude moves on, and the mark goes when claude exits. It is claude's own hooks in the seeded `~/.claude/settings.json` that do it, calling `agent-status`, a short script in the image that sets a tmux window option `/etc/tmux.conf` shows. A home seeded before the marks existed keeps the settings it had, so copy the `hooks` block from the example's `settings.json` into yours to get them.
 
 The seeded `~/.claude/settings.json` sets `skipDangerousModePermissionPrompt`, so claude does not ask you to confirm that you meant to skip permissions. Make that choice deliberately: the VM separates host files and the host kernel, but these examples leave networking open and can reach host services. Delete the line if you would rather be asked, and configure `network.allow` to limit egress.
 
