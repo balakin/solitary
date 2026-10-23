@@ -8,7 +8,6 @@ ARG NODE_VERSION=24.22.1
 ARG NVM_VERSION=v0.40.7
 ARG NVIM_VERSION=v0.12.5
 ARG LAZYGIT_VERSION=0.64.1
-ARG WORKMUX_VERSION=v0.1.247
 ARG GH_VERSION=2.98.0
 ARG TMUX_VERSION=3.7c
 ARG CATPPUCCIN_TMUX_VERSION=v2.3.0
@@ -17,7 +16,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Without this the image has no locale at all, and every terminal program falls
 # back to ASCII: tmux rewrites each wide character as an underscore, so the
-# theme's rounded pills and workmux's status glyphs arrive mangled. C.UTF-8 is
+# theme's rounded pills and the agent's status marks arrive mangled. C.UTF-8 is
 # built into glibc, so it needs no locale package.
 ENV LANG=C.UTF-8
 ENV NVM_DIR=/opt/nvm
@@ -102,23 +101,6 @@ RUN arch="$(uname -m)" \
  && rm /tmp/lazygit.tar.gz /tmp/lazygit \
  && lazygit --version
 
-# workmux runs one agent per git worktree in its own tmux window. Verified
-# against the checksum published beside the archive.
-RUN arch="$(uname -m)" \
- && case "$arch" in \
-      x86_64)  wm_arch=amd64 ;; \
-      aarch64) wm_arch=arm64 ;; \
-      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
-    esac \
- && base="https://github.com/raine/workmux/releases/download/${WORKMUX_VERSION}/workmux-linux-${wm_arch}" \
- && curl -fsSL -o /tmp/workmux.tar.gz "${base}.tar.gz" \
- && curl -fsSL -o /tmp/workmux.sha256 "${base}.sha256" \
- && echo "$(cut -d' ' -f1 /tmp/workmux.sha256)  /tmp/workmux.tar.gz" | sha256sum -c - \
- && tar -C /tmp -xzf /tmp/workmux.tar.gz \
- && install -m755 /tmp/workmux /usr/local/bin/workmux \
- && rm /tmp/workmux.tar.gz /tmp/workmux.sha256 /tmp/workmux \
- && workmux --version
-
 # gh, so the agent can open pull requests and read issues without a browser: a
 # cell cannot open one on the host, so GITHUB_TOKEN from cell.yaml is how it
 # authenticates. Verified against the checksums published beside the archive.
@@ -173,6 +155,9 @@ RUN mkdir -p /etc/tmux/plugins \
 # anyway with none of this applied and reports nothing.
 COPY --chmod=0644 tmux.conf /etc/tmux.conf
 COPY --chmod=0755 system-stats.sh /etc/tmux/system-stats.sh
+# Marks the tmux window Claude Code runs in; the hooks in the seeded
+# ~/.claude/settings.json call it, and tmux.conf shows the mark.
+COPY --chmod=0755 agent-status /usr/local/bin/agent-status
 
 # Everything under /opt/cell-skel is copied into the cell's home the first time
 # the container starts, and only where nothing is there already.

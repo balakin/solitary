@@ -5,7 +5,7 @@ Two complete cell definitions, meant to be taken rather than read. Each is a
 seeded into the cell's home the first time it starts.
 
 ```sh
-solitary clone balakin/solitary/examples/claude   # claude, neovim, tmux, workmux, gh, node
+solitary clone balakin/solitary/examples/claude   # claude, neovim, tmux, gh, node
 solitary clone balakin/solitary/examples/vscode   # openvscode-server in the browser, claude, gh, node
 ```
 
