@@ -71,6 +71,11 @@ secrets:
     required: false
     description: gh — cloning, pushing branches and opening pull requests
 
+# Named rather than found, so that claude has solitary's skills for working in a
+# cell — publishing a file, reading what was sent in — from its first session.
+agents:
+  - claude-code
+
 # Left open so the cell reaches whatever the host reaches: an allow list gates
 # the build as well, and a domain missing from it fails the build rather than
 # one request. The list that works for this cell is in the documentation, under
