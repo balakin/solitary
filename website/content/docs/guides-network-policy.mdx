@@ -21,6 +21,20 @@ A domain covers its subdomains, so `github.com` reaches `api.github.com`. It doe
 
 Two pieces enforce the list, both in the machine and outside the container. A resolver answers for the listed names only — anything else gets NXDOMAIN, so a query cannot carry data out to a resolver of an agent's choosing — and it records the addresses it hands out in a set the firewall allows. A name resolves and is reachable, or does neither, and a site that changes its addresses keeps working without anyone editing a rule. The container is rootless: nothing inside it can load a firewall rule, stop the resolver, or edit either one's configuration.
 
+## GitHub Actions and Packages
+
+Reading a job's logs or downloading an artifact with `gh` is redirected from `api.github.com` to one of 140 numbered Azure storage accounts, and GitHub Packages serves downloads from storage accounts of its own. Allowing `blob.core.windows.net` would open every storage account on Azure, so solitary carries the exact names as presets:
+
+```yaml
+network:
+  allow:
+    - github.com
+    - github:actions-results # job logs and artifacts
+    - github:packages # ghcr.io and the npm, Maven, NuGet and RubyGems registries
+```
+
+There is no pattern such as `productionresultssa*.blob.core.windows.net` to write instead: storage account names are first come, first served, so a pattern would match accounts anyone can register. See [presets](/docs/configuration#presets) for what each one holds.
+
 ## Include dependencies
 
 A restricted cell cannot pull its own image unless the registry is allowed. A build can also need package registries, source control, API endpoints, or a CDN. Missing destinations fail as DNS errors instead of silently expanding the policy:
