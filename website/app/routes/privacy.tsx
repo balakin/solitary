@@ -14,7 +14,7 @@ import {
 
 const title = pageTitle('Privacy Policy');
 const description =
-  'How the Solitary website handles personal data: cookie-free Umami analytics stored in the EU, GitHub Pages hosting, and no telemetry in the Solitary application.';
+  'How the Solitary website handles personal data: cookie-free Umami analytics stored in the EU, GitHub Pages hosting, and no telemetry in the Solitary CLI.';
 
 // A substantive change to the text below moves this date, and nothing else is
 // dated: there is no separate effective date to keep in step with it.

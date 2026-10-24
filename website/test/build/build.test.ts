@@ -85,6 +85,14 @@ test('the 404 page sends a slashed address on to the bare one', () => {
   );
 });
 
+// Search engines show about 160 characters of a description and cut the rest
+// mid-phrase; the docs pages are held to the same by their schema.
+test.each(['index.html', 'privacy.html'])('%s has a description a search result shows whole', (page) => {
+  const description = read(page).match(/<meta name="description" content="([^"]*)"/)?.[1] ?? '';
+  expect(description.length, description).toBeGreaterThanOrEqual(120);
+  expect(description.length, description).toBeLessThanOrEqual(160);
+});
+
 test('the privacy policy has its own title and description', () => {
   const html = read('privacy.html');
   expect(html).toContain('<title>Privacy Policy | Solitary</title>');
