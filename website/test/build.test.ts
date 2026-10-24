@@ -104,3 +104,22 @@ test('each page loads the tracker once, and only when the build had a website ID
 
   assert.ok(pages > 1, 'no prerendered pages found');
 });
+
+// Crawlers fetch the image by the URL in the tag, so it has to be absolute and
+// has to name a file the build actually ships: either mistake leaves a link
+// preview with no picture and no error anywhere.
+test('every page names an absolute social image that the build ships', () => {
+  const site = 'https://solitary.balakin.io';
+  const pages = {
+    'index.html': `${site}/og.png`,
+    'privacy/index.html': `${site}/og.png`,
+    'docs/index.html': `${site}/og/docs/image.webp`,
+  };
+
+  for (const [page, image] of Object.entries(pages)) {
+    const html = read(page);
+    assert.equal(tags(html, 'meta', `property="og:image" content="${image}"`).length, 1, page);
+    assert.equal(tags(html, 'meta', `name="twitter:image" content="${image}"`).length, 1, page);
+    assert.ok(existsSync(join(out, image.slice(site.length))), `${image} is not in the build`);
+  }
+});
