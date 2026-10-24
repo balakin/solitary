@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/balakin/solitary/internal/agents"
 	"github.com/balakin/solitary/internal/config"
 )
 
@@ -22,89 +23,37 @@ import (
 const Prefix = "solitary-"
 
 // Target is one directory skills are installed into.
-type Target struct {
-	Agents []string // empty for a directory named rather than detected
-	Dir    string
+type Target = agents.Target
+
+// system is where an absolute marker is looked for, and is only ever moved by a
+// test: a marker like /etc/codex is a fact about the machine running it.
+var system = "/"
+
+// host is this machine as a place to look for agents.
+func host(home string) agents.Place {
+	return agents.Place{
+		Expand: func(path string) string {
+			expanded := agents.Expand(path, home, os.Getenv)
+			if expanded != "" && filepath.IsAbs(path) {
+				expanded = filepath.Join(system, expanded)
+			}
+			return expanded
+		},
+		Exists: func(path string) bool {
+			_, err := os.Stat(path)
+			return err == nil
+		},
+	}
 }
 
 // Detect returns the skills directory of every agent configured under home.
-// Agents reading the same directory are one target, so a skill is written once
-// however many of them will read it.
 func Detect(home string) []Target {
-	var found []Target
-	var seen []string
-	for _, agent := range agents {
-		if slices.Contains(seen, agent.name) || !configured(home, agent) {
-			continue
-		}
-		seen = append(seen, agent.name)
-
-		dir := resolve(home, agent.skills)
-		if i := slices.IndexFunc(found, func(t Target) bool { return t.Dir == dir }); i >= 0 {
-			found[i].Agents = append(found[i].Agents, agent.name)
-			continue
-		}
-		found = append(found, Target{Agents: []string{agent.name}, Dir: dir})
-	}
-	return found
+	return agents.Detect(host(home))
 }
 
-// IDs lists every agent --agent accepts, in the list's order.
-func IDs() []string {
-	var ids []string
-	for _, agent := range agents {
-		if !slices.Contains(ids, agent.id) {
-			ids = append(ids, agent.id)
-		}
-	}
-	return ids
-}
-
-// Named returns the skills directory of each agent named by its ID, whether or
-// not it is configured yet: naming one is how an agent is installed for before
-// it has ever run. An agent with more than one directory gets the first one
-// that is configured, or else the first.
+// Named returns the skills directory of each agent named by its ID.
 func Named(home string, ids []string) ([]Target, error) {
-	var found []Target
-	for _, id := range ids {
-		var match *agent
-		for i := range agents {
-			if agents[i].id != id {
-				continue
-			}
-			if match == nil {
-				match = &agents[i]
-			}
-			if configured(home, agents[i]) {
-				match = &agents[i]
-				break
-			}
-		}
-		if match == nil {
-			return nil, fmt.Errorf("unknown agent %q; known agents are: %s", id, strings.Join(slices.Sorted(slices.Values(IDs())), ", "))
-		}
-
-		dir := resolve(home, match.skills)
-		if i := slices.IndexFunc(found, func(t Target) bool { return t.Dir == dir }); i >= 0 {
-			if !slices.Contains(found[i].Agents, match.name) {
-				found[i].Agents = append(found[i].Agents, match.name)
-			}
-			continue
-		}
-		found = append(found, Target{Agents: []string{match.name}, Dir: dir})
-	}
-	return found, nil
-}
-
-func configured(home string, agent agent) bool {
-	for _, marker := range agent.markers {
-		if path := resolve(home, marker); path != "" {
-			if _, err := os.Stat(path); err == nil {
-				return true
-			}
-		}
-	}
-	return false
+	return agents.Named(host(home), ids)
 }
 
 // Names lists the skills in src, sorted.

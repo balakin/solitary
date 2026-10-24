@@ -1,12 +1,16 @@
-package skills
+// Package agents is the coding agents solitary knows how to give skills to:
+// what each is called, where it reads skills from, and what says it is there.
+// The host installer and a cell's definition both name agents from it.
+package agents
 
 import (
-	"os"
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-// agents is the skills CLI's own list (vercel-labs/skills, src/agents.ts at
+// list is the skills CLI's own list (vercel-labs/skills, src/agents.ts at
 // a80e4c9), so that `solitary skills install` finds what `npx skills add -g`
 // would without needing node. Only the global half is kept: an agent detected
 // by something in the current directory, or with no global skills directory at
@@ -20,7 +24,7 @@ import (
 //
 // Refreshing it means reading the same file again: the order is upstream's, so
 // a diff against it stays readable.
-var agents = []agent{
+var list = []Agent{
 	{"aider-desk", "AiderDesk", "~/.aider-desk/skills", []string{"~/.aider-desk"}},
 	{"amp", "Amp", "$CONFIG/agents/skills", []string{"$CONFIG/amp"}},
 	{"antigravity", "Antigravity", "~/.gemini/antigravity/skills", []string{"~/.gemini/antigravity"}},
@@ -114,39 +118,168 @@ var homes = map[string]string{
 	"SARVAM_HOME":       "~/.sarvam",
 }
 
-// system is where an absolute marker is looked for, and is only ever moved by a
-// test: a marker like /etc/codex is a fact about the machine running it.
-var system = "/"
-
-type agent struct {
-	id      string // what --agent takes, as `npx skills add --agent` does
-	name    string
-	skills  string
-	markers []string
+// Agent is one coding agent and where it keeps its skills.
+type Agent struct {
+	ID      string // what --agent and a cell's agents: take, as `npx skills add --agent` does
+	Name    string
+	Skills  string
+	Markers []string
 }
 
-// resolve turns a path as the list writes it into one on this machine, or ""
-// when it is built on a variable that is unset and has no default.
-func resolve(home, path string) string {
+// All is every agent, in the list's order. An agent with more than one possible
+// directory appears once for each, in the order they are preferred.
+func All() []Agent {
+	return slices.Clone(list)
+}
+
+// IDs lists every agent ID once, in the list's order.
+func IDs() []string {
+	var ids []string
+	for _, agent := range list {
+		if !slices.Contains(ids, agent.ID) {
+			ids = append(ids, agent.ID)
+		}
+	}
+	return ids
+}
+
+// Known reports whether id names an agent on the list.
+func Known(id string) bool {
+	return slices.ContainsFunc(list, func(a Agent) bool { return a.ID == id })
+}
+
+// Vars are the environment variables the list's paths are built on, so that a
+// caller resolving them somewhere else — inside a container — knows what to ask
+// that place for.
+func Vars() []string {
+	vars := []string{"XDG_CONFIG_HOME"}
+	for _, agent := range list {
+		for _, path := range append([]string{agent.Skills}, agent.Markers...) {
+			head, _, _ := strings.Cut(path, "/")
+			if strings.HasPrefix(head, "$") && head != "$CONFIG" && !slices.Contains(vars, head[1:]) {
+				vars = append(vars, head[1:])
+			}
+		}
+	}
+	return vars
+}
+
+// Expand turns a path as the list writes it into one under home, reading
+// variables through getenv, or "" when it is built on a variable that is unset
+// and has no default. An absolute path is returned as it is: where it is looked
+// for is the caller's business.
+func Expand(path, home string, getenv func(string) string) string {
 	head, rest, _ := strings.Cut(path, "/")
 
 	switch {
 	case head == "~":
 		return filepath.Join(home, rest)
 	case head == "$CONFIG":
-		if dir := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); dir != "" {
+		if dir := strings.TrimSpace(getenv("XDG_CONFIG_HOME")); dir != "" {
 			return filepath.Join(dir, rest)
 		}
 		return filepath.Join(home, ".config", rest)
 	case strings.HasPrefix(head, "$"):
-		if dir := strings.TrimSpace(os.Getenv(head[1:])); dir != "" {
+		if dir := strings.TrimSpace(getenv(head[1:])); dir != "" {
 			return filepath.Join(dir, rest)
 		}
 		if def, ok := homes[head[1:]]; ok {
-			return resolve(home, filepath.ToSlash(filepath.Join(def, rest)))
+			return Expand(filepath.ToSlash(filepath.Join(def, rest)), home, getenv)
 		}
 		return ""
 	default:
-		return filepath.Join(system, path)
+		return path
 	}
+}
+
+// Target is one directory skills are installed into.
+type Target struct {
+	Agents []string // empty for a directory named rather than found
+	Dir    string
+}
+
+// Place is where agents are looked for: how a path from the list becomes a real
+// one there, and whether it exists. The host and a cell's container are each a
+// place, with their own home and their own environment.
+type Place struct {
+	Expand func(path string) string
+	Exists func(path string) bool
+}
+
+// Detect returns the skills directory of every agent configured in place.
+// Agents reading the same directory are one target, so a skill is written once
+// however many of them will read it.
+func Detect(place Place) []Target {
+	var found []Target
+	var seen []string
+	for _, agent := range list {
+		if slices.Contains(seen, agent.ID) || !configured(place, agent) {
+			continue
+		}
+		seen = append(seen, agent.ID)
+		found = addTarget(found, agent.Name, place.Expand(agent.Skills))
+	}
+	return found
+}
+
+// Named returns the skills directory of each agent named by its ID, whether or
+// not it is configured yet: naming one is how an agent is installed for before
+// it has ever run. An agent with more than one directory gets the first one
+// that is configured, or else the first.
+func Named(place Place, ids []string) ([]Target, error) {
+	var found []Target
+	for _, id := range ids {
+		agent, err := pick(place, id)
+		if err != nil {
+			return nil, err
+		}
+		found = addTarget(found, agent.Name, place.Expand(agent.Skills))
+	}
+	return found, nil
+}
+
+// Unknown is the error for an ID that is not on the list.
+func Unknown(id string) error {
+	return fmt.Errorf("unknown agent %q; known agents are: %s", id, strings.Join(slices.Sorted(slices.Values(IDs())), ", "))
+}
+
+func pick(place Place, id string) (Agent, error) {
+	var match *Agent
+	for i := range list {
+		if list[i].ID != id {
+			continue
+		}
+		if match == nil {
+			match = &list[i]
+		}
+		if configured(place, list[i]) {
+			return list[i], nil
+		}
+	}
+	if match == nil {
+		return Agent{}, Unknown(id)
+	}
+	return *match, nil
+}
+
+func configured(place Place, agent Agent) bool {
+	for _, marker := range agent.Markers {
+		if path := place.Expand(marker); path != "" && place.Exists(path) {
+			return true
+		}
+	}
+	return false
+}
+
+func addTarget(found []Target, name, dir string) []Target {
+	if dir == "" {
+		return found
+	}
+	if i := slices.IndexFunc(found, func(t Target) bool { return t.Dir == dir }); i >= 0 {
+		if !slices.Contains(found[i].Agents, name) {
+			found[i].Agents = append(found[i].Agents, name)
+		}
+		return found
+	}
+	return append(found, Target{Agents: []string{name}, Dir: dir})
 }

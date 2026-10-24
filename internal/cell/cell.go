@@ -324,7 +324,15 @@ func up(name string, rebuild bool, progress io.Writer) error {
 	// After the container, since the tool has to be linked onto the PATH of
 	// whatever is running now, and unconditionally, since a container that
 	// did not need replacing may still predate this.
-	return installArtifacts(instance)
+	if err := installArtifacts(instance); err != nil {
+		return err
+	}
+
+	// Beside the tool they describe, so that the two always come from the
+	// same binary — a cell that is only being joined included.
+	installSkills(name, instance, c, progress)
+
+	return nil
 }
 
 // ensureMachine is the half of up below the container: the machine created or
@@ -1630,6 +1638,11 @@ func Remove(name string, progress io.Writer) error {
 	// Drop the record of what was applied, so a later up starts clean rather
 	// than comparing against a machine that no longer exists.
 	if err := config.RemoveApplied(name); err != nil {
+		return err
+	}
+	// And of the skills in the home, which is gone with it. A move to a new
+	// machine keeps this one, since the home goes across.
+	if err := removeSkillsRecord(name); err != nil {
 		return err
 	}
 

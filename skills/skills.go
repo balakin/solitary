@@ -22,3 +22,18 @@ func Host() fs.FS {
 	}
 	return sub
 }
+
+//go:embed cell
+var cell embed.FS
+
+// Cell is the skills for an agent inside a cell, which up installs there. They
+// describe the artifact tool, the inbox and the firewall that the same up sets
+// up, so they never travel on their own: each carries metadata.internal, which
+// keeps `npx skills add` from offering them to a host that has none of those.
+func Cell() fs.FS {
+	sub, err := fs.Sub(cell, "cell")
+	if err != nil {
+		panic(err) // the directory is embedded above; it cannot be missing
+	}
+	return sub
+}

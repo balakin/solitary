@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/balakin/solitary/internal/agents"
 	"github.com/balakin/solitary/internal/skills"
 	shipped "github.com/balakin/solitary/skills"
 )
@@ -156,7 +157,7 @@ func newSkillsInstallCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "rewrite only the directories installed into before")
 	_ = cmd.Flags().MarkHidden("refresh")
 	_ = cmd.RegisterFlagCompletionFunc("agent", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-		return skills.IDs(), cobra.ShellCompDirectiveNoFileComp
+		return agents.IDs(), cobra.ShellCompDirectiveNoFileComp
 	})
 
 	return cmd

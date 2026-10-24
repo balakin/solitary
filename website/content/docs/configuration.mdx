@@ -50,6 +50,9 @@ network: # omit and the cell reaches whatever the host reaches;
     - 10.0.0.53
   vpn: ./vpn.conf # optional; send all of it through this WireGuard tunnel
 
+agents: # optional; the coding agents that get solitary's skills
+  - claude-code
+
 git: # optional; usually set once in config.yaml instead
   name: Ada Lovelace
   email: ada@example.com
@@ -106,6 +109,32 @@ Leave it out and everything in the cell runs as root, which is what almost every
 Set it when something in the cell refuses to run as root — `limactl` does — or when the image serves a login of its own — an `sshd`, an editor server — and hands someone a session as a user it created. Then `up` mounts the home through a view in which it belongs to that user, while the machine still sees it as its own; without it the home belongs to the container's root and everything that user does in it fails on a permission. The container's command still runs as whatever the image declared, since that is usually the root the server needs.
 
 The user has to exist in the image, and giving it what it needs is the image's half of this — see [the user inside a cell](/docs/guides-images#the-user-inside-a-cell).
+
+### `agents`
+
+The coding agents the cell runs. `up` gives each of them solitary's [skills for working inside a cell](/docs/agent-skills#inside-a-cell) — publishing a file, reading what was sent in, what a refused name means — in the directory that agent reads skills from, and keeps them current at every `up`, beside the `artifact` tool they describe.
+
+```yaml
+agents:
+  - claude-code # an ID, as npx skills uses them
+  - name: codex # a known agent, somewhere other than its usual place
+    skills: ~/.config/codex/skills
+  - name: my-agent # an agent of your own
+    skills: ~/my-agent/skills
+```
+
+| Value    | Skills go to                                                            |
+| -------- | ----------------------------------------------------------------------- |
+| left out | the agents found in the container, looked for again at every `up`       |
+| a list   | exactly these agents, whether or not they have run yet                  |
+| `[]`     | nowhere; solitary's skills are taken back out of the cell               |
+| `all`    | every agent solitary knows, for an image whose agents nobody has listed |
+
+Left out, an agent is found by the directory it keeps its configuration in, read inside the container — so an image that moves one with `CLAUDE_CONFIG_DIR` or `XDG_CONFIG_HOME` is followed. An agent makes that directory the first time it runs, so it is found by the next `up` after that, which can be one that only joins a running cell; its next session then has the skills. Name it here and they are there from its first session.
+
+`skills:` is a directory under the home, written `~/path`. The home is the part of a cell that lasts and the only part solitary writes to, so an agent whose directory resolves outside it — an image that sets `CLAUDE_CONFIG_DIR=/opt/claude` — is skipped with a warning, and so is a directory reached through a symlink.
+
+Only solitary's own skills, the directories named `solitary-*`, are ever written or removed. A change to this list is applied by the next `up`: skills are installed where it now points and taken out of where it no longer does, and the directories they were in are left alone. `all` makes a directory for every agent there is — sixty-five of them — which is why it is something to ask for rather than a default; a directory `up` made and that holds nothing but solitary's skills is never mistaken for an agent later.
 
 ## Authority
 

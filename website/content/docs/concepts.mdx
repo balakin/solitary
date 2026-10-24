@@ -34,7 +34,7 @@ A cell is edited by editing `cell.yaml` and running `up` again. What that costs 
 
 | Layer     | Settings                                                        | Applied by                                                         |
 | --------- | --------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Container | `image`, `build`, `command`, `secrets`, `git`                   | `up` — the container is replaced                                   |
+| Container | `image`, `build`, `command`, `secrets`, `git`, `agents`         | `up` — the container is replaced                                   |
 | Machine   | `vm`, `ports`, `network`, `gpu`                                 | The next boot: `down` then `up`                                    |
 | Disk      | what `vm.provision` did, and everything the cell has done since | `up --new-machine` — a new disk, with only the home carried across |
 
