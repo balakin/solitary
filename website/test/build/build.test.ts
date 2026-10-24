@@ -208,3 +208,29 @@ test('every docs page is titled with its own name and then the site', async () =
 
   expect(checked, 'no docs pages found').toBeGreaterThan(1);
 });
+
+// The subtitle under a docs page's title is a line; a search result wants the
+// 120 to 160 characters an engine shows before cutting, or it substitutes an
+// excerpt of its own. Each page carries one of each (seoDescription).
+test('every docs page tells search engines more than its subtitle does', async () => {
+  let checked = 0;
+
+  for (const { file } of await pages()) {
+    if (!file.startsWith('docs/')) continue;
+    const html = read(file);
+    const description = html.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? '';
+    const decoded = description.replaceAll('&#x27;', "'").replaceAll('&amp;', '&');
+    checked++;
+
+    expect(decoded.length, `${file}: "${decoded}"`).toBeGreaterThanOrEqual(120);
+    expect(decoded.length, `${file}: "${decoded}"`).toBeLessThanOrEqual(160);
+    expect(tags(html, 'meta', 'property="og:description"'), file).toEqual([
+      `<meta property="og:description" content="${description}"/>`,
+    ]);
+    expect(html, `${file} shows its search description as the subtitle`).not.toMatch(
+      new RegExp(`<p[^>]*>${description.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</p>`),
+    );
+  }
+
+  expect(checked, 'no docs pages found').toBeGreaterThan(1);
+});

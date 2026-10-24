@@ -80,12 +80,12 @@ function Content({
   return (
     <DocsPage toc={toc} slots={{ footer: PageEnd }}>
       <title>{pageTitle(page.title)}</title>
-      <meta name="description" content={page.description} />
+      <meta name="description" content={page.seoDescription} />
       <link rel="canonical" href={url} />
       <meta property="og:url" content={url} />
       <meta property="og:type" content="article" />
       <meta property="og:title" content={page.title} />
-      <meta property="og:description" content={page.description} />
+      <meta property="og:description" content={page.seoDescription} />
       <meta property="og:image" content={imagePath} />
       <meta property="og:site_name" content={appName} />
       <meta name="twitter:card" content="summary_large_image" />
