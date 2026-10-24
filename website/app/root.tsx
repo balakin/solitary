@@ -12,7 +12,8 @@ import './app.css';
 import { isMarkdownPreferred, rewritePath } from 'fumadocs-core/negotiation';
 import NotFound from './routes/not-found';
 import { docsContentRoute, docsRoute } from '@/lib/shared';
-import { trackerAttributes } from '@/lib/analytics';
+import { trackerAttributes, trackRepositoryLink } from '@/lib/analytics';
+import { useEffect } from 'react';
 
 // Read once at build time. Vite inlines both, so a build without the ID ships
 // no tracker at all rather than one that cannot report.
@@ -46,6 +47,12 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    if (!tracker) return;
+    document.addEventListener('click', trackRepositoryLink);
+    return () => document.removeEventListener('click', trackRepositoryLink);
+  }, []);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

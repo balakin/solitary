@@ -1,6 +1,10 @@
-// Website analytics: Umami Cloud's tracker, and nothing of our own around it.
-// It counts pageviews and the few clicks named below; it sets no cookie and
-// stores no identifier in the browser. See README.md, "Analytics".
+// Website analytics: Umami Cloud's tracker, and as little of our own around it
+// as it takes. It counts pageviews and the few clicks named below; it sets no
+// cookie and stores no identifier in the browser. See README.md, "Analytics".
+
+// Relative and with its extension, unlike the rest of app/: the tests import
+// this file with node, which knows neither the `@/` alias nor a bare path.
+import { repoUrl } from './shared.ts';
 
 export const trackerSrc = 'https://cloud.umami.is/script.js';
 export const productionHost = 'solitary.balakin.io';
@@ -50,4 +54,18 @@ export function trackerAttributes(websiteId: string | undefined, production: boo
  */
 export function trackEvent(event: AnalyticsEvent) {
   window.umami?.track(event);
+}
+
+/**
+ * A document click listener for the links to the repository this site does not
+ * render itself: fumadocs' GitHub icon in the header, the docs sidebar and the
+ * mobile menu. Fumadocs builds those anchors from a fixed set of fields, so an
+ * attribute cannot be put on them. A link that carries its own
+ * `data-umami-event` is left to the tracker, so nothing is counted twice.
+ */
+export function trackRepositoryLink(event: Pick<MouseEvent, 'target'>) {
+  const link = (event.target as Element | null)?.closest?.('a');
+  if (link?.getAttribute('href') === repoUrl && !link.hasAttribute('data-umami-event')) {
+    trackEvent('github_click');
+  }
 }
