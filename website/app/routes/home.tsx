@@ -18,7 +18,7 @@ import { Footer } from '@/components/footer';
 import { appName, repoUrl, siteDescription, siteImageMeta, siteTagline } from '@/lib/shared';
 
 export function meta(_args: Route.MetaArgs) {
-  const title = `${appName} — ${siteTagline}`;
+  const title = `${appName}: ${siteTagline}`;
 
   return [
     { title },
