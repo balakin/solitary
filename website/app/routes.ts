@@ -6,7 +6,6 @@ export default [
   route('privacy', 'routes/privacy.tsx'),
   route('api/search', 'routes/search.ts'),
   route('og/docs/*', 'routes/og.docs.tsx'),
-  route('og/home/image.webp', 'routes/og.home.tsx'),
 
   // LLM integration:
   route('llms.txt', 'llms/index.ts'),

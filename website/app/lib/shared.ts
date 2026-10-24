@@ -8,10 +8,31 @@ export const siteTagline = 'Run coding agents on a VM, not on your machine';
 export const siteDescription =
   'Run coding agents in disposable, hypervisor-isolated cells: no host mounts, secrets whitelisted per cell, default-deny egress, and an explicit way to move work in and out.';
 
-// The home page's social image. A constant rather than a literal repeated in the
-// route, the meta tag, and the prerender config: a path that is not prerendered
-// 404s on a static host, and a social card that 404s fails silently.
-export const homeImagePath = '/og/home/image.webp';
+// Absolute because the social images are read by crawlers, not browsers: the
+// Open Graph protocol asks for a full URL, and Facebook and LinkedIn drop a
+// relative one without saying so.
+export const siteUrl = 'https://solitary.balakin.io';
+
+// The site's cover: a file in public/ rather than a generated route, drawn at
+// twice the 1200×630 card size so it stays sharp on a high-density display.
+export const siteImage = {
+  url: `${siteUrl}/og.png`,
+  width: 2000,
+  height: 1050,
+  alt: 'Solitary — Let coding agents run free. Keep your machine out of reach.',
+};
+
+export function siteImageMeta() {
+  return [
+    { property: 'og:image', content: siteImage.url },
+    { property: 'og:image:width', content: String(siteImage.width) },
+    { property: 'og:image:height', content: String(siteImage.height) },
+    { property: 'og:image:alt', content: siteImage.alt },
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:image', content: siteImage.url },
+    { name: 'twitter:image:alt', content: siteImage.alt },
+  ];
+}
 
 // fill this with your actual GitHub info, for example:
 export const gitConfig = {

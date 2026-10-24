@@ -3,7 +3,7 @@ import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { Link } from 'react-router';
 import { homeOptions } from '@/lib/layout.shared';
 import { Footer } from '@/components/footer';
-import { appName, licenseUrl, repoUrl } from '@/lib/shared';
+import { appName, licenseUrl, repoUrl, siteImageMeta } from '@/lib/shared';
 
 const title = `Privacy Policy — ${appName}`;
 const description =
@@ -24,6 +24,7 @@ export function meta(_args: Route.MetaArgs) {
     { property: 'og:title', content: title },
     { property: 'og:description', content: description },
     { property: 'og:site_name', content: appName },
+    ...siteImageMeta(),
   ];
 }
 
