@@ -12,6 +12,11 @@ import './app.css';
 import { isMarkdownPreferred, rewritePath } from 'fumadocs-core/negotiation';
 import NotFound from './routes/not-found';
 import { docsContentRoute, docsRoute } from '@/lib/shared';
+import { trackerAttributes } from '@/lib/analytics';
+
+// Read once at build time. Vite inlines both, so a build without the ID ships
+// no tracker at all rather than one that cannot report.
+const tracker = trackerAttributes(import.meta.env.VITE_UMAMI_WEBSITE_ID, import.meta.env.PROD);
 
 // Every face is served from this origin: no third-party font request, so
 // reading the docs does not announce itself to anyone but this host. Both are
@@ -48,6 +53,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        {/* Once, here, for the whole site: the layout is rendered once and
+            kept across client-side navigations, and the tracker counts those
+            itself by watching the history API. Deferred, so a slow or blocked
+            request holds nothing up. */}
+        {tracker && <script defer {...tracker} />}
       </head>
       <body className="flex min-h-screen flex-col">
         {/* The footer is rendered by the pages that want one rather than here:

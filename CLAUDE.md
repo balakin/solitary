@@ -32,6 +32,7 @@ Website (docs site, separate toolchain, see `website/README.md`):
 cd website && pnpm install && pnpm dev      # Node 24, pnpm pinned via corepack
 pnpm build && pnpm types:check
 pnpm lint && pnpm fmt:check                 # oxlint and oxfmt; `pnpm fmt` rewrites
+pnpm build:pages && pnpm test               # node:test; most tests read the prerendered build
 ```
 
 oxfmt owns the formatting of everything under `website/` — MDX docs included — so leave it to
@@ -41,7 +42,8 @@ rewrite files rather than matching its output by hand.
 
 `.github/workflows/verify.yml` runs on every push and pull request to `main`, as two jobs that
 mirror the commands above: the Go CLI (tidy check, `golangci-lint run`, `golangci-lint fmt --diff`,
-`make test`, `make build`) and the website (`pnpm lint`, `fmt:check`, `types:check`, `build`).
+`make test`, `make build`) and the website (`pnpm lint`, `fmt:check`, `types:check`, `build:pages`,
+`test`).
 Run the same commands locally before pushing rather than using CI to find out.
 
 Actions are pinned to a commit SHA with the tag in a trailing comment; Dependabot moves them, so

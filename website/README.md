@@ -90,6 +90,47 @@ left at `preserve`: prose keeps whatever line breaks it was written with.
 imported for its side effect). Suppress anything else at the line that needs it, with a comment
 saying why, rather than by widening the config.
 
+## Analytics
+
+The production site counts pageviews and three clicks with [Umami Cloud](https://umami.is)
+(EU region). There is no telemetry anywhere else — not in the CLI, not in a cell — and the
+[privacy policy](https://solitary.balakin.io/privacy) (`app/routes/privacy.tsx`) says so; change it
+along with anything here that changes what is collected.
+
+`app/lib/analytics.ts` builds the one script tag `app/root.tsx` puts in every page's `<head>`. It
+is emitted only when the build is a production build **and** `VITE_UMAMI_WEBSITE_ID` is set, so
+`pnpm dev` and a build without the ID — a fork's, a pull request's — load nothing. Even with the ID,
+`data-domains` keeps the tracker silent on any host but `solitary.balakin.io`, so a production build
+served from localhost sends nothing either. It also drops query strings and fragments, and honours
+Do Not Track. The tracker sets no cookie and counts client-side navigations itself.
+
+The ID is public — it is in every page — so it is a repository **variable**, not a secret:
+`VITE_UMAMI_WEBSITE_ID` under Settings → Secrets and variables → Actions → Variables, which
+`pages.yml` passes to the build. A deploy without it still ships, with a warning on the run. To
+build with it locally:
+
+```sh
+VITE_UMAMI_WEBSITE_ID=<id> pnpm build:pages
+```
+
+| Event            | Sent when someone                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| `install_click`  | copies the install command, or follows "Create your first cell" or "other ways to install" on the home page |
+| `github_click`   | follows "View on GitHub" on the home page or "GitHub" in the footer                                         |
+| `feedback_click` | reserved; the site has no feedback link yet                                                                 |
+
+`install_click` measures interest, not installs. The GitHub icon in the header is fumadocs' own and
+is not counted.
+
+To track another click, name it in `AnalyticsEvent`, then:
+
+- on a link that leaves the site, add `data-umami-event="<name>"` (keep `target="_blank"`);
+- on a link that stays, call `trackEvent('<name>')` from `onClick`. The attribute is wrong there:
+  Umami cancels the click and reloads the page at the link's URL, so the client-side navigation is
+  lost.
+
+Never attach data to an event. `pnpm test` checks the built pages, so run it after `pnpm build:pages`.
+
 ## Production build
 
 ```sh
