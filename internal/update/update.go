@@ -85,7 +85,7 @@ func Latest(ctx context.Context) (string, error) {
 // Install downloads the release archive for version and replaces the running
 // binary with the one inside it.
 func Install(ctx context.Context, version string) error {
-	path, err := executable()
+	path, err := Executable()
 	if err != nil {
 		return err
 	}
@@ -157,9 +157,9 @@ func install(ctx context.Context, version, path string) error {
 	return nil
 }
 
-// executable resolves the running binary through any symlinks, so that what is
+// Executable resolves the running binary through any symlinks, so that what is
 // replaced is the file itself rather than a link to it.
-func executable() (string, error) {
+func Executable() (string, error) {
 	path, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locating the running binary: %w", err)

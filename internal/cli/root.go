@@ -45,6 +45,7 @@ func newRootCmd() *cobra.Command {
 		newSendCmd(),
 		newDashboardCmd(),
 		newSecretsCmd(),
+		newSkillsCmd(),
 		newUpdateCmd(),
 	)
 
