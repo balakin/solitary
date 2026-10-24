@@ -19,8 +19,10 @@ export function pageTitle(title: string) {
 }
 
 export const siteTagline = 'Run coding agents on a VM, not on your machine';
+// No longer than 160 characters, the most a search engine shows before it
+// cuts the rest off mid-phrase.
 export const siteDescription =
-  'Run coding agents in disposable, hypervisor-isolated cells: no host mounts, secrets whitelisted per cell, default-deny egress, and an explicit way to move work in and out.';
+  'Run coding agents in disposable, hypervisor-isolated cells: no host mounts, per-cell secrets, default-deny egress, and an explicit way to move work in and out.';
 
 // Absolute because the social images are read by crawlers, not browsers: the
 // Open Graph protocol asks for a full URL, and Facebook and LinkedIn drop a
