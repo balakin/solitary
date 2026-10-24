@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { productionHost, trackerAttributes, trackerSrc } from '../app/lib/analytics.ts';
+import {
+  productionHost,
+  trackerAttributes,
+  trackerSrc,
+  trackRepositoryLink,
+} from '../app/lib/analytics.ts';
+import { repoUrl } from '../app/lib/shared.ts';
 
 const id = '00000000-0000-4000-8000-000000000000';
 
@@ -30,4 +36,35 @@ test('a build without a website ID loads no tracker', () => {
   assert.equal(trackerAttributes(undefined, true), null);
   assert.equal(trackerAttributes('', true), null);
   assert.equal(trackerAttributes('  ', true), null);
+});
+
+/** A click on a stand-in for an anchor, recording what reached `umami.track`. */
+function click(attributes: Record<string, string>) {
+  const sent: string[] = [];
+  globalThis.window = { umami: { track: (event: string) => sent.push(event) } } as never;
+  const link = {
+    getAttribute: (name: string) => attributes[name] ?? null,
+    hasAttribute: (name: string) => name in attributes,
+  };
+  trackRepositoryLink({ target: { closest: () => link } as never });
+  return sent;
+}
+
+test('a link to the repository that the site does not render is counted', () => {
+  assert.deepEqual(click({ href: repoUrl }), ['github_click']);
+});
+
+test('a link to the repository that carries its own event is left to the tracker', () => {
+  assert.deepEqual(click({ href: repoUrl, 'data-umami-event': 'github_click' }), []);
+});
+
+test('links elsewhere, deeper into the repository included, are not counted', () => {
+  assert.deepEqual(click({ href: `${repoUrl}/blob/main/LICENSE` }), []);
+  assert.deepEqual(click({ href: '/docs' }), []);
+});
+
+test('a click outside any link is not counted', () => {
+  globalThis.window = { umami: { track: () => assert.fail('tracked') } } as never;
+  trackRepositoryLink({ target: { closest: () => null } as never });
+  trackRepositoryLink({ target: null });
 });

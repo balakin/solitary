@@ -113,14 +113,15 @@ build with it locally:
 VITE_UMAMI_WEBSITE_ID=<id> pnpm build:pages
 ```
 
-| Event            | Sent when someone                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------- |
-| `install_click`  | copies the install command, or follows "Create your first cell" or "other ways to install" on the home page |
-| `github_click`   | follows "View on GitHub" on the home page or "GitHub" in the footer                                         |
-| `feedback_click` | reserved; the site has no feedback link yet                                                                 |
+| Event            | Sent when someone                                                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `install_click`  | copies the install command, or follows "Create your first cell" or "other ways to install" on the home page                                                    |
+| `github_click`   | follows any link to the repository: "View on GitHub" on the home page, "GitHub" in the footer, and the GitHub icon in the header, docs sidebar and mobile menu |
+| `feedback_click` | reserved; the site has no feedback link yet                                                                                                                    |
 
-`install_click` measures interest, not installs. The GitHub icon in the header is fumadocs' own and
-is not counted.
+`install_click` measures interest, not installs. The GitHub icons are fumadocs' own and take no
+attributes, so `trackRepositoryLink`, one click listener on the document, counts any link to the
+repository URL that does not carry `data-umami-event` itself.
 
 To track another click, name it in `AnalyticsEvent`, then:
 
