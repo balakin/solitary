@@ -54,6 +54,13 @@ jobs:
       - name: 📚 Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # A warning rather than a failure: a site without analytics is still the
+      # site, and a docs fix should not wait on it. But the build drops the
+      # tracker silently, so without this the only sign is a flat dashboard.
+      - name: 📊 Check analytics configuration
+        if: vars.VITE_UMAMI_WEBSITE_ID == ''
+        run: echo "::warning title=Analytics off::VITE_UMAMI_WEBSITE_ID is not set, so this deploy has no analytics. Set it under Settings → Secrets and variables → Actions → Variables."
+
       # Prerenders every route and turns the catch-all into Pages' 404.html.
       # The Umami website ID is a variable rather than a secret: it ends up in
       # every page. Unset, the site builds without analytics rather than failing.
