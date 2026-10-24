@@ -104,3 +104,7 @@ jobs:
       # assembly fails here rather than after it has merged.
       - name: 🏗️ Build site
         run: pnpm build:pages
+
+      # After the build: most of these check the pages it prerendered.
+      - name: 🧪 Run tests
+        run: pnpm test
