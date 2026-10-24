@@ -49,6 +49,53 @@ func Detect(home string) []Target {
 	return found
 }
 
+// IDs lists every agent --agent accepts, in the list's order.
+func IDs() []string {
+	var ids []string
+	for _, agent := range agents {
+		if !slices.Contains(ids, agent.id) {
+			ids = append(ids, agent.id)
+		}
+	}
+	return ids
+}
+
+// Named returns the skills directory of each agent named by its ID, whether or
+// not it is configured yet: naming one is how an agent is installed for before
+// it has ever run. An agent with more than one directory gets the first one
+// that is configured, or else the first.
+func Named(home string, ids []string) ([]Target, error) {
+	var found []Target
+	for _, id := range ids {
+		var match *agent
+		for i := range agents {
+			if agents[i].id != id {
+				continue
+			}
+			if match == nil {
+				match = &agents[i]
+			}
+			if configured(home, agents[i]) {
+				match = &agents[i]
+				break
+			}
+		}
+		if match == nil {
+			return nil, fmt.Errorf("unknown agent %q; known agents are: %s", id, strings.Join(slices.Sorted(slices.Values(IDs())), ", "))
+		}
+
+		dir := resolve(home, match.skills)
+		if i := slices.IndexFunc(found, func(t Target) bool { return t.Dir == dir }); i >= 0 {
+			if !slices.Contains(found[i].Agents, match.name) {
+				found[i].Agents = append(found[i].Agents, match.name)
+			}
+			continue
+		}
+		found = append(found, Target{Agents: []string{match.name}, Dir: dir})
+	}
+	return found, nil
+}
+
 func configured(home string, agent agent) bool {
 	for _, marker := range agent.markers {
 		if path := resolve(home, marker); path != "" {
