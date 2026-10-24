@@ -106,7 +106,8 @@ Do Not Track. The tracker sets no cookie and counts client-side navigations itse
 
 The ID is public — it is in every page — so it is a repository **variable**, not a secret:
 `VITE_UMAMI_WEBSITE_ID` under Settings → Secrets and variables → Actions → Variables, which
-`pages.yml` passes to the build. To build with it locally:
+`pages.yml` passes to the build. A deploy without it still ships, with a warning on the run. To
+build with it locally:
 
 ```sh
 VITE_UMAMI_WEBSITE_ID=<id> pnpm build:pages
@@ -129,16 +130,6 @@ To track another click, name it in `AnalyticsEvent`, then:
   lost.
 
 Never attach data to an event. `pnpm test` checks the built pages, so run it after `pnpm build:pages`.
-
-After deploying a change that touches analytics:
-
-1. View source on <https://solitary.balakin.io/>: one `cloud.umami.is/script.js` tag, with the
-   right `data-website-id`.
-2. In the browser's network panel, loading a page and following a link inside the site each send
-   one `POST` to `/api/send`, and the request's `url` has no query string.
-3. Click "View on GitHub" and copy the install command, then check that `github_click` and
-   `install_click` show under **Events** in the Umami dashboard (it updates within a minute).
-4. With Do Not Track on, or a blocker on `cloud.umami.is`, nothing is sent and the site still works.
 
 ## Production build
 
