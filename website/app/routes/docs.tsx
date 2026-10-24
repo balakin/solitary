@@ -12,7 +12,7 @@ import {
 } from 'fumadocs-ui/layouts/docs/page';
 import { docs, getPageMarkdownUrl, source } from '@/lib/source';
 import { baseOptions } from '@/lib/layout.shared';
-import { appName, gitConfig, getPageImagePath, siteUrl } from '@/lib/shared';
+import { appName, canonicalUrl, gitConfig, getPageImagePath, siteUrl } from '@/lib/shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
 import { useMDXComponents } from '@/components/mdx';
 import { PageCredits } from '@/components/footer';
@@ -28,6 +28,7 @@ export async function loader({ params }: Route.LoaderArgs) {
     markdownUrl: getPageMarkdownUrl(page).url,
     pageTree: await source.serializePageTree(source.getPageTree()),
     imagePath: siteUrl + getPageImagePath(page.slugs, page.locale),
+    url: canonicalUrl(page.url),
   };
 }
 
@@ -49,10 +50,12 @@ function Content({
   path,
   markdownUrl,
   imagePath,
+  url,
 }: {
   path: string;
   markdownUrl: string;
   imagePath: string;
+  url: string;
 }) {
   const page = docs.getPage(path);
   if (!page) throw new Error(`unknown page: ${path}`);
@@ -65,6 +68,8 @@ function Content({
     <DocsPage toc={toc} slots={{ footer: PageEnd }}>
       <title>{page.title}</title>
       <meta name="description" content={page.description} />
+      <link rel="canonical" href={url} />
+      <meta property="og:url" content={url} />
       <meta property="og:type" content="article" />
       <meta property="og:title" content={page.title} />
       <meta property="og:description" content={page.description} />
@@ -92,11 +97,11 @@ function Content({
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { path, pageTree, imagePath, markdownUrl } = useFumadocsLoader(loaderData);
+  const { path, pageTree, imagePath, markdownUrl, url } = useFumadocsLoader(loaderData);
 
   return (
     <DocsLayout {...baseOptions()} tree={pageTree}>
-      <Content path={path} markdownUrl={markdownUrl} imagePath={imagePath} />
+      <Content path={path} markdownUrl={markdownUrl} imagePath={imagePath} url={url} />
     </DocsLayout>
   );
 }

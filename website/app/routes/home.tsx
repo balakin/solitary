@@ -15,7 +15,14 @@ import { homeOptions } from '@/lib/layout.shared';
 import { trackEvent } from '@/lib/analytics';
 import { Terminal } from '@/components/terminal';
 import { Footer } from '@/components/footer';
-import { appName, repoUrl, siteDescription, siteImageMeta, siteTagline } from '@/lib/shared';
+import {
+  appName,
+  canonicalMeta,
+  repoUrl,
+  siteDescription,
+  siteImageMeta,
+  siteTagline,
+} from '@/lib/shared';
 
 export function meta(_args: Route.MetaArgs) {
   const title = `${appName}: ${siteTagline}`;
@@ -23,6 +30,7 @@ export function meta(_args: Route.MetaArgs) {
   return [
     { title },
     { name: 'description', content: siteDescription },
+    ...canonicalMeta('/'),
     { property: 'og:type', content: 'website' },
     { property: 'og:title', content: title },
     { property: 'og:description', content: siteDescription },

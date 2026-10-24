@@ -13,6 +13,26 @@ export const siteDescription =
 // relative one without saying so.
 export const siteUrl = 'https://solitary.balakin.io';
 
+/**
+ * The one address a page is indexed under, for its canonical link, its og:url
+ * and its sitemap entry alike. It ends in a slash because a prerendered page is
+ * a directory holding an index.html, and GitHub Pages answers the bare path
+ * with a redirect to the slashed one. Internal links use the bare path all the
+ * same: fumadocs builds them, and a client-side navigation never reaches the
+ * server to be redirected.
+ */
+export function canonicalUrl(path: string) {
+  return `${siteUrl}${path.replace(/\/?$/, '/')}`;
+}
+
+export function canonicalMeta(path: string) {
+  const url = canonicalUrl(path);
+  return [
+    { tagName: 'link', rel: 'canonical', href: url },
+    { property: 'og:url', content: url },
+  ];
+}
+
 // The site's cover: a file in public/ rather than a generated route, drawn at
 // twice the 1200×630 card size so it stays sharp on a high-density display.
 export const siteImage = {
