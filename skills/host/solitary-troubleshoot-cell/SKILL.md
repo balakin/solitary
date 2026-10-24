@@ -56,6 +56,15 @@ environment, so its output is safe to show.
 - **Tools reverted after a restart.** The container starts over from its image at every boot,
   and only the home survives. Update tools with `solitary up --rebuild <name>`, not from
   inside the cell.
+- **The agent in the cell doesn't have solitary's skills.** Check `agents:` in `cell.yaml`.
+  Left out, an agent is only found once it has run and made its config directory, so run
+  `solitary up <name>` again (joining a running cell is enough) and start a new agent
+  session. Naming it, as in `agents: [claude-code]`, installs the skills from the start. A
+  warning from `up` that the directory is outside the home means the image moved the agent
+  there (for example `CLAUDE_CONFIG_DIR=/opt/claude`), and solitary writes only to the home.
+  Point that variable into the home in the image instead. If the agent is moved in a way `up`
+  can't see, such as an export in `.bashrc`, name its real directory with a mapping:
+  `- {name: claude-code, skills: ~/.config/claude/skills}`.
 - **Work disappeared.** Work lives in `/home/cell`, which survives everything except
   `solitary rm`. If it's gone after an `rm`, it can't be recovered. Say so plainly.
 
