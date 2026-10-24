@@ -17,7 +17,7 @@ Omit `ports` and every port the container listens on reaches host localhost. Set
 
 Without `network.allow`, the cell reaches whatever the host reaches. With an allow list, the cell is default-deny: the listed domains, IPv4 addresses, and CIDR blocks resolve and are reachable, and other destinations are denied. An entry can explicitly permit a host or local-network address; review those grants carefully.
 
-A domain covers its subdomains; a different domain the same site uses has to be listed itself. The list must include every dependency: source control, container registries, package registries, APIs, and any CDN a build needs.
+A domain covers its subdomains; a different domain the same site uses has to be listed itself. The list must include every dependency: source control, container registries, package registries, APIs, and any CDN a build needs. A few services that spread across many names of someone else's domain have a [preset](/docs/configuration#presets) instead, such as `github:actions-results` for GitHub Actions logs and artifacts.
 
 Restricted and VPN-only cells enforce IPv4 egress: non-loopback IPv6 traffic is dropped, their resolver filters `AAAA` answers, and IPv6 entries in `allow`, `resolvers` or a tunnel endpoint are refused. An unrestricted VM may have an IPv6 route.
 

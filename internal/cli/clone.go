@@ -236,6 +236,10 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 	case c.Network.Restricted():
 		fmt.Fprintf(out, "  network  %d allowed\n", len(c.Network.Allow))
 		for _, entry := range c.Network.Allow {
+			if names, ok := config.Preset(entry); ok {
+				fmt.Fprintf(out, "           %s (%d names)\n", entry, len(names))
+				continue
+			}
 			fmt.Fprintf(out, "           %s\n", entry)
 		}
 	case c.Network.VPN != "":

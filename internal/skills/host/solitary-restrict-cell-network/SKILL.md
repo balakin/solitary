@@ -35,6 +35,12 @@ network:
   what the cell uses once it's running.
 - **IPv4 only.** Entries are IPv4 addresses, IPv4 CIDR blocks or DNS names. IPv6 entries are
   refused.
+- **Presets for GitHub's storage.** A refused `productionresultssa<N>.blob.core.windows.net`
+  is GitHub Actions logs or artifacts, and the job lands on a different account next time:
+  add `github:actions-results`, which lists all of them. A refused
+  `*registryv2prod.blob.core.windows.net` or `pkg-containers.githubusercontent.com` is GitHub
+  Packages: add `github:packages`. Never add `blob.core.windows.net` or `windows.net`, which
+  open every Azure storage account.
 - **A cell's list replaces the user-wide one.** `network.allow` in `cell.yaml` replaces the
   list in `~/.config/solitary/config.yaml` rather than adding to it.
 - **Keep grants narrow.** A grant allows the addresses a name resolves to, so anything else

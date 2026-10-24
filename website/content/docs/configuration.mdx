@@ -216,15 +216,26 @@ A GPU is authority in the way a device is, and more of it: what the cell renders
 
 ### `network`
 
-| Field       | Meaning                                                                                                                                                                                         |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `allow`     | Domains, IPv4 addresses, and IPv4 CIDR blocks the cell may open connections to. Empty means the cell reaches whatever the host reaches; set means default-deny. A domain covers its subdomains. |
-| `resolvers` | The DNS servers the cell's own resolver forwards to. Empty means `1.1.1.1` and `8.8.8.8`. The entry `host` means the resolver the machine is given by its network, which is the host's.         |
-| `vpn`       | A `wg-quick` configuration, as a path relative to the cell's directory. Everything the cell reaches then leaves through that tunnel.                                                            |
+| Field       | Meaning                                                                                                                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`     | Domains, IPv4 addresses, IPv4 CIDR blocks and [presets](#presets) the cell may open connections to. Empty means the cell reaches whatever the host reaches; set means default-deny. A domain covers its subdomains. |
+| `resolvers` | The DNS servers the cell's own resolver forwards to. Empty means `1.1.1.1` and `8.8.8.8`. The entry `host` means the resolver the machine is given by its network, which is the host's.                             |
+| `vpn`       | A `wg-quick` configuration, as a path relative to the cell's directory. Everything the cell reaches then leaves through that tunnel.                                                                                |
 
 Each entry under `resolvers` must be an IPv4 address or the literal `host`; anything else is refused when the cell is read.
 
 IPv6 entries are refused in `allow`, `resolvers`, and a tunnel's `Endpoint`. Restricted and VPN-only cells drop non-loopback IPv6 packets. Unrestricted VMs may have an IPv6 route. See [networking](/docs/networking) and [routing a cell through a VPN](/docs/guides-vpn).
+
+#### Presets
+
+An `allow` entry with a colon in it is a preset: a list of names that solitary carries, enforced exactly as though each name had been written out. They exist for services reached through more names than anyone should type, where the obvious shortcut would open far more than the service.
+
+| Preset                   | Names                                                                                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github:actions-results` | The 140 Azure storage accounts that hold GitHub Actions logs and artifacts, `productionresultssa0` to `productionresultssa199.blob.core.windows.net`, which `gh run view --log` and artifact downloads redirect to. |
+| `github:packages`        | GitHub Packages: `pkg.github.com`, `ghcr.io`, `pkg-containers.githubusercontent.com`, and the storage accounts the npm, Maven, NuGet and RubyGems registries serve downloads from.                                  |
+
+Neither includes `github.com`, which `gh` and the API need; list it beside them. The lists are compiled into the binary rather than fetched at boot, so what a cell may reach is fixed by the version of solitary it runs under and changes only with a release. An unknown preset is refused when the cell is read. `clone` and the dashboard show a preset with the number of names it stands for, and the dashboard's network view lists them.
 
 ## The machine
 
@@ -281,7 +292,7 @@ Write it once in `config.yaml` and every cell commits as you.
 
 A `vm.base` left in a definition is still held to an image template name — letters, digits, dots, underscores or dashes — though it is ignored. `build` and `network.vpn` must be relative paths inside the cell directory; symlink components are refused. Build reads remain confined to that directory.
 
-Allow entries must be IPv4 addresses/CIDRs or ASCII DNS names with labels of at most 63 characters, up to 253 characters overall. Punycode names, private single-label names and an optional trailing dot are supported. Tunnel endpoint ports must be integers from 1 to 65535. WireGuard shell hooks and `SaveConfig` are refused; the latter could overwrite the managed configuration.
+Allow entries must be presets, IPv4 addresses/CIDRs or ASCII DNS names with labels of at most 63 characters, up to 253 characters overall. Punycode names, private single-label names and an optional trailing dot are supported. Tunnel endpoint ports must be integers from 1 to 65535. WireGuard shell hooks and `SaveConfig` are refused; the latter could overwrite the managed configuration.
 
 A forwarded localhost service is reachable by other local users and processes. Browser reachability also depends on browser and service protections. Require authentication on editors, terminals and other privileged services.
 

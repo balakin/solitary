@@ -453,7 +453,9 @@ type Network struct {
 	// happens to use, so "objects.githubusercontent.com" has to be listed
 	// too. An entry that parses as an IPv4 address or CIDR block is used as
 	// given; an IPv6 one is refused, since a cell's machine has no IPv6
-	// route guaranteed to reach it through.
+	// route guaranteed to reach it through. An entry with a colon in it, such
+	// as "github:actions-results", is a preset: a list of names solitary
+	// carries, enforced as though each had been listed (see Entries).
 	Allow []string `yaml:"allow,omitempty"`
 }
 
@@ -533,9 +535,16 @@ func (n Network) validateResolvers() error {
 	return nil
 }
 
-// validateAllow accepts only IPv4 addresses/CIDRs and safe ASCII DNS names.
+// validateAllow accepts only IPv4 addresses/CIDRs, safe ASCII DNS names and
+// presets solitary knows.
 func (n Network) validateAllow() error {
 	for _, entry := range n.Allow {
+		if isPreset(entry) {
+			if _, ok := Preset(entry); !ok {
+				return fmt.Errorf("network.allow: %q is not a preset solitary knows; the presets are %s", entry, strings.Join(Presets(), ", "))
+			}
+			continue
+		}
 		if ipv6(entry) {
 			return fmt.Errorf("network.allow: %q is an IPv6 address, which a cell cannot reach: %s", entry, noIPv6)
 		}
@@ -585,7 +594,7 @@ func (n Network) Restricted() bool {
 // addresses.
 func (n Network) Domains() []string {
 	var domains []string
-	for _, entry := range n.Allow {
+	for _, entry := range n.Entries() {
 		if !isAddress(entry) {
 			domains = append(domains, entry)
 		}
@@ -596,7 +605,7 @@ func (n Network) Domains() []string {
 
 func (n Network) Addresses() []string {
 	var addresses []string
-	for _, entry := range n.Allow {
+	for _, entry := range n.Entries() {
 		if isAddress(entry) {
 			addresses = append(addresses, entry)
 		}
@@ -716,7 +725,7 @@ func (n Network) Covers(host string) bool {
 		return true
 	}
 	ip := net.ParseIP(host)
-	for _, entry := range n.Allow {
+	for _, entry := range n.Entries() {
 		if ip != nil {
 			if _, block, err := net.ParseCIDR(entry); err == nil && block.Contains(ip) {
 				return true
