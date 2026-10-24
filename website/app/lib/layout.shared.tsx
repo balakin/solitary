@@ -1,6 +1,6 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import { Logo } from '@/components/logo';
-import { appName, gitConfig } from './shared';
+import { appName, docsHome, gitConfig } from './shared';
 
 export function baseOptions(): BaseLayoutProps {
   return {
@@ -29,7 +29,7 @@ export function homeOptions(): BaseLayoutProps {
   return {
     ...baseOptions(),
     links: [
-      { text: 'Documentation', url: '/docs' },
+      { text: 'Documentation', url: docsHome },
       { text: 'Quickstart', url: '/docs/quickstart' },
     ],
   };

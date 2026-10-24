@@ -8,7 +8,8 @@ import { canonicalUrl } from '@/lib/shared';
 // and search engines ignore a date they learn not to trust.
 //
 // Each entry is the page's canonical URL, the one its own head names: a
-// sitemap that disagrees with the page leaves a search engine to pick.
+// sitemap that disagrees with the page leaves a search engine to pick. /docs is
+// not listed: it is a redirect to the first page, not a page.
 export function loader() {
   const urls = ['/', '/privacy', ...source.getPages().map((page) => page.url)]
     .map((path) => `  <url><loc>${canonicalUrl(path)}</loc></url>`)

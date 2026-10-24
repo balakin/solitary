@@ -8,7 +8,7 @@
 </h1>
 
 <p align="center">
-  <a href="https://solitary.balakin.io/docs"><img alt="Documentation" src="https://img.shields.io/badge/docs-solitary.balakin.io-blue"></a>
+  <a href="https://solitary.balakin.io/docs/overview"><img alt="Documentation" src="https://img.shields.io/badge/docs-solitary.balakin.io-blue"></a>
   <a href="https://github.com/balakin/solitary/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/balakin/solitary?sort=semver"></a>
   <a href="https://github.com/balakin/homebrew-solitary"><img alt="Homebrew" src="https://img.shields.io/badge/brew-balakin%2Fsolitary-orange"></a>
   <br>

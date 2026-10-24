@@ -12,14 +12,26 @@ import {
 } from 'fumadocs-ui/layouts/docs/page';
 import { docs, getPageMarkdownUrl, source } from '@/lib/source';
 import { baseOptions } from '@/lib/layout.shared';
-import { appName, canonicalUrl, gitConfig, getPageImagePath, siteUrl } from '@/lib/shared';
+import {
+  appName,
+  canonicalUrl,
+  docsHome,
+  gitConfig,
+  getPageImagePath,
+  siteUrl,
+} from '@/lib/shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
+import { redirect } from 'react-router';
 import { useMDXComponents } from '@/components/mdx';
 import { PageCredits } from '@/components/footer';
 import { use } from 'react';
 
 export async function loader({ params }: Route.LoaderArgs) {
   const slugs = params['*'].split('/').filter((v) => v.length > 0);
+  // Permanent, which is also what makes the prerendered page redirect at once:
+  // react-router writes a 302 as a refresh that waits two seconds.
+  if (slugs.length === 0) throw redirect(docsHome, 301);
+
   const page = source.getPage(slugs);
   if (!page) throw new Response('Not found', { status: 404 });
 

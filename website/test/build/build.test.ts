@@ -24,6 +24,24 @@ function tags(html: string, tag: string, needle: string) {
     .filter((match) => match.includes(needle));
 }
 
+/** Whether `html` is react-router's prerendered redirect rather than a page. */
+const isRedirect = (html: string) => html.includes('<meta http-equiv="refresh"');
+
+/**
+ * Every page the build ships, by the address Pages serves it at: index.html at
+ * the root, and every other page as <path>.html at <path> (see
+ * scripts/pages-artifact.mjs). The 404 page and redirects are not pages.
+ */
+async function pages() {
+  const found: { file: string; url: string }[] = [];
+  for await (const file of glob('**/*.html', { cwd: out })) {
+    if (file === '404.html' || isRedirect(read(file))) continue;
+    const path = file === 'index.html' ? '' : file.replace(/(\/index)?\.html$/, '');
+    found.push({ file, url: `${site}/${path}` });
+  }
+  return found;
+}
+
 /** Whether `html` has a link to `href` whose text is `text`. */
 function hasLink(html: string, href: string, text: string) {
   return new RegExp(`<a\\b[^>]*href="${href}"[^>]*>(?:<!-- -->)?${text}<`).test(html);
@@ -37,18 +55,45 @@ beforeAll(() => {
 });
 
 test('/privacy is prerendered, so it loads directly and on refresh', () => {
-  expect(existsSync(join(out, 'privacy', 'index.html'))).toBe(true);
+  expect(existsSync(join(out, 'privacy.html'))).toBe(true);
+});
+
+// Pages serves <path>.html at <path> and a directory's index.html at <path>/,
+// redirecting <path> there. Which one wins when both exist is not documented,
+// so the build never ships the pair: a page is a file, or a directory index
+// when other pages live under it.
+test('no page is both a file and a directory', async () => {
+  for await (const file of glob('**/*.html', { cwd: out })) {
+    const dir = join(out, file.slice(0, -'.html'.length));
+    expect(existsSync(dir), `${file} sits next to a directory of the same name`).toBe(false);
+  }
+});
+
+test('/docs sends the browser to the first page at once, and asks not to be indexed', () => {
+  const html = read('docs/index.html');
+  expect(html).toContain('<meta http-equiv="refresh" content="0;url=/docs/overview">');
+  expect(html).toContain('<meta name="robots" content="noindex">');
+  expect(existsSync(join(out, 'docs', 'overview.html'))).toBe(true);
+});
+
+// Pages used to serve every page at its slashed address, and those were indexed
+// and shared. Nothing is there now, so Pages answers with 404.html, which has
+// to send the browser on before the app starts.
+test('the 404 page sends a slashed address on to the bare one', () => {
+  expect(read('404.html')).toMatch(
+    /<script>if \(location\.pathname\.length > 1 && location\.pathname\.endsWith\('\/'\)\) location\.replace\(/,
+  );
 });
 
 test('the privacy policy has its own title and description', () => {
-  const html = read('privacy/index.html');
+  const html = read('privacy.html');
   expect(html).toContain('<title>Privacy Policy | Solitary</title>');
   expect(html).toMatch(/<meta name="description" content="[^"]+"/);
 });
 
 // The footer's links are tested on the component; this is that every page
 // that should render it does.
-test.each(['index.html', 'privacy/index.html', 'docs/index.html', '404.html'])(
+test.each(['index.html', 'privacy.html', 'docs/overview.html', '404.html'])(
   '%s ships the footer',
   (page) => {
     const html = read(page);
@@ -85,8 +130,8 @@ test('each page loads the tracker once, and only when the build had a website ID
 // preview with no picture and no error anywhere.
 test.each([
   ['index.html', `${site}/og.png`],
-  ['privacy/index.html', `${site}/og.png`],
-  ['docs/index.html', `${site}/og/docs/image.webp`],
+  ['privacy.html', `${site}/og.png`],
+  ['docs/overview.html', `${site}/og/docs/overview/image.webp`],
 ])('%s names an absolute social image that the build ships', (page, image) => {
   const html = read(page);
   expect(tags(html, 'meta', `property="og:image" content="${image}"`)).toHaveLength(1);
@@ -101,11 +146,7 @@ test.each([
 // ships and the sitemap leaves out, or an entry that would answer with a 404.
 test('the sitemap lists exactly the pages the build ships', async () => {
   const listed = [...read('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, url]) => url);
-  const shipped: string[] = [];
-
-  for await (const page of glob('**/index.html', { cwd: out })) {
-    shipped.push(`${site}/${page.slice(0, -'index.html'.length)}`);
-  }
+  const shipped = (await pages()).map(({ url }) => url);
 
   expect(new Set(listed)).toEqual(new Set(shipped));
   expect(listed, 'the sitemap lists a page twice').toHaveLength(shipped.length);
@@ -124,12 +165,10 @@ test('every page names itself, once, as its canonical URL, and the sitemap agree
   const listed = new Set(
     [...read('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, url]) => url),
   );
-  let pages = 0;
+  const shipped = await pages();
 
-  for await (const page of glob('**/index.html', { cwd: out })) {
+  for (const { file: page, url: self } of shipped) {
     const html = read(page);
-    const self = `${site}/${page.slice(0, -'index.html'.length)}`;
-    pages++;
 
     expect(tags(html, 'link', 'rel="canonical"'), page).toEqual([
       `<link rel="canonical" href="${self}"/>`,
@@ -140,7 +179,7 @@ test('every page names itself, once, as its canonical URL, and the sitemap agree
     expect(listed.has(self), `${self} is not in the sitemap`).toBe(true);
   }
 
-  expect(pages, 'no prerendered pages found').toBeGreaterThan(1);
+  expect(shipped.length, 'no prerendered pages found').toBeGreaterThan(1);
 });
 
 test('the 404 page claims no canonical URL', () => {

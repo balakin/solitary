@@ -74,9 +74,15 @@ What a static host still asks of the app is two things:
   react-router otherwise discovers routes lazily, asking `/__manifest` for the routes a link
   points at before it navigates there; nothing answers that on Pages, so the first client-side
   navigation lands on the error boundary while the prerendered pages all look fine.
-- `website/scripts/pages-artifact.mjs` (`pnpm build:pages`), which renames the prerendered
-  catch-all route to `404.html`. Pages answers an unknown path with that file from the root of
-  what it serves, and a prerendered route is a directory with an `index.html` in it.
+- `website/scripts/pages-artifact.mjs` (`pnpm build:pages`), which turns each prerendered page
+  from a directory with an `index.html` in it into a file, `<path>.html`. Pages serves that file at
+  the bare path, where it answers a directory's bare path with a redirect to the slashed one — and
+  the bare path is what every link fumadocs builds, and every canonical URL, uses. A directory
+  that still holds other pages keeps its `index.html`, so a file never sits next to a directory of
+  the same name: which of the two Pages serves then is undocumented. That is why the docs start
+  at `/docs/overview` and `/docs` is a redirect to it. The catch-all route becomes `404.html` by
+  the same step, the file Pages answers an unknown path with; it also sends a slashed address on
+  to the bare one, for the links shared while pages were directories.
 
 Everything else is prerendering: every route is a file, `/api/search` included.
 
