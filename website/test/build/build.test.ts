@@ -116,3 +116,35 @@ test('robots.txt allows crawling and points at the sitemap', () => {
   expect(robots).not.toMatch(/^Disallow: \/\S/m);
   expect(robots).toMatch(/^Sitemap: https:\/\/solitary\.balakin\.io\/sitemap\.xml$/m);
 });
+
+// One address per page, named the same way in three places that a search
+// engine compares: the page's canonical link, its og:url, and the sitemap.
+// Any disagreement leaves the engine to choose.
+test('every page names itself, once, as its canonical URL, and the sitemap agrees', async () => {
+  const listed = new Set(
+    [...read('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, url]) => url),
+  );
+  let pages = 0;
+
+  for await (const page of glob('**/index.html', { cwd: out })) {
+    const html = read(page);
+    const self = `${site}/${page.slice(0, -'index.html'.length)}`;
+    pages++;
+
+    expect(tags(html, 'link', 'rel="canonical"'), page).toEqual([
+      `<link rel="canonical" href="${self}"/>`,
+    ]);
+    expect(tags(html, 'meta', 'property="og:url"'), page).toEqual([
+      `<meta property="og:url" content="${self}"/>`,
+    ]);
+    expect(listed.has(self), `${self} is not in the sitemap`).toBe(true);
+  }
+
+  expect(pages, 'no prerendered pages found').toBeGreaterThan(1);
+});
+
+test('the 404 page claims no canonical URL', () => {
+  const html = read('404.html');
+  expect(tags(html, 'link', 'rel="canonical"')).toHaveLength(0);
+  expect(tags(html, 'meta', 'property="og:url"')).toHaveLength(0);
+});
