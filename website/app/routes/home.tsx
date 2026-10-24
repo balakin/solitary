@@ -17,12 +17,48 @@ import { Terminal } from '@/components/terminal';
 import { Footer } from '@/components/footer';
 import {
   appName,
+  author,
   canonicalMeta,
+  canonicalUrl,
+  licenseUrl,
   repoUrl,
   siteDescription,
+  siteImage,
   siteImageMeta,
   siteTagline,
 } from '@/lib/shared';
+
+// What search engines read as facts rather than infer from the page. The
+// WebSite is where Google takes the name it prints above a result, "Solitary"
+// rather than the host name. The SoftwareApplication says what is being
+// offered; it earns no rich result on its own, since Google shows one for
+// software only alongside ratings or reviews, which this site has none of.
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': `${canonicalUrl('/')}#website`,
+      name: appName,
+      url: canonicalUrl('/'),
+      description: siteDescription,
+    },
+    {
+      '@type': 'SoftwareApplication',
+      '@id': `${canonicalUrl('/')}#software`,
+      name: appName,
+      description: siteDescription,
+      url: canonicalUrl('/'),
+      image: siteImage.url,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'macOS, Linux',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      license: licenseUrl,
+      author: { '@type': 'Person', name: author.name, url: author.url },
+      sameAs: [repoUrl],
+    },
+  ],
+};
 
 export function meta(_args: Route.MetaArgs) {
   const title = `${appName}: ${siteTagline}`;
@@ -38,6 +74,7 @@ export function meta(_args: Route.MetaArgs) {
     { name: 'twitter:title', content: title },
     { name: 'twitter:description', content: siteDescription },
     ...siteImageMeta(),
+    { 'script:ld+json': structuredData },
   ];
 }
 

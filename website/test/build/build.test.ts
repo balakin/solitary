@@ -242,3 +242,34 @@ test('every docs page tells search engines more than its subtitle does', async (
 
   expect(checked, 'no docs pages found').toBeGreaterThan(1);
 });
+
+// Parsed rather than matched: a stray character makes the whole block invalid,
+// and a search engine then ignores it without saying so.
+test('the home page describes the site and the software as structured data', () => {
+  const scripts = [
+    ...read('index.html').matchAll(/<script type="application\/ld\+json">([^<]*)<\/script>/g),
+  ];
+  expect(scripts).toHaveLength(1);
+
+  const graph: Record<string, unknown>[] = JSON.parse(scripts[0][1])['@graph'];
+  expect(graph.find((node) => node['@type'] === 'WebSite')).toMatchObject({
+    name: 'Solitary',
+    url: `${site}/`,
+  });
+  expect(graph.find((node) => node['@type'] === 'SoftwareApplication')).toMatchObject({
+    name: 'Solitary',
+    url: `${site}/`,
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'macOS, Linux',
+    offers: { price: '0' },
+    license: licenseUrl,
+    sameAs: [repoUrl],
+  });
+});
+
+test('only the home page carries structured data', async () => {
+  for (const { file } of await pages()) {
+    if (file === 'index.html') continue;
+    expect(read(file), file).not.toContain('application/ld+json');
+  }
+});
