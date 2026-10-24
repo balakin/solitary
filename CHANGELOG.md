@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.18.0](https://github.com/balakin/solitary/compare/v0.17.1...v0.18.0) (2026-10-24)
+
+
+### Features
+
+* give the agents in a cell skills for working there ([dca4cf9](https://github.com/balakin/solitary/commit/dca4cf989f6fcc43cffd8bb09b2984b070fa6f90))
+* install agent skills that teach a host's coding agent to drive solitary ([f7ce1d0](https://github.com/balakin/solitary/commit/f7ce1d0374ce1adef5c8d044505260372a904a3c))
+* name the agents to install skills for with --agent ([8fde04d](https://github.com/balakin/solitary/commit/8fde04dd11cca441363df477e9ab9f43a0b45877))
+
+
+### Bug Fixes
+
+* show escape sequences in skill messages rather than sending them to the terminal ([f8afd17](https://github.com/balakin/solitary/commit/f8afd17542ead2ddfbceedd38f7d104df9fa2bc9))
+
+
+### Refactors
+
+* keep the agent skills inside the binary ([d95fdc3](https://github.com/balakin/solitary/commit/d95fdc37e56d4e370ffcc3faef8dad7252b07226))
+
 ## [0.17.1](https://github.com/balakin/solitary/compare/v0.17.0...v0.17.1) (2026-10-23)
 
 
