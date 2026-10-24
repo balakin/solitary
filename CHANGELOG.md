@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/balakin/solitary/compare/v0.18.0...v0.19.0) (2026-10-24)
+
+
+### Features
+
+* add allow list presets for GitHub Actions results and Packages ([32cd8b7](https://github.com/balakin/solitary/commit/32cd8b78153171bc8edf8e3d66d3f68a024396a7))
+
 ## [0.18.0](https://github.com/balakin/solitary/compare/v0.17.1...v0.18.0) (2026-10-24)
 
 
