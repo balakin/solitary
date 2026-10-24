@@ -1,10 +1,19 @@
 import { loader } from 'fumadocs-core/source';
+import { pageSchema } from 'fumadocs-core/source/schema';
 import { defineDocs } from 'fumadocs-mdx/macro';
+import { z } from 'zod';
 import { docsRoute, getPageContentPath } from './shared';
 
 export const docs = defineDocs({
   dir: 'content/docs',
   docs: {
+    schema: pageSchema.extend({
+      // What a search result says about the page. `description` is shown under
+      // the page's title as well, where a line is right; a result wants the
+      // 120 to 160 characters a search engine shows before it cuts, and a
+      // shorter one is often replaced by an excerpt of the engine's choosing.
+      seoDescription: z.string().min(120).max(160),
+    }),
     async: true,
     postprocess: {
       includeProcessedMarkdown: true,

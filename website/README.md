@@ -166,4 +166,9 @@ The root `CLAUDE.md` explains what a static host still needs from the app.
 
 The site documents the problem, architecture, security model, capabilities, configuration, and trade-offs. Its installation page covers both the released binaries and a build from source.
 
+Each page's frontmatter carries two descriptions. `description` is the line shown under the page's
+title. `seoDescription` is what search results and link previews show: 120 to 160 characters,
+the length a search engine displays before cutting, and the build refuses a page without one.
+Write it for someone deciding from a list of results whether this is the page they want.
+
 Documentation claims are written from the Go source in the parent repository rather than from intent. When changing `internal/config`, `internal/cli`, or `internal/dashboard`, check `content/docs/configuration.mdx`, `commands.mdx`, and `dashboard.mdx` against it.
