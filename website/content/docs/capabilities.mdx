@@ -48,7 +48,7 @@ Domains, IPv4 addresses, and IPv4 CIDR blocks are supported; restricted and VPN-
 
 ## Artifacts
 
-Inside the cell, publish regular files with `artifact`. On the host, `fetch` copies published files without making the cell's filesystem visible. `send` places selected host files in the cell's inbox. Transfers are explicit, repeatable, and validated rather than mounts.
+Inside the cell, publish regular files with `artifact`. On the host, `fetch` copies published files without making the cell's filesystem visible. `send` places selected host files in the cell's inbox. Transfers are explicit, repeatable, and validated rather than mounts. The agent in a cell is taught all three by the [skills](/docs/agent-skills#inside-a-cell) `up` installs.
 
 ## Dashboard
 

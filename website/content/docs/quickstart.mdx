@@ -46,7 +46,17 @@ The only line that is active out of the box is the image:
 image: docker.io/library/ubuntu:24.04
 ```
 
-Everything else — `secrets`, `network`, `ports`, `vm`, `git` — is commented out, which is also the default behaviour: no secrets, no port restriction, no egress restriction. See [the configuration reference](/docs/configuration) for the full surface.
+Everything else — `secrets`, `agents`, `network`, `ports`, `vm`, `git` — is commented out, which is also the default behaviour: no secrets, no port restriction, no egress restriction. See [the configuration reference](/docs/configuration) for the full surface.
+
+### Or have your agent write it
+
+If you work with a coding agent — Claude Code, Codex, Cursor and most others — let it write the cell for you. Teach it solitary first:
+
+```sh
+solitary skills install
+```
+
+Then ask it in plain words, from any directory: _"create a solitary cell for this Go project, with Claude Code in it, that can reach GitHub and the Go module proxy and nothing else"_. Its [skills](/docs/agent-skills) take it through `init`, the fields that matter, an allow list that does not break the build, and bringing the cell up. Two things it leaves to you: typing secret values, which it asks you to do with `solitary secrets demo` rather than asking for them, and anything that discards a machine.
 
 ## Bring it up
 
@@ -92,6 +102,8 @@ solitary fetch demo
 
 The file lands in your current directory, not executable. See [moving work in and out](/docs/artifacts).
 
+An agent working in the cell knows this too. `up` gives the agents a cell names under [`agents`](/docs/configuration#agents) — or the ones it finds there — [skills of their own](/docs/agent-skills#inside-a-cell): ask one for a report and it publishes the file and tells you the `solitary fetch` that collects it.
+
 ## Stop or destroy it
 
 ```sh
@@ -104,6 +116,11 @@ solitary rm vscode      # and the one you cloned, if you are done with it
 `rm` leaves the definition and the host-held secret values behind, so `solitary up demo` gives you a clean cell that is still authenticated. A clean rebuild is a normal operation here, not incident response.
 
 <Cards>
+  <Card
+    title="Agent skills"
+    href="/docs/agent-skills"
+    description="Let your coding agent create, restrict and fix cells."
+  />
   <Card
     title="Example cells"
     href="/docs/guides-examples"

@@ -52,6 +52,8 @@ Fetching copies rather than moves, so fetching twice is not a mistake and an int
 
 Only the **machine** has to be running, not the container: what a cell published can still be collected after whatever produced it has died.
 
+An agent in the cell does not have to be told any of this: the [skills `up` gives it](/docs/agent-skills#inside-a-cell) cover publishing with `artifact`, finding what was sent to the inbox — a pasted screenshot included — and telling you the exact `solitary fetch` to run.
+
 ## The outbox is untrusted input
 
 Its contents are named by whatever runs in the cell, and those names become paths on your machine. Four rules, all enforced on the host:

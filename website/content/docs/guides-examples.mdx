@@ -41,6 +41,8 @@ gh           the GitHub CLI, authenticated from GITHUB_TOKEN
 lazygit, rg, fd, jq
 ```
 
+Both cells name `claude-code` under [`agents`](/docs/configuration#agents), so claude has solitary's [skills for working in a cell](/docs/agent-skills#inside-a-cell) from its first session: ask it for a file and it publishes it with `artifact` and tells you the `solitary fetch` to run.
+
 Both cells declare one secret, `GITHUB_TOKEN`, and it is optional:
 
 ```yaml
