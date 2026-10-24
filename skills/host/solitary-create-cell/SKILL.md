@@ -57,6 +57,9 @@ secrets: # names only; values never go in this file
     required: false
     description: pushing branches and opening pull requests
 
+agents: # the coding agents the image runs; each gets solitary's in-cell skills
+  - claude-code
+
 ports: # omit and every port the container listens on reaches host localhost
   - 8080
 
@@ -75,6 +78,22 @@ vm: # optional; defaults are 2 cpus, 4GiB, 20GiB
   `sshd`, an editor server) or a tool refuses to run as root.
 - **`secrets`.** A name on its own is required, and the cell won't start without it. Mark
   credentials the cell can work without `required: false`.
+- **`agents`.** Name the coding agents the image runs, by the IDs `npx skills` uses
+  (`claude-code`, `codex`, `gemini-cli`, `cursor`, `opencode`, …). `up` then gives each one
+  solitary's skills for working inside a cell: publishing a file with `artifact`, finding
+  what was sent in, recognising a refused name, and what survives a restart. Set it whenever
+  you know the agent:
+  - **Left out,** `up` looks for agents by their config directories, which an agent only
+    creates the first time it runs, so the skills arrive one `up` after that.
+  - **Named,** they're there from the agent's first session, even before it has ever run.
+  - **An agent of the user's own,** or a known one whose directory the image moves, is a
+    mapping: `- {name: my-agent, skills: ~/my-agent/skills}`. The directory has to be under
+    the home, written `~/…`. The home is the only place solitary writes.
+  - **`[]`** turns the skills off.
+  - **`all`** installs for every agent solitary knows, about 65 directories in the home. Use
+    it only when the user asks for it or can't say what the image runs.
+
+  An unknown ID is refused when the cell is read, and the error lists the known ones.
 - **`network`.** Leave it out on the first `up`. A missing name in an allow list fails the
   image build itself, so get the cell working first and then restrict it. The
   `solitary-restrict-cell-network` skill does that part.
@@ -112,7 +131,11 @@ Check it:
 ```sh
 solitary ls                      # the cell should be running
 solitary exec <name> uname -a    # run one command inside it
+solitary exec <name> ls ~/.claude/skills   # solitary-* skills for a named agent
 ```
+
+`up` says `Installed solitary's skills in …` when it puts them somewhere new, and warns
+when it can't: a directory outside the home, or one reached through a symlink.
 
 The user then works in it with `solitary shell <name>`, or with `solitary up <name>`, which
 attaches.
@@ -124,6 +147,7 @@ Edit `cell.yaml` and run `up` again. What that costs depends on the layer the se
 | Settings                                                    | Applied by                                                  |
 | ----------------------------------------------------------- | ----------------------------------------------------------- |
 | `image`, `build`, `command`, `secrets`, `user`, `devices`, `git` | `up`, which replaces the container and keeps the home  |
+| `agents`                                                    | `up`, even on a running cell; nothing is replaced           |
 | `vm`, `ports`, `network`, `gpu`                             | the next boot: `solitary down <name> && solitary up <name>` |
 | whatever `vm.provision` already did                         | `solitary up --new-machine <name>`, which carries the home  |
 
