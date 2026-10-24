@@ -90,6 +90,23 @@ left at `preserve`: prose keeps whatever line breaks it was written with.
 imported for its side effect). Suppress anything else at the line that needs it, with a comment
 saying why, rather than by widening the config.
 
+## Tests
+
+[Vitest](https://vitest.dev) runs two projects, split by what they can see:
+
+- `test/components/` renders components in jsdom with React Testing Library: the links a page
+  draws, and what a click on one sends to the tracker. Pages render inside a router and fumadocs'
+  `RootProvider`, as `root.tsx` renders them (`test/components/render.tsx`).
+- `test/build/` reads the prerendered site in `build/client`: which pages became files, what each
+  route's `meta` put in its head, the sitemap against what shipped, and whether a build carries the
+  tracker. jsdom renders components, not the files GitHub Pages serves, so these stay on the
+  build.
+
+```sh
+pnpm build:pages && pnpm test    # both projects; the build project needs the build first
+pnpm vitest --project components # components only, no build needed, in watch mode
+```
+
 ## Analytics
 
 The production site counts pageviews and three clicks with [Umami Cloud](https://umami.is)
@@ -130,7 +147,7 @@ To track another click, name it in `AnalyticsEvent`, then:
   Umami cancels the click and reloads the page at the link's URL, so the client-side navigation is
   lost.
 
-Never attach data to an event. `pnpm test` checks the built pages, so run it after `pnpm build:pages`.
+Never attach data to an event.
 
 ## Production build
 
