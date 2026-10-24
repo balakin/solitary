@@ -25,6 +25,15 @@ An agent can still push to every repository reachable by a token, call every API
 
 A VM prevents an image from directly modifying the host, but the image still runs code with the secrets and network access you granted. Review images and build definitions.
 
+## An attached terminal is shared with the cell
+
+`solitary shell`, `up` and `exec` connect the cell to your terminal as it is. That is what makes nvim, tmux, true colour and the mouse work in a cell, and it means whatever runs there can send your terminal emulator any escape sequence it understands. Solitary cannot filter that stream without breaking the programs it is for, so what the terminal does with it is part of what you trust a cell with:
+
+- **The clipboard.** OSC 52 lets a program write to your clipboard, and in some terminals read it. A cell that can read your clipboard sees whatever you last copied — a password included — which is exactly what [`send --clipboard`](/docs/artifacts#paste-a-screenshot) is designed never to allow. Check that your terminal refuses or asks before a read: kitty (`clipboard_control`) and Ghostty (`clipboard-read`) ask by default, and WezTerm ignores read requests. Writes are allowed by all three, so a cell can leave a command on your clipboard; look at what you paste from a session with an agent in it.
+- **The terminal itself.** Escape sequences are parsed by your terminal emulator, and emulators have had vulnerabilities there — in title and status reporting especially. Keep it up to date, and leave features that answer queries with text the terminal types back for you switched off.
+
+What Solitary prints on its own — a cell's published file names, a cloned definition's description, the messages `up` writes about it — shows control characters as `\uXXXX` rather than passing them on. Only the session you attach to is passed through, so attach only to cells running images you trust.
+
 ## Secrets exist inside the cell
 
 The host `.env` file is not copied into the VM, but selected values become container environment variables. Container metadata can record those values until the cell is destroyed. Never treat a passed secret as invisible to the agent.
