@@ -179,6 +179,7 @@ func describeStaged(out io.Writer, staged *clone.Staged, name string) {
 		user = "image default"
 	}
 	fmt.Fprintf(out, "  user     %s\n", user)
+	fmt.Fprintf(out, "  agents   %s\n", c.Agents)
 	resolvers := c.Network.Resolvers
 	if len(resolvers) == 0 {
 		resolvers = config.DefaultResolvers()

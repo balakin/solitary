@@ -88,6 +88,18 @@ image: docker.io/library/ubuntu:24.04
 #   name: Ada Lovelace
 #   email: ada@example.com
 
+# The coding agents this cell runs. up gives each one solitary's skills for
+# working in a cell — publishing a file, reading what was sent in, what a refused
+# name means — in the directory that agent reads skills from. Leave it out and up
+# looks for agents every time it runs, which finds one only after it has run
+# once; name them and the skills are there from the start. IDs are the ones
+# npx skills uses. [] turns this off; all installs for every agent there is.
+#
+# agents:
+#   - claude-code
+#   - name: my-agent            # an agent of your own, or a known one elsewhere
+#     skills: ~/my-agent/skills # under the home, the only place solitary writes
+
 # Guest ports reachable from the host. Leave this out and every port the cell
 # listens on reaches host localhost; set it and only these do.
 #

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	shipped "github.com/balakin/solitary/skills"
+	"github.com/balakin/solitary/internal/agents"
 )
 
 // state points the record at a temp directory, so a test never reads or writes
@@ -42,30 +42,6 @@ func write(t *testing.T, path, data string) {
 	}
 }
 
-func TestShippedSkillsAreWellFormed(t *testing.T) {
-	names, err := Names(shipped.Host())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(names) == 0 {
-		t.Fatal("no skills embedded")
-	}
-
-	// The spec every agent reads requires the name to be the directory's.
-	for _, name := range names {
-		data, err := os.ReadFile(filepath.Join("..", "..", "skills", "host", name, "SKILL.md"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		want := "---\nname: " + name + "\ndescription: "
-		if len(data) < len(want) || string(data[:len(want)]) != want {
-			t.Errorf("%s/SKILL.md does not open with name: %s and a description", name, name)
-		}
-	}
-}
-
-// agentHome is a home with nothing configured and no override set, so that
-// only what a test creates is detected.
 func agentHome(t *testing.T, dirs ...string) string {
 	t.Helper()
 
@@ -73,11 +49,9 @@ func agentHome(t *testing.T, dirs ...string) string {
 	saved := system
 	system = t.TempDir()
 	t.Cleanup(func() { system = saved })
-	t.Setenv("XDG_CONFIG_HOME", "")
-	for name := range homes {
+	for _, name := range agents.Vars() {
 		t.Setenv(name, "")
 	}
-	t.Setenv("FLATPAK_XDG_CONFIG_HOME", "")
 	for _, dir := range dirs {
 		if err := os.MkdirAll(filepath.Join(home, dir), 0o755); err != nil {
 			t.Fatal(err)
@@ -136,15 +110,6 @@ func TestDetectTakesOneDirectoryPerAgent(t *testing.T) {
 	got := Detect(home)
 	if len(got) != 1 || got[0].Dir != filepath.Join(home, ".clawdbot", "skills") {
 		t.Errorf("Detect = %v, want ~/.clawdbot/skills alone", got)
-	}
-}
-
-func TestEveryAgentResolvesWithoutOverrides(t *testing.T) {
-	home := agentHome(t)
-	for _, agent := range agents {
-		if dir := resolve(home, agent.skills); dir == "" || !filepath.IsAbs(dir) {
-			t.Errorf("%s: skills directory %q resolves to %q", agent.name, agent.skills, dir)
-		}
 	}
 }
 
@@ -301,20 +266,5 @@ func TestNamedRefusesAnUnknownAgent(t *testing.T) {
 	_, err := Named(agentHome(t), []string{"claude"})
 	if err == nil || !strings.Contains(err.Error(), `unknown agent "claude"`) || !strings.Contains(err.Error(), "claude-code") {
 		t.Errorf("Named(claude) error = %v, want one naming the agent and listing the known ones", err)
-	}
-}
-
-func TestIDsAreUniqueAndWellFormed(t *testing.T) {
-	ids := IDs()
-	if !slices.Contains(ids, "claude-code") || !slices.Contains(ids, "openclaw") {
-		t.Errorf("IDs = %v, missing claude-code or openclaw", ids)
-	}
-	if len(slices.Compact(slices.Sorted(slices.Values(ids)))) != len(ids) {
-		t.Error("IDs lists an agent twice")
-	}
-	for _, id := range ids {
-		if strings.ToLower(id) != id || strings.ContainsAny(id, " _") {
-			t.Errorf("ID %q is not lowercase with dashes", id)
-		}
 	}
 }

@@ -22,6 +22,8 @@ import (
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/balakin/solitary/internal/agents"
 )
 
 // Cell is a single cell definition, read from cells/<name>/cell.yaml.
@@ -116,6 +118,11 @@ type Cell struct {
 	// Git is the identity commits made in this cell are attributed to.
 	// Usually set once in the user-wide config rather than per cell.
 	Git Git `yaml:"git"`
+
+	// Agents are the coding agents this cell runs, so that up can give each
+	// one solitary's skills for working inside a cell. Left out, up looks
+	// for them instead.
+	Agents Agents `yaml:"agents"`
 
 	// BuildPath is Build resolved against the cell's directory. It is filled
 	// in by LoadCell rather than read from the file.
@@ -261,6 +268,124 @@ func (s Secrets) RequiredNames() []string {
 		}
 	}
 	return names
+}
+
+// Agents says which coding agents a cell's skills are installed for.
+//
+// Left out of a definition, up looks for agents in the container every time it
+// runs, which finds an agent only once it has run and made its directory. A
+// list names them, so the skills are there before the agent first starts; an
+// empty one turns skills off; "all" installs for every agent there is, for an
+// image whose agents nobody has listed.
+type Agents struct {
+	Set  bool // false when the definition does not mention agents
+	All  bool
+	List []Agent
+}
+
+// Agent is one agent a cell names: an ID from the list solitary knows, or a
+// name of the cell's own with the directory its skills go in. A known ID with a
+// directory is that agent, somewhere other than its usual place.
+type Agent struct {
+	Name string `yaml:"name"`
+
+	// Skills is the directory, relative to the cell's home, or empty for a
+	// known agent's own. It is written as ~/path and kept without the ~/:
+	// the home is the only part of a cell that lasts, and the only part
+	// solitary writes to.
+	Skills string `yaml:"skills"`
+}
+
+// agentName is what a custom agent may be called: the shape of an ID on the
+// list, so that the two read alike wherever they are shown.
+var agentName = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*$`)
+
+// UnmarshalYAML reads "all", or a list of IDs and name/skills mappings.
+func (a *Agents) UnmarshalYAML(node *yaml.Node) error {
+	if node.Tag == "!!null" {
+		return nil
+	}
+	a.Set = true
+
+	if node.Kind == yaml.ScalarNode {
+		if node.Value == "all" {
+			a.All = true
+			return nil
+		}
+		return fmt.Errorf("agents: is a list of agents or all, not %q", node.Value)
+	}
+	if node.Kind != yaml.SequenceNode {
+		return errors.New("agents: is a list of agents or all")
+	}
+
+	for _, item := range node.Content {
+		var entry Agent
+		switch item.Kind {
+		case yaml.ScalarNode:
+			entry.Name = item.Value
+		case yaml.MappingNode:
+			if err := item.Decode(&entry); err != nil {
+				return fmt.Errorf("agents: %w", err)
+			}
+		default:
+			return errors.New("agents: each entry is an agent ID, or a mapping with name and skills")
+		}
+
+		if err := entry.validate(); err != nil {
+			return fmt.Errorf("agents: %w", err)
+		}
+		if slices.ContainsFunc(a.List, func(other Agent) bool { return other.Name == entry.Name }) {
+			return fmt.Errorf("agents: %s is listed twice", entry.Name)
+		}
+		a.List = append(a.List, entry)
+	}
+
+	return nil
+}
+
+// String says which agents a cell's skills go to, as clone shows it.
+func (a Agents) String() string {
+	switch {
+	case !a.Set:
+		return "whichever are found when it starts"
+	case a.All:
+		return "all"
+	case len(a.List) == 0:
+		return "none"
+	}
+	names := make([]string, 0, len(a.List))
+	for _, agent := range a.List {
+		if agent.Skills != "" {
+			names = append(names, agent.Name+" (~/"+agent.Skills+")")
+		} else {
+			names = append(names, agent.Name)
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+func (a *Agent) validate() error {
+	if a.Skills == "" {
+		if a.Name == "" {
+			return errors.New("an entry has no name")
+		}
+		if !agents.Known(a.Name) {
+			return fmt.Errorf("%w; for an agent of your own, give its name and the directory it reads skills from as skills: ~/path", agents.Unknown(a.Name))
+		}
+		return nil
+	}
+
+	if !agentName.MatchString(a.Name) {
+		return fmt.Errorf("%q is not an agent name: use lowercase letters, digits and dashes", a.Name)
+	}
+	rest, ok := strings.CutPrefix(a.Skills, "~/")
+	clean := filepath.ToSlash(filepath.Clean(rest))
+	if !ok || rest == "" || clean != strings.TrimSuffix(rest, "/") || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || strings.HasPrefix(clean, "/") {
+		return fmt.Errorf("%s: skills: %q must be a directory under the home, written as ~/path", a.Name, a.Skills)
+	}
+	a.Skills = clean
+
+	return nil
 }
 
 // VM describes the Lima machine backing a cell. Every field is optional: values

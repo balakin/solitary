@@ -248,18 +248,25 @@ The layering runs host → machine → container, and each package owns one laye
   anything is installed.
 - `internal/dashboard` — bubbletea TUI over `cell.List`/`Describe` plus a live traffic stream.
 - `internal/host` — host memory checks, so `up` refuses a `vm.memory` the host cannot back.
-- `internal/skills` — installs the agent skills embedded from `skills/` into the directories host
-  agents read them from, owning the `solitary-` prefix there and nothing else. Which agents exist
-  and where each reads skills is the `skills` CLI's list, ported by hand into `agents.go` from the
-  upstream commit its comment names; refresh it from the same file rather than editing entries. `skills/` sits at
+- `internal/agents` — which coding agents exist, where each reads skills and what says it is
+  there: the `skills` CLI's list, ported by hand into `agents.go` from the upstream commit its
+  comment names; refresh it from the same file rather than editing entries. Detection takes a
+  `Place` (how paths expand, whether one exists), so the host and a cell's container share it.
+- `internal/skills` — installs the host skills embedded from `skills/host/` into the directories
+  host agents read them from, owning the `solitary-` prefix there and nothing else. `skills/` sits at
   the repository root rather than under `internal/` because `npx skills add balakin/solitary` reads
   it too, as `skills/<category>/<name>/SKILL.md`; each skill's `name` must equal its directory.
   Skills are written for every agent at once: plain shell commands, no agent's own tool names, and
   only `name` and `description` in the frontmatter. `update` has the new binary rewrite them, since
-  the old one only carries the old copies.
+  the old one only carries the old copies. The skills under `skills/cell/` are installed by `up`
+  instead (`internal/cell/skills.go`, with `skills.py` doing the writes in the machine) beside the
+  `artifact` tool they describe, into the agents a cell's `agents:` names or `up` finds in the
+  container; they carry `metadata.internal` so `npx skills` keeps them off hosts. What `up` put
+  where, and which directories it made, is recorded on the host per cell, so a directory it made
+  that holds only `solitary-*` skills is never taken for an agent.
 
 Which layer a setting belongs to decides what applying it costs, and code should preserve that:
-container settings (`image`, `build`, `command`, `secrets`, `devices`, `git`) are applied by `up`; machine
+container settings (`image`, `build`, `command`, `secrets`, `devices`, `git`, `agents`) are applied by `up`; machine
 settings (`vm`, `ports`, `network`, `gpu`) only take effect at the next boot — `up` warns on a running
 machine and applies them when the machine is stopped; anything `vm.provision` changed lives on the
 disk and only `rm` undoes it.

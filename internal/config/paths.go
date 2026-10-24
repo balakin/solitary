@@ -103,6 +103,18 @@ func GuestFile(name string) (string, error) {
 	return filepath.Join(dir, "cells", name+".guest.json"), nil
 }
 
+// SkillsFile records where up put solitary's skills in a cell's home, and which
+// directories it had to make to do so. It describes the home rather than the
+// machine, so a move to a new machine keeps it and only rm, which loses the
+// home, removes it.
+func SkillsFile(name string) (string, error) {
+	dir, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "cells", name+".skills.json"), nil
+}
+
 // HomeArchive is where up --new-machine keeps a cell's home while its machine
 // is replaced: the one copy of it between the old machine being destroyed and
 // the new one being given it back, so it is kept until that has happened.
