@@ -20,6 +20,7 @@ solitary patch <name>           install every update the cell's machine is missi
 solitary fetch <name> [files]   collect what a cell published
 solitary send <name> <file...>  put files into a cell's inbox
 solitary secrets <name>         set the values a cell is allowed to see
+solitary skills install         teach the coding agents on this host to drive solitary
 solitary dashboard              manage cells in a live view
 solitary doctor                 check that this host can run cells
 solitary update                 replace the binary with the latest release
@@ -88,6 +89,10 @@ A cell with `network.allow` reaches [Ubuntu's archive](/docs/networking#allow-li
 | Flag       | Meaning                                                                  |
 | ---------- | ------------------------------------------------------------------------ |
 | `--reboot` | Restart a running cell without asking, when what was installed needs it. |
+
+## `skills` teaches your agent
+
+`solitary skills install` writes solitary's skills into the skills directory of every coding agent configured on the host — or of the ones named with `--agent`, by the IDs `npx skills` uses — so that agent can create a cell, restrict its network and troubleshoot one. `skills ls` says where they are and whether they match this binary; `skills rm` takes them out. Only skills named `solitary-*` are ever written or removed. Agents inside a cell get skills of their own from `up`, chosen by the cell's [`agents`](/docs/configuration#agents). See [agent skills](/docs/agent-skills).
 
 ## `update` keeps the binary current
 

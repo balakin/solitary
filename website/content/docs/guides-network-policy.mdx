@@ -50,7 +50,9 @@ Do not combine `host` with `network.vpn`; see [why](/docs/guides-vpn#not-the-hos
 
 ## Debug a failure
 
-The dashboard's traffic view shows lookups, resolved addresses, and refused connections. The refused name usually identifies the entry to add. Changing the list takes effect after restarting the machine:
+The dashboard's traffic view shows lookups, resolved addresses, and refused connections. The refused name usually identifies the entry to add.
+
+Agents help on both sides. One inside the cell has a [skill](/docs/agent-skills#inside-a-cell) that reads a DNS failure as the allow list at work: it stops, names the host it was refused and what for, and leaves the decision to you rather than reaching for a mirror or a proxy. One on the host, with `solitary skills install`, can run the loop for you — read the refused name, add it, restart the cell, try again. Changing the list takes effect after restarting the machine:
 
 ```sh
 solitary down my-cell

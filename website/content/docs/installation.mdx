@@ -69,6 +69,16 @@ Stop if either verification fails. `solitary update` performs signature verifica
 
 On macOS the binary is unsigned, so Gatekeeper quarantines a download from the browser; fetching it with `curl` as above avoids that, and neither Homebrew nor `solitary update` quarantines anything.
 
+## Let your agent drive it
+
+Solitary ships skills that teach a coding agent on your host to create a cell, restrict its network and work out what is wrong with one. Install them into every agent it finds:
+
+```sh
+solitary skills install
+```
+
+See [agent skills](/docs/agent-skills) for which agents, and where.
+
 ## Staying current
 
 `solitary update` replaces the binary with the newest release, after verifying the release workflow's Sigstore signature and the archive checksum:
@@ -81,6 +91,8 @@ solitary update --check  # only say whether one exists
 Every other command mentions a newer release once a day, at most three times per release, and only when it is talking to a terminal. Set `SOLITARY_NO_UPDATE_CHECK=1` to keep solitary from asking GitHub anything on its own.
 
 A binary built from source is left alone by both: it is ahead of the release it names rather than behind it.
+
+`update` also rewrites the [agent skills](/docs/agent-skills) wherever they were installed, so they describe the binary that replaced the old one. An install Homebrew owns is upgraded by Homebrew instead; run `solitary skills install` after `brew upgrade`.
 
 ## Uninstall
 
