@@ -12,9 +12,10 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { homeOptions } from '@/lib/layout.shared';
+import { trackEvent } from '@/lib/analytics';
 import { Terminal } from '@/components/terminal';
 import { Footer } from '@/components/footer';
-import { appName, homeImagePath, siteDescription, siteTagline } from '@/lib/shared';
+import { appName, homeImagePath, repoUrl, siteDescription, siteTagline } from '@/lib/shared';
 
 export function meta(_args: Route.MetaArgs) {
   const title = `${appName} — ${siteTagline}`;
@@ -147,7 +148,19 @@ export default function Home() {
           {/* The install line is the hero's own call to action, not a link to
               one: it is short enough to read before running, and the button
               below it is where someone goes who would rather read first. */}
-          <div className="mt-10 w-full max-w-xl text-left">
+          {/* Copying it counts as an install_click, the nearest thing to one
+              this page can see. The copy button is fumadocs' own and takes no
+              props, so its click is caught here as it bubbles; it is the only
+              button in the block. */}
+          {/* The div is not a control: it only observes the button's click,
+              which Enter and Space on the button produce as well. */}
+          {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+          <div
+            className="mt-10 w-full max-w-xl text-left"
+            onClick={(event) => {
+              if ((event.target as Element).closest('button')) trackEvent('install_click');
+            }}
+          >
             <DynamicCodeBlock lang="sh" code={install} />
           </div>
           <p className="mt-3 text-sm text-fd-muted-foreground">
@@ -162,7 +175,11 @@ export default function Home() {
               Lima
             </a>{' '}
             2.0 —{' '}
-            <Link className="text-fd-primary hover:underline" to="/docs/installation">
+            <Link
+              className="text-fd-primary hover:underline"
+              to="/docs/installation"
+              onClick={() => trackEvent('install_click')}
+            >
               other ways to install
             </Link>
             .
@@ -171,14 +188,16 @@ export default function Home() {
             <Link
               className="rounded-full bg-fd-primary px-6 py-3 font-medium text-fd-primary-foreground transition-opacity hover:opacity-85"
               to="/docs/quickstart"
+              onClick={() => trackEvent('install_click')}
             >
               Create your first cell
             </Link>
             <a
               className="rounded-full border border-fd-border px-6 py-3 font-medium transition-colors hover:bg-fd-accent"
-              href="https://github.com/balakin/solitary"
+              href={repoUrl}
               target="_blank"
               rel="noreferrer"
+              data-umami-event="github_click"
             >
               View on GitHub
             </a>

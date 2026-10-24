@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { author, licenseUrl, repoUrl } from '@/lib/shared';
 
 const linkStyle = 'text-fd-foreground underline-offset-4 hover:underline';
@@ -12,13 +13,22 @@ function Credits() {
           {author.name}
         </a>
       </p>
-      <nav className="flex gap-5">
-        <a className={linkStyle} href={repoUrl} target="_blank" rel="noreferrer">
+      <nav aria-label="Project" className="flex flex-wrap gap-x-5 gap-y-2">
+        <a
+          className={linkStyle}
+          href={repoUrl}
+          target="_blank"
+          rel="noreferrer"
+          data-umami-event="github_click"
+        >
           GitHub
         </a>
         <a className={linkStyle} href={licenseUrl} target="_blank" rel="noreferrer">
-          Apache 2.0
+          Apache 2.0 License
         </a>
+        <Link className={linkStyle} to="/privacy">
+          Privacy Policy
+        </Link>
       </nav>
     </>
   );
