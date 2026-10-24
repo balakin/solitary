@@ -134,7 +134,7 @@ Left out, an agent is found by the directory it keeps its configuration in, read
 
 `skills:` is a directory under the home, written `~/path`. The home is the part of a cell that lasts and the only part solitary writes to, so an agent whose directory resolves outside it — an image that sets `CLAUDE_CONFIG_DIR=/opt/claude` — is skipped with a warning, and so is a directory reached through a symlink.
 
-Only solitary's own skills, the directories named `solitary-*`, are ever written or removed. A change to this list is applied by the next `up`: skills are installed where it now points and taken out of where it no longer does, and the directories they were in are left alone. `all` makes a directory for every agent there is — close to seventy of them — which is why it is something to ask for rather than a default; a directory `up` made and that holds nothing but solitary's skills is never mistaken for an agent later.
+Only solitary's own skills, the directories named `solitary-*`, are ever written or removed. A change to this list is applied by the next `up`: skills are installed where it now points and taken out of where it no longer does, and the directories they were in are left alone. `all` makes a directory for every agent there is — sixty-five of them — which is why it is something to ask for rather than a default; a directory `up` made and that holds nothing but solitary's skills is never mistaken for an agent later.
 
 ## Authority
 
