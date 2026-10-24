@@ -8,6 +8,16 @@ export const docsHome = `${docsRoute}/overview`;
 export const docsImageRoute = '/og/docs';
 export const docsContentRoute = '/llms.mdx/docs';
 
+/**
+ * A page's <title>: its own name, then the site's. In a list of search results
+ * a bare "Quickstart" could belong to any project; the preview cards a link
+ * unfurls into keep the bare name, since they show the site on a line of its
+ * own (og:site_name).
+ */
+export function pageTitle(title: string) {
+  return `${title} | ${appName}`;
+}
+
 export const siteTagline = 'Run coding agents on a VM, not on your machine';
 export const siteDescription =
   'Run coding agents in disposable, hypervisor-isolated cells: no host mounts, secrets whitelisted per cell, default-deny egress, and an explicit way to move work in and out.';

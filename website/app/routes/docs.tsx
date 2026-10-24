@@ -18,6 +18,7 @@ import {
   docsHome,
   gitConfig,
   getPageImagePath,
+  pageTitle,
   siteUrl,
 } from '@/lib/shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
@@ -78,7 +79,7 @@ function Content({
 
   return (
     <DocsPage toc={toc} slots={{ footer: PageEnd }}>
-      <title>{page.title}</title>
+      <title>{pageTitle(page.title)}</title>
       <meta name="description" content={page.description} />
       <link rel="canonical" href={url} />
       <meta property="og:url" content={url} />

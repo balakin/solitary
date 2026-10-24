@@ -3,9 +3,16 @@ import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { Link } from 'react-router';
 import { homeOptions } from '@/lib/layout.shared';
 import { Footer } from '@/components/footer';
-import { appName, canonicalMeta, licenseUrl, repoUrl, siteImageMeta } from '@/lib/shared';
+import {
+  appName,
+  canonicalMeta,
+  licenseUrl,
+  pageTitle,
+  repoUrl,
+  siteImageMeta,
+} from '@/lib/shared';
 
-const title = `Privacy Policy | ${appName}`;
+const title = pageTitle('Privacy Policy');
 const description =
   'How the Solitary website handles personal data: cookie-free Umami analytics stored in the EU, GitHub Pages hosting, and no telemetry in the Solitary application.';
 
