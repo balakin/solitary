@@ -294,7 +294,7 @@ func (m model) network() []string {
 		shown = shown[:networkPreview]
 	}
 	for _, entry := range shown {
-		lines = append(lines, field("", valueStyle.Render(entry)))
+		lines = append(lines, field("", allowEntry(entry)))
 	}
 	if rest := len(allow) - len(shown); rest > 0 {
 		lines = append(lines, field("", labelStyle.Render(fmt.Sprintf("+%d more", rest))))
@@ -376,6 +376,16 @@ func ago(d time.Duration) string {
 	}
 }
 
+// allowEntry is one entry of the allow list as written, with the number of
+// names a preset stands for beside it.
+func allowEntry(entry string) string {
+	if names, ok := config.Preset(entry); ok {
+		return valueStyle.Render(entry) + labelStyle.Render(fmt.Sprintf(" · %d names", len(names)))
+	}
+
+	return valueStyle.Render(entry)
+}
+
 // networkBody is the whole allow list, for when the preview is not enough.
 // reportBody is the inspect command's report, row for row, styled: section
 // headings stand out, and what the machine could fix and has not is in the
@@ -415,7 +425,13 @@ func (m model) networkBody() string {
 
 	rows := make([]string, 0, len(m.detail.Network.Allow)+3)
 	for _, entry := range m.detail.Network.Allow {
-		rows = append(rows, "  "+valueStyle.Render(entry))
+		rows = append(rows, "  "+allowEntry(entry))
+		// A preset is listed in full here, since this is where the whole
+		// list is read: what it stands for is what the cell may reach.
+		names, _ := config.Preset(entry)
+		for _, name := range names {
+			rows = append(rows, "    "+labelStyle.Render(name))
+		}
 	}
 	if m.detail.Network.Restricted() {
 		rows = append(rows, "", labelStyle.Render("Other destination addresses are refused; shared IPs share access."))

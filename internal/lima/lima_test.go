@@ -503,3 +503,21 @@ func TestTemplateVersionPinsTheTemplate(t *testing.T) {
 			got, TemplateVersion, want, TemplateVersion+1)
 	}
 }
+
+// A preset is rendered as the names it stands for, never as itself: the
+// resolver would otherwise be asked to answer for a name with a colon in it,
+// and answer for nothing.
+func TestRenderExpandsPresets(t *testing.T) {
+	rendered, err := Render(goldenCell, config.Defaults(), nil, config.Network{Allow: []string{"github.com", "github:actions-results"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"'productionresultssa0.blob.core.windows.net'", "'productionresultssa199.blob.core.windows.net'"} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("Render() lacks %s", want)
+		}
+	}
+	if strings.Contains(rendered, "github:actions-results") {
+		t.Error("Render() passed the preset's own name to the resolver")
+	}
+}

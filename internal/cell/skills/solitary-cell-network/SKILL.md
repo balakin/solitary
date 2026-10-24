@@ -38,6 +38,13 @@ Retrying won't help.
    Use the name from `$SOLITARY_CELL`. A domain covers its subdomains, so `pypi.org`
    also allows `files.pypi.org`, but a different domain the same service uses (such as
    `files.pythonhosted.org`) needs its own entry. Mention the ones you can predict.
+
+   GitHub's storage is the exception: ask for a preset, not the name. A refused
+   `productionresultssa<N>.blob.core.windows.net` (`gh run view --log`, an artifact
+   download) needs `github:actions-results`, since the next job lands on a different
+   account. A refused `*registryv2prod.blob.core.windows.net` or
+   `pkg-containers.githubusercontent.com` needs `github:packages`. Never suggest
+   `blob.core.windows.net`: it opens every Azure storage account.
 3. **Restarting ends this session.** Everything in the cell's home survives it. Say so,
    so the user isn't surprised.
 
