@@ -59,7 +59,7 @@ type skillsRecord struct {
 // that cannot be given them still works. What went wrong is said instead.
 func installSkills(name, instance string, c *config.Cell, progress io.Writer) {
 	if err := syncSkills(name, instance, c, progress); err != nil {
-		fmt.Fprintf(progress, "Warning: could not install solitary's skills in %q: %v\n", name, err)
+		fmt.Fprintf(progress, "Warning: could not install solitary's skills in %q: %s\n", name, config.Display(err.Error()))
 	}
 }
 
@@ -90,6 +90,10 @@ func syncSkills(name, instance string, c *config.Cell, progress io.Writer) error
 		}
 	}
 
+	// The directories below come from the container's own environment, which
+	// the image sets, so everything said about them goes through Display:
+	// a value carrying escape sequences is shown, not run by the terminal.
+	//
 	// The home is all solitary writes to: it is the part of a cell that
 	// lasts, and the only part reachable from the machine without going
 	// through the container. Anything outside it is the image's.
@@ -97,7 +101,7 @@ func syncSkills(name, instance string, c *config.Cell, progress io.Writer) error
 	for _, target := range targets {
 		rel, ok := inHome(target.Dir)
 		if !ok {
-			fmt.Fprintf(progress, "Warning: skipping skills for %s: %s is outside the cell's home, the only place solitary writes\n", strings.Join(target.Agents, ", "), target.Dir)
+			fmt.Fprintf(progress, "Warning: skipping skills for %s: %s is outside the cell's home, the only place solitary writes\n", config.Display(strings.Join(target.Agents, ", ")), config.Display(target.Dir))
 			continue
 		}
 		dirs = append(dirs, rel)
@@ -125,7 +129,7 @@ func syncSkills(name, instance string, c *config.Cell, progress io.Writer) error
 		return err
 	}
 	for _, dir := range result.Skipped {
-		fmt.Fprintf(progress, "Warning: skipping skills in ~/%s: a symlink or a file is in the way\n", dir)
+		fmt.Fprintf(progress, "Warning: skipping skills in ~/%s: a symlink or a file is in the way\n", config.Display(dir))
 	}
 
 	reportSkills(progress, record.Dirs, result.Written)
@@ -347,10 +351,10 @@ func reportSkills(progress io.Writer, before, after []string) {
 		}
 	}
 	if len(added) > 0 {
-		fmt.Fprintf(progress, "Installed solitary's skills in %s\n", summarise(added))
+		fmt.Fprintf(progress, "Installed solitary's skills in %s\n", config.Display(summarise(added)))
 	}
 	if len(removed) > 0 {
-		fmt.Fprintf(progress, "Removed solitary's skills from %s\n", summarise(removed))
+		fmt.Fprintf(progress, "Removed solitary's skills from %s\n", config.Display(summarise(removed)))
 	}
 }
 
