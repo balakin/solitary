@@ -17,7 +17,9 @@ export default {
     // route, and on a static host it has to be a file on disk.
     // GitHub Pages answers an unknown path with 404.html from the root of what
     // it serves, so the catch-all route is prerendered once to become that file.
-    const paths: string[] = [...getStaticPaths(), '/404'];
+    // /docs is not a page but a redirect to the first one; prerendered, it
+    // becomes a file that sends the browser on (see docsHome).
+    const paths: string[] = [...getStaticPaths(), '/docs', '/404'];
 
     for await (const entry of glob('**/*.mdx', { cwd: 'content/docs' })) {
       const slugs = getSlugs(entry);

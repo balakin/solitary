@@ -1,6 +1,10 @@
 export const appName = 'Solitary';
 
 export const docsRoute = '/docs';
+// The docs' first page. Not /docs itself: every page is served as a file of
+// its own, and /docs has to stay a directory to hold the others, so the page
+// that would live there lives here and /docs redirects to it.
+export const docsHome = `${docsRoute}/overview`;
 export const docsImageRoute = '/og/docs';
 export const docsContentRoute = '/llms.mdx/docs';
 
@@ -15,14 +19,12 @@ export const siteUrl = 'https://solitary.balakin.io';
 
 /**
  * The one address a page is indexed under, for its canonical link, its og:url
- * and its sitemap entry alike. It ends in a slash because a prerendered page is
- * a directory holding an index.html, and GitHub Pages answers the bare path
- * with a redirect to the slashed one. Internal links use the bare path all the
- * same: fumadocs builds them, and a client-side navigation never reaches the
- * server to be redirected.
+ * and its sitemap entry alike: the bare path, the one fumadocs builds every
+ * link with and the address bar shows. Pages serves it without a redirect
+ * because scripts/pages-artifact.mjs turns each page into a file of its own.
  */
 export function canonicalUrl(path: string) {
-  return `${siteUrl}${path.replace(/\/?$/, '/')}`;
+  return `${siteUrl}${path === '/' ? '/' : path.replace(/\/$/, '')}`;
 }
 
 export function canonicalMeta(path: string) {
