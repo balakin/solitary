@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working with code in this repository.
 
 ## What this is
 
@@ -124,7 +124,7 @@ excludes `website/`, so a commit that only touches the docs site never proposes 
 exclusion is by path and nothing else: a commit is dropped only when *every* file it touches sits
 under `website/`. A `website` scope on the subject buys nothing, and neither does a hidden
 changelog type — `docs` and `chore` are kept out of the changelog but still count towards a bump.
-So site-only work has to be committed on its own; the moment the same commit also edits `CLAUDE.md`
+So site-only work has to be committed on its own; the moment the same commit also edits `AGENTS.md`
 or `.github/workflows/pages.yml` it becomes a release trigger, and prose about the site belongs in
 its own `docs:` commit anyway.
 

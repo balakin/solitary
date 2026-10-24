@@ -162,7 +162,7 @@ The deployed site is static: `pnpm build` prerenders every route, search include
 runs `pnpm start` in production. `pnpm build:pages` is what CI publishes — the same build, with
 each page moved from `<path>/index.html` to `<path>.html`, which Pages serves at the bare path
 without redirecting it to a slashed one. The catch-all route becomes `404.html` by the same step.
-The root `CLAUDE.md` explains what a static host still needs from the app.
+The root `AGENTS.md` explains what a static host still needs from the app.
 
 The site documents the problem, architecture, security model, capabilities, configuration, and trade-offs. Its installation page covers both the released binaries and a build from source.
 
