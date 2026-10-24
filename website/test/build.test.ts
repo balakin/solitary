@@ -123,3 +123,25 @@ test('every page names an absolute social image that the build ships', () => {
     assert.ok(existsSync(join(out, image.slice(site.length))), `${image} is not in the build`);
   }
 });
+
+// The sitemap is built from the docs source rather than from what was
+// prerendered, so this is what catches the two drifting apart: a page the build
+// ships and the sitemap leaves out, or an entry that would answer with a 404.
+test('the sitemap lists exactly the pages the build ships', async () => {
+  const site = 'https://solitary.balakin.io';
+  const listed = [...read('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, url]) => url);
+  const shipped: string[] = [];
+
+  for await (const page of glob('**/index.html', { cwd: out })) {
+    shipped.push(`${site}/${page.slice(0, -'index.html'.length)}`);
+  }
+
+  assert.deepEqual(new Set(listed), new Set(shipped));
+  assert.equal(listed.length, shipped.length, 'the sitemap lists a page twice');
+});
+
+test('robots.txt allows crawling and points at the sitemap', () => {
+  const robots = read('robots.txt');
+  assert.doesNotMatch(robots, /^Disallow: \/\S/m);
+  assert.match(robots, /^Sitemap: https:\/\/solitary\.balakin\.io\/sitemap\.xml$/m);
+});
