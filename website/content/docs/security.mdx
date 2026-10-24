@@ -30,6 +30,10 @@ Secret values live on the host and are passed into the container as environment 
 
 The image or `Containerfile` is trusted code. Building happens inside the VM, but a malicious image can still misuse the authority granted to its container. Review images and build definitions, and treat an outbox as untrusted input when fetching files onto the host.
 
+## The terminal
+
+A session you attach to — `shell`, `up`, `exec` on a terminal — reaches your terminal emulator directly, escape sequences included, so that editors and terminal tools work in a cell. Your terminal's handling of those sequences, the clipboard above all, is part of the boundary for that session. See [an attached terminal is shared with the cell](/docs/limitations#an-attached-terminal-is-shared-with-the-cell).
+
 ## Principle of use
 
 Give an agent a fresh cell, the minimum credentials, a narrow network, and an explicit path for artifacts. Assume the agent can do anything those permissions allow.
