@@ -32,7 +32,7 @@ Website (docs site, separate toolchain, see `website/README.md`):
 cd website && pnpm install && pnpm dev      # Node 24, pnpm pinned via corepack
 pnpm build && pnpm types:check
 pnpm lint && pnpm fmt:check                 # oxlint and oxfmt; `pnpm fmt` rewrites
-pnpm build:pages && pnpm test               # node:test; most tests read the prerendered build
+pnpm build:pages && pnpm test               # vitest: jsdom + RTL components, and checks on the prerendered build
 ```
 
 oxfmt owns the formatting of everything under `website/` — MDX docs included — so leave it to

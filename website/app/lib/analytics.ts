@@ -2,9 +2,7 @@
 // as it takes. It counts pageviews and the few clicks named below; it sets no
 // cookie and stores no identifier in the browser. See README.md, "Analytics".
 
-// Relative and with its extension, unlike the rest of app/: the tests import
-// this file with node, which knows neither the `@/` alias nor a bare path.
-import { repoUrl } from './shared.ts';
+import { repoUrl } from '@/lib/shared';
 
 export const trackerSrc = 'https://cloud.umami.is/script.js';
 export const productionHost = 'solitary.balakin.io';
