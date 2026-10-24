@@ -187,3 +187,24 @@ test('the 404 page claims no canonical URL', () => {
   expect(tags(html, 'link', 'rel="canonical"')).toHaveLength(0);
   expect(tags(html, 'meta', 'property="og:url"')).toHaveLength(0);
 });
+
+// A bare "Quickstart" in a list of search results could be anyone's. The
+// preview card keeps the bare name: it shows the site on a line of its own.
+test('every docs page is titled with its own name and then the site', async () => {
+  let checked = 0;
+
+  for (const { file } of await pages()) {
+    if (!file.startsWith('docs/')) continue;
+    const html = read(file);
+    const heading = html.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1];
+    checked++;
+
+    expect(heading, `${file} has no heading`).toBeTruthy();
+    expect(html, file).toContain(`<title>${heading} | Solitary</title>`);
+    expect(tags(html, 'meta', 'property="og:title"'), file).toEqual([
+      `<meta property="og:title" content="${heading}"/>`,
+    ]);
+  }
+
+  expect(checked, 'no docs pages found').toBeGreaterThan(1);
+});
