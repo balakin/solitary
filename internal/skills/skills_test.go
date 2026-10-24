@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -266,5 +267,34 @@ func TestNamedRefusesAnUnknownAgent(t *testing.T) {
 	_, err := Named(agentHome(t), []string{"claude"})
 	if err == nil || !strings.Contains(err.Error(), `unknown agent "claude"`) || !strings.Contains(err.Error(), "claude-code") {
 		t.Errorf("Named(claude) error = %v, want one naming the agent and listing the known ones", err)
+	}
+}
+
+func TestHostSkillsAreWellFormed(t *testing.T) {
+	checkSkills(t, Host())
+}
+
+// checkSkills holds every skill in src to what each agent reads: a solitary-
+// directory whose SKILL.md opens with its own name and a description, and
+// nothing else in the frontmatter, since an agent ignores what it does not know
+// and that is the one shape every agent reads alike.
+func checkSkills(t *testing.T, src fs.FS) {
+	t.Helper()
+
+	names, err := Names(src)
+	if err != nil || len(names) == 0 {
+		t.Fatalf("%d skills, %v", len(names), err)
+	}
+	for _, name := range names {
+		data, err := fs.ReadFile(src, name+"/SKILL.md")
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		head, _, ok := strings.Cut(strings.TrimPrefix(string(data), "---\n"), "\n---\n")
+		lines := strings.Split(head, "\n")
+		if !ok || len(lines) != 2 || lines[0] != "name: "+name || !strings.HasPrefix(lines[1], "description: ") {
+			t.Errorf("%s/SKILL.md frontmatter is %q, want only its name and a description", name, head)
+		}
 	}
 }

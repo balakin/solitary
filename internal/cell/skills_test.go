@@ -3,6 +3,7 @@ package cell
 import (
 	"bytes"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path"
@@ -285,5 +286,28 @@ func mustWrite(t *testing.T, file, data string) {
 	mustMkdir(t, path.Dir(filepath.ToSlash(file)))
 	if err := os.WriteFile(file, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCellSkillsAreWellFormed(t *testing.T) {
+	src, err := fs.Sub(cellSkills, "skills")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := fs.ReadDir(src, ".")
+	if err != nil || len(entries) != 4 {
+		t.Fatalf("%d cell skills, %v; want 4", len(entries), err)
+	}
+	for _, entry := range entries {
+		data, err := fs.ReadFile(src, entry.Name()+"/SKILL.md")
+		if err != nil {
+			t.Errorf("%s: %v", entry.Name(), err)
+			continue
+		}
+		head, _, ok := strings.Cut(strings.TrimPrefix(string(data), "---\n"), "\n---\n")
+		lines := strings.Split(head, "\n")
+		if !strings.HasPrefix(entry.Name(), "solitary-") || !ok || len(lines) != 2 || lines[0] != "name: "+entry.Name() || !strings.HasPrefix(lines[1], "description: ") {
+			t.Errorf("%s/SKILL.md frontmatter is %q, want only its name and a description", entry.Name(), head)
+		}
 	}
 }
