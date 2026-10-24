@@ -41,7 +41,7 @@ test('/privacy is prerendered, so it loads directly and on refresh', () => {
 
 test('the privacy policy names its controller and contact', () => {
   const html = read('privacy/index.html');
-  assert.match(html, /<title>Privacy Policy — Solitary<\/title>/);
+  assert.match(html, /<title>Privacy Policy | Solitary<\/title>/);
   assert.match(html, /<meta name="description" content="[^"]+"/);
   assert.match(html, /<h1>Privacy Policy<\/h1>/);
   assert.match(html, /Dmitrii Balakin/);

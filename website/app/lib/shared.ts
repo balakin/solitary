@@ -19,7 +19,7 @@ export const siteImage = {
   url: `${siteUrl}/og.png`,
   width: 2000,
   height: 1050,
-  alt: 'Solitary — Let coding agents run free. Keep your machine out of reach.',
+  alt: 'Solitary: Let coding agents run free. Keep your machine out of reach.',
 };
 
 export function siteImageMeta() {
