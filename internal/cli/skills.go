@@ -33,17 +33,20 @@ func newSkillsCmd() *cobra.Command {
 }
 
 func newSkillsInstallCmd() *cobra.Command {
-	var into []string
+	var agentIDs, into []string
 	var yes, refresh bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Install the skills for every agent found, or into --into",
+		Short: "Install the skills for every agent found, or for the ones named",
 		Long: "Installs into the skills directory of each coding agent configured in your\n" +
-			"home — the agents `npx skills add -g` knows — and into every directory installed\n" +
-			"into before. --into names one more, for an agent that is not found. Only\n" +
-			"solitary's own skills, the ones named solitary-*, are ever written or removed.\n\n" +
-			"A directory not installed into before is asked about first.",
+			"home — the agents `npx skills add -g` knows — and asks before writing into a\n" +
+			"directory for the first time. --agent names agents instead, by the IDs\n" +
+			"`npx skills` uses, and --into names a directory, for an agent it does not know;\n" +
+			"either replaces looking, and is not asked about. Every directory installed into\n" +
+			"before is brought up to date as well.\n\n" +
+			"Only solitary's own skills, the ones named solitary-*, are ever written or\n" +
+			"removed.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			out := cmd.OutOrStdout()
@@ -52,34 +55,41 @@ func newSkillsInstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			// A refresh is update handing over to the binary it installed,
-			// and touches only what was asked for before: a newly configured
-			// agent is the user's to opt in.
-			var targets []skills.Target
-			if !refresh {
-				home, err := os.UserHomeDir()
-				if err != nil {
-					return fmt.Errorf("locating home directory: %w", err)
-				}
-				targets = skills.Detect(home)
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("locating home directory: %w", err)
 			}
-			for _, dir := range recorded {
-				targets = addTarget(targets, skills.Target{Dir: dir})
+
+			// What was named is what the user chose, so it is installed
+			// without asking. Looking is for when nothing was named, and
+			// a refresh does neither: it is update handing over to the
+			// binary it installed, and touches only what was agreed to
+			// before.
+			named, err := skills.Named(home, agentIDs)
+			if err != nil {
+				return err
 			}
 			for _, dir := range into {
 				abs, err := filepath.Abs(dir)
 				if err != nil {
 					return fmt.Errorf("resolving %s: %w", dir, err)
 				}
-				targets = addTarget(targets, skills.Target{Dir: abs})
+				named = addTarget(named, skills.Target{Dir: abs})
+			}
+
+			targets := named
+			if len(named) == 0 && !refresh {
+				targets = skills.Detect(home)
+			}
+			for _, dir := range recorded {
+				targets = addTarget(targets, skills.Target{Dir: dir})
 			}
 
 			if len(targets) == 0 {
 				if refresh {
 					return nil
 				}
-				return errors.New("no coding agent found in your home directory; name the directory your agent reads skills from with --into")
+				return errors.New("no coding agent found in your home directory; name yours with --agent, or the directory it reads skills from with --into")
 			}
 
 			names, err := skills.Names(shipped.Host())
@@ -92,7 +102,7 @@ func newSkillsInstallCmd() *cobra.Command {
 			// was agreed to.
 			var fresh []skills.Target
 			for _, target := range targets {
-				if !slices.Contains(recorded, target.Dir) {
+				if !slices.Contains(recorded, target.Dir) && !slices.ContainsFunc(named, func(t skills.Target) bool { return t.Dir == target.Dir }) {
 					fresh = append(fresh, target)
 				}
 			}
@@ -129,19 +139,25 @@ func newSkillsInstallCmd() *cobra.Command {
 				return nil
 			}
 			fmt.Fprintf(out, "Installed into %s.\n", joinDirs(targets))
-			if len(fresh) > 0 {
+			if len(dirs) > len(recorded) {
 				fmt.Fprintln(out, "An agent session that was already running picks them up when it starts again.")
-				fmt.Fprintln(out, "For an agent that was not found, name its directory: solitary skills install --into <dir>")
+			}
+			if len(fresh) > 0 {
+				fmt.Fprintln(out, "For an agent that was not found, name it: solitary skills install --agent <id>, or --into <dir>")
 			}
 
 			return nil
 		},
 	}
 
-	cmd.Flags().StringArrayVar(&into, "into", nil, "also install into this skills directory (repeatable)")
+	cmd.Flags().StringSliceVar(&agentIDs, "agent", nil, "install for this agent, by its npx skills ID: claude-code, codex, … (repeatable)")
+	cmd.Flags().StringArrayVar(&into, "into", nil, "install into this skills directory (repeatable)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "install without asking")
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "rewrite only the directories installed into before")
 	_ = cmd.Flags().MarkHidden("refresh")
+	_ = cmd.RegisterFlagCompletionFunc("agent", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return skills.IDs(), cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }

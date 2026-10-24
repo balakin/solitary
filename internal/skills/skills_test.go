@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -255,5 +256,65 @@ func TestRecordRoundTrips(t *testing.T) {
 	}
 	if dirs, err := Recorded(); err != nil || dirs != nil {
 		t.Errorf("Recorded after clearing = %v, %v; want nothing", dirs, err)
+	}
+}
+
+func TestNamedInstallsForAnAgentThatHasNotRunYet(t *testing.T) {
+	home := agentHome(t)
+
+	got, err := Named(home, []string{"claude-code", "codex", "warp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Target{
+		{Agents: []string{"Claude Code"}, Dir: filepath.Join(home, ".claude", "skills")},
+		{Agents: []string{"Codex", "Warp"}, Dir: filepath.Join(home, ".agents", "skills")},
+	}
+	if !slices.EqualFunc(got, want, func(a, b Target) bool {
+		return a.Dir == b.Dir && slices.Equal(a.Agents, b.Agents)
+	}) {
+		t.Errorf("Named = %v, want %v", got, want)
+	}
+}
+
+func TestNamedPrefersTheDirectoryAlreadyInUse(t *testing.T) {
+	home := agentHome(t, ".moltbot")
+
+	got, err := Named(home, []string{"openclaw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Dir != filepath.Join(home, ".moltbot", "skills") {
+		t.Errorf("Named = %v, want ~/.moltbot/skills", got)
+	}
+
+	got, err = Named(agentHome(t), []string{"openclaw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || !strings.HasSuffix(got[0].Dir, filepath.Join(".openclaw", "skills")) {
+		t.Errorf("Named with nothing configured = %v, want ~/.openclaw/skills", got)
+	}
+}
+
+func TestNamedRefusesAnUnknownAgent(t *testing.T) {
+	_, err := Named(agentHome(t), []string{"claude"})
+	if err == nil || !strings.Contains(err.Error(), `unknown agent "claude"`) || !strings.Contains(err.Error(), "claude-code") {
+		t.Errorf("Named(claude) error = %v, want one naming the agent and listing the known ones", err)
+	}
+}
+
+func TestIDsAreUniqueAndWellFormed(t *testing.T) {
+	ids := IDs()
+	if !slices.Contains(ids, "claude-code") || !slices.Contains(ids, "openclaw") {
+		t.Errorf("IDs = %v, missing claude-code or openclaw", ids)
+	}
+	if len(slices.Compact(slices.Sorted(slices.Values(ids)))) != len(ids) {
+		t.Error("IDs lists an agent twice")
+	}
+	for _, id := range ids {
+		if strings.ToLower(id) != id || strings.ContainsAny(id, " _") {
+			t.Errorf("ID %q is not lowercase with dashes", id)
+		}
 	}
 }
