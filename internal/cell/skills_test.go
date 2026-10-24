@@ -311,3 +311,15 @@ func TestCellSkillsAreWellFormed(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillMessagesDoNotPassEscapesThrough(t *testing.T) {
+	var out bytes.Buffer
+	reportSkills(&out, []string{".old"}, []string{".x\x1b]52;c;cHduZWQ=\x07/skills"})
+
+	if strings.ContainsAny(out.String(), "\x1b\x07") {
+		t.Errorf("message carries raw control characters: %q", out.String())
+	}
+	if !strings.Contains(out.String(), `\u001b`) {
+		t.Errorf("message = %q, want the escape shown", out.String())
+	}
+}
