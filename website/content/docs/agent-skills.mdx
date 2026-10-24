@@ -1,0 +1,64 @@
+---
+title: Agent skills
+description: Teach the coding agent on your host to create, restrict and fix cells.
+seoDescription: 'Install Solitary agent skills for Claude Code, Codex, Gemini CLI and other agents: create a cell, restrict its network and troubleshoot it from the host.'
+---
+
+A coding agent on your host can drive solitary for you: write a `cell.yaml`, bring the cell up, tighten its allow list until nothing it needs is refused, and work out why one stopped answering. Skills are how it learns to, and solitary ships them.
+
+```sh
+solitary skills install
+```
+
+| Skill                            | For                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------- |
+| `solitary-create-cell`           | writing a cell definition, or taking an example, and bringing it up                    |
+| `solitary-restrict-cell-network` | a default-deny `network.allow`, and finding the name a refused build or request needed |
+| `solitary-troubleshoot-cell`     | a cell that will not start, stopped answering, or ignored a change                     |
+
+They are written to hand the user what is the user's: an agent using them asks you to type secrets with `solitary secrets` rather than asking for the values, and leaves `rm` and `up --new-machine` — the two that discard a machine — for you to ask for.
+
+## Where they go
+
+`install` looks for the coding agents configured in your home and writes into the directory each reads skills from. It knows the agents the [`skills`](https://github.com/vercel-labs/skills/blob/main/docs/agents.md) CLI does — Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode, Windsurf, Kiro and some seventy more — found the way that CLI finds them: by the directory each keeps its own configuration in, and by the variables some of them honour to move it, such as `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. Many agents read the shared `~/.agents/skills`, so one copy there serves all of them.
+
+It says where it is about to write and asks before writing into a directory for the first time:
+
+```text
+They go into:
+  ~/.claude/skills        read by Claude Code
+  ~/.agents/skills        read by Codex, Warp
+  ~/.config/goose/skills  read by Goose
+
+Nothing else in those directories is touched.
+
+Install them? [y/N]
+```
+
+`--yes` answers for you, and is needed where there is no terminal to ask on. An agent that is not found is reached by naming its directory, and is remembered from then on:
+
+```sh
+solitary skills install --into ~/my-agent/skills
+```
+
+A skill is a directory with a `SKILL.md` in it, the format every one of these agents reads, so the same files serve all of them. Only solitary's own — the directories named `solitary-*` — are ever written or removed; a skill of yours beside them is left as it is. An agent session already running picks them up when it starts again.
+
+## Keeping them current
+
+The skills come from the binary, so they describe the commands it has. `solitary update` refreshes every directory they were installed into once it has replaced itself. An install that Homebrew owns is updated by Homebrew, which does not know about them, so run `install` again after `brew upgrade`:
+
+```sh
+solitary skills ls       # where they are, and whether each matches this binary
+solitary skills install  # bring them in line
+solitary skills rm       # take them out of every directory
+```
+
+## Without the binary
+
+The same skills are in the repository under `skills/`, in the layout the [`skills`](https://www.npmjs.com/package/skills) CLI reads:
+
+```sh
+npx skills add balakin/solitary
+```
+
+That takes them from the default branch rather than from your release, so they can describe a flag your binary does not have yet. `solitary skills install` is the one that always matches.
