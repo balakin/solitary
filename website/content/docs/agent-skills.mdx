@@ -68,15 +68,3 @@ An agent running in a cell gets skills of its own, for the part of the work that
 | `solitary-cell-environment` | what survives a restart, how credentials arrive, and how you reach a server it starts     |
 
 Nothing has to be installed for these. `up` writes them into the cell's home at every start, beside the `artifact` tool they describe, so the two always come from the same binary. Which agents get them is the cell's [`agents`](/docs/configuration#agents) setting: left out, the agents found in the container; named, those agents from their first session.
-
-They are in the repository under `skills/cell/` and marked internal, so `npx skills add` does not offer them to a host, where none of what they describe exists.
-
-## Without the binary
-
-The same skills are in the repository under `skills/`, in the layout the [`skills`](https://www.npmjs.com/package/skills) CLI reads:
-
-```sh
-npx skills add balakin/solitary
-```
-
-That takes them from the default branch rather than from your release, so they can describe a flag your binary does not have yet. `solitary skills install` is the one that always matches.
