@@ -35,9 +35,12 @@ Nothing else in those directories is touched.
 Install them? [y/N]
 ```
 
-`--yes` answers for you, and is needed where there is no terminal to ask on. An agent that is not found is reached by naming its directory, and is remembered from then on:
+`--yes` answers for you, and is needed where there is no terminal to ask on.
+
+Name the agents instead and nothing is looked for or asked: `--agent` takes the IDs `npx skills` uses, and installs for an agent even before it has run for the first time. An agent it does not know is reached by naming the directory it reads skills from. Either is remembered from then on:
 
 ```sh
+solitary skills install --agent claude-code --agent codex
 solitary skills install --into ~/my-agent/skills
 ```
 
