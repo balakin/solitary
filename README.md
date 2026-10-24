@@ -120,6 +120,13 @@ you are done.
 Write your own with `solitary init <name>` — see the
 [quickstart](https://solitary.balakin.io/docs/quickstart).
 
+Or let the coding agent you already use write it. `solitary skills install`
+teaches Claude Code, Codex, Cursor and most others to create a cell, restrict
+its network and fix one; then ask yours for _"a cell for this project that can
+reach GitHub and nothing else"_. Agents inside a cell get skills of their own,
+for handing files out and reading a refused connection for what it is — see
+[agent skills](https://solitary.balakin.io/docs/agent-skills).
+
 ## Documentation
 
 Everything else — the configuration reference, the command surface, networking,
