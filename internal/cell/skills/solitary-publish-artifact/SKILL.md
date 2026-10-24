@@ -1,8 +1,6 @@
 ---
 name: solitary-publish-artifact
 description: Hand a file out of a solitary cell to the user, the only way anything leaves one. For an agent running inside a cell, where SOLITARY_CELL is set. Use when the user asks for a file, a report, a patch, a build, an export or a screenshot to keep, or when work produced something they will want on their own machine.
-metadata:
-  internal: true
 ---
 
 # Publish a file from this cell

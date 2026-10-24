@@ -1,8 +1,6 @@
 ---
 name: solitary-read-inbox
 description: Find files the user sent into a solitary cell, including pasted screenshots. For an agent running inside a cell, where SOLITARY_CELL is set. Use when the user says they sent, pasted, attached, dropped or shared a file or a screenshot, or refers to an image or document you can't see.
-metadata:
-  internal: true
 ---
 
 # Read what the user sent

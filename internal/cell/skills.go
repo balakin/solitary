@@ -2,7 +2,7 @@ package cell
 
 import (
 	"bytes"
-	_ "embed"
+	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,8 +20,15 @@ import (
 	"github.com/balakin/solitary/internal/config"
 	"github.com/balakin/solitary/internal/lima"
 	"github.com/balakin/solitary/internal/podman"
-	shipped "github.com/balakin/solitary/skills"
 )
+
+// cellSkills holds the skills for an agent inside a cell, one directory each.
+// They describe the artifact tool, the inbox and the firewall that the same up
+// sets up, which is why they are compiled in beside the script that installs
+// that tool rather than shipped any other way.
+//
+//go:embed skills
+var cellSkills embed.FS
 
 // skillsHelper does the writing in the machine: one call for the whole sync,
 // walking the cell's home without following anything the cell put there.
@@ -96,7 +103,11 @@ func syncSkills(name, instance string, c *config.Cell, progress io.Writer) error
 		dirs = append(dirs, rel)
 	}
 
-	skills, err := skillFiles(shipped.Cell())
+	src, err := fs.Sub(cellSkills, "skills")
+	if err != nil {
+		return err
+	}
+	skills, err := skillFiles(src)
 	if err != nil {
 		return err
 	}

@@ -1,8 +1,6 @@
 ---
 name: solitary-cell-environment
 description: How a solitary cell works, for an agent running inside one (SOLITARY_CELL is set) — what survives a restart, where to keep work, how credentials arrive, and how the user reaches a server the cell runs. Use when installing tools, starting a dev server or web app, handling credentials or sign-in links, or when the user asks where something went after a restart.
-metadata:
-  internal: true
 ---
 
 # Working inside a solitary cell

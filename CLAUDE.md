@@ -252,18 +252,18 @@ The layering runs host → machine → container, and each package owns one laye
   there: the `skills` CLI's list, ported by hand into `agents.go` from the upstream commit its
   comment names; refresh it from the same file rather than editing entries. Detection takes a
   `Place` (how paths expand, whether one exists), so the host and a cell's container share it.
-- `internal/skills` — installs the host skills embedded from `skills/host/` into the directories
-  host agents read them from, owning the `solitary-` prefix there and nothing else. `skills/` sits at
-  the repository root rather than under `internal/` because `npx skills add balakin/solitary` reads
-  it too, as `skills/<category>/<name>/SKILL.md`; each skill's `name` must equal its directory.
-  Skills are written for every agent at once: plain shell commands, no agent's own tool names, and
-  only `name` and `description` in the frontmatter. `update` has the new binary rewrite them, since
-  the old one only carries the old copies. The skills under `skills/cell/` are installed by `up`
-  instead (`internal/cell/skills.go`, with `skills.py` doing the writes in the machine) beside the
-  `artifact` tool they describe, into the agents a cell's `agents:` names or `up` finds in the
-  container; they carry `metadata.internal` so `npx skills` keeps them off hosts. What `up` put
-  where, and which directories it made, is recorded on the host per cell, so a directory it made
-  that holds only `solitary-*` skills is never taken for an agent.
+- `internal/skills` — installs the host skills embedded from `internal/skills/host/` into the
+  directories host agents read them from, owning the `solitary-` prefix there and nothing else.
+  The binary is the only way a skill is delivered — no `npx skills` route — so a skill always
+  describes the version that installed it, and each lives beside the code that embeds it. Each
+  skill's `name` must equal its directory, and skills are written for every agent at once: plain
+  shell commands, no agent's own tool names, and only `name` and `description` in the frontmatter.
+  `update` has the new binary rewrite them, since the old one only carries the old copies. The
+  skills under `internal/cell/skills/` are installed by `up` instead (`internal/cell/skills.go`,
+  with `skills.py` doing the writes in the machine) beside the `artifact` tool they describe, into
+  the agents a cell's `agents:` names or `up` finds in the container. What `up` put where, and
+  which directories it made, is recorded on the host per cell, so a directory it made that holds
+  only `solitary-*` skills is never taken for an agent.
 
 Which layer a setting belongs to decides what applying it costs, and code should preserve that:
 container settings (`image`, `build`, `command`, `secrets`, `devices`, `git`, `agents`) are applied by `up`; machine

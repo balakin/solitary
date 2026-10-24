@@ -1,8 +1,6 @@
 ---
 name: solitary-cell-network
 description: Recognise when a solitary cell's firewall refused a connection, and tell the user what to allow rather than working around it. For an agent running inside a cell, where SOLITARY_CELL is set. Use when a download, install, git fetch, API call or build fails with "no such host", NXDOMAIN, ENOTFOUND, EAI_AGAIN, "could not resolve host" or "Temporary failure in name resolution".
-metadata:
-  internal: true
 ---
 
 # A name that doesn't resolve

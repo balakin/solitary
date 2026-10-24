@@ -14,7 +14,6 @@ import (
 
 	"github.com/balakin/solitary/internal/agents"
 	"github.com/balakin/solitary/internal/skills"
-	shipped "github.com/balakin/solitary/skills"
 )
 
 func newSkillsCmd() *cobra.Command {
@@ -93,7 +92,7 @@ func newSkillsInstallCmd() *cobra.Command {
 				return errors.New("no coding agent found in your home directory; name yours with --agent, or the directory it reads skills from with --into")
 			}
 
-			names, err := skills.Names(shipped.Host())
+			names, err := skills.Names(skills.Host())
 			if err != nil {
 				return err
 			}
@@ -124,7 +123,7 @@ func newSkillsInstallCmd() *cobra.Command {
 
 			dirs := recorded
 			for _, target := range targets {
-				if err := skills.Install(shipped.Host(), target.Dir); err != nil {
+				if err := skills.Install(skills.Host(), target.Dir); err != nil {
 					return err
 				}
 				if !slices.Contains(dirs, target.Dir) {
@@ -219,7 +218,7 @@ func newSkillsLsCmd() *cobra.Command {
 			stale := false
 			for _, dir := range dirs {
 				fmt.Fprintln(out, tilde(dir))
-				status, err := skills.Status(shipped.Host(), dir)
+				status, err := skills.Status(skills.Host(), dir)
 				if err != nil {
 					return err
 				}
