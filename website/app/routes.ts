@@ -5,6 +5,7 @@ export default [
   route('docs/*', 'routes/docs.tsx'),
   route('privacy', 'routes/privacy.tsx'),
   route('api/search', 'routes/search.ts'),
+  route('sitemap.xml', 'routes/sitemap.ts'),
   route('og/docs/*', 'routes/og.docs.tsx'),
 
   // LLM integration:
