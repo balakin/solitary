@@ -86,3 +86,15 @@ html > body[data-scroll-locked] {
   margin-right: 0px !important;
   --removed-body-scroll-bar-size: 0px !important;
 }
+
+/*
+ * Tailwind v4's preflight gives buttons the default cursor, as browsers do,
+ * where v3 gave them a pointer. fumadocs' own buttons — copy, theme, search —
+ * carry no cursor class of their own, so without this they show an arrow.
+ */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
