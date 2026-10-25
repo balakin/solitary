@@ -8,14 +8,16 @@ import { vi } from 'vitest';
  * `Link` needs, and fumadocs' provider, which its layouts read the router
  * through. A stand-in for the tracker lets a test see what a click sent. The
  * router renders a tick later, so a test waits with a `findBy` query first.
+ * A page that reads loader data is given its route's own loader.
  */
-export function renderPage(Page: React.ComponentType) {
+export function renderPage(Page: React.ComponentType, loader?: () => unknown) {
   const track = vi.fn();
   window.umami = { track };
 
   const Stub = createRoutesStub([
     {
       path: '/',
+      loader,
       Component: () => (
         <RootProvider>
           <Page />

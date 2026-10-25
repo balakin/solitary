@@ -1,7 +1,6 @@
 import type { Route } from './+types/home';
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
-import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
-import { Link } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
 import {
   ArrowRightLeft,
   DoorOpen,
@@ -15,6 +14,8 @@ import {
 import { homeOptions } from '@/lib/layout.shared';
 import { trackEvent } from '@/lib/analytics';
 import { Terminal } from '@/components/terminal';
+import { HighlightedCode } from '@/components/highlighted-code';
+import { highlightCode } from '@/lib/highlight.server';
 import { Footer } from '@/components/footer';
 import {
   appName,
@@ -171,7 +172,17 @@ const layers = [
   },
 ];
 
+export async function loader() {
+  const [installTree, cellYamlTree] = await Promise.all([
+    highlightCode(install, 'sh'),
+    highlightCode(cellYaml, 'yaml'),
+  ]);
+  return { installTree, cellYamlTree };
+}
+
 export default function Home() {
+  const { installTree, cellYamlTree } = useLoaderData<typeof loader>();
+
   return (
     <HomeLayout {...homeOptions()}>
       <main>
@@ -206,7 +217,7 @@ export default function Home() {
               if ((event.target as Element).closest('button')) trackEvent('install_click');
             }}
           >
-            <DynamicCodeBlock lang="sh" code={install} />
+            <HighlightedCode tree={installTree} />
           </div>
           <p className="mt-3 text-sm text-fd-muted-foreground">
             Or <code className="text-fd-foreground">brew install balakin/solitary/solitary</code>.
@@ -484,7 +495,7 @@ export default function Home() {
                 Shareable workflows →
               </Link>
             </div>
-            <DynamicCodeBlock lang="yaml" code={cellYaml} />
+            <HighlightedCode tree={cellYamlTree} />
           </div>
         </section>
 
