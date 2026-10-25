@@ -180,7 +180,7 @@ export default function Home() {
           <p className="mb-6 rounded-full border border-fd-border bg-fd-card px-4 py-1.5 text-sm text-fd-muted-foreground">
             Early · macOS and Linux
           </p>
-          <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-balance md:text-7xl">
+          <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-balance md:text-5xl lg:text-6xl">
             Let coding agents run free.
             <br />
             <span className="text-fd-primary">Keep your machine out of reach.</span>
