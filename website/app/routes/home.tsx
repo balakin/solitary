@@ -6,6 +6,7 @@ import {
   ArrowRightLeft,
   DoorOpen,
   KeyRound,
+  Play,
   ShieldBan,
   Trash2,
   Waypoints,
@@ -26,6 +27,7 @@ import {
   siteImage,
   siteImageMeta,
   siteTagline,
+  videoUrl,
 } from '@/lib/shared';
 
 // What search engines read as facts rather than infer from the page. The
@@ -247,8 +249,66 @@ export default function Home() {
           </div>
         </section>
 
-        {/* The threat */}
+        {/* The video */}
         <section className="border-y border-fd-border bg-fd-card/50">
+          <div className="mx-auto max-w-6xl px-6 py-24">
+            <div className="grid gap-12 md:grid-cols-[1fr_1.4fr] md:items-center">
+              <div>
+                <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
+                  See it in action
+                </p>
+                <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+                  Stop giving AI agents your whole machine.
+                </h2>
+                <p className="mt-5 leading-8 text-fd-muted-foreground">
+                  What a cell can reach, how files cross its boundary, and where the boundary ends —
+                  then two real workflows: VS Code in the browser, and Claude with tmux in the
+                  terminal.
+                </p>
+              </div>
+              <div>
+                {/* A thumbnail that links out rather than an embedded player: YouTube's
+                  player sets cookies the moment it loads, and this site sets none. */}
+                <a
+                  className="group relative block overflow-hidden rounded-2xl border border-fd-border bg-fd-card shadow-lg transition-colors hover:border-fd-primary"
+                  href={videoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-umami-event="video_click"
+                >
+                  <img
+                    className="aspect-video w-full"
+                    src="/video-full-access.png"
+                    width={1280}
+                    height={720}
+                    alt="Watch on YouTube: Stop Giving AI Agents Your Whole Machine."
+                  />
+                  <span
+                    className="absolute inset-0 flex items-center justify-center bg-black/10 transition-colors group-hover:bg-black/0"
+                    aria-hidden
+                  >
+                    <span className="flex size-16 items-center justify-center rounded-full bg-white text-black shadow-lg transition-transform group-hover:scale-110 md:size-20">
+                      <Play className="ml-1 size-7 fill-current md:size-9" />
+                    </span>
+                  </span>
+                  <span
+                    className="absolute right-3 bottom-3 rounded-md bg-black/80 px-2 py-0.5 font-mono text-sm font-medium text-white tabular-nums"
+                    aria-hidden
+                  >
+                    6:45
+                  </span>
+                  <span className="sr-only">, 6 minutes 45 seconds</span>
+                </a>
+                <p className="mt-3 text-center text-sm text-fd-muted-foreground">
+                  Watch on YouTube
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* The threat */}
+        <section>
           <div className="mx-auto grid max-w-6xl gap-12 px-6 py-24 md:grid-cols-[1fr_1.2fr] md:items-start">
             <div>
               <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
@@ -284,50 +344,52 @@ export default function Home() {
         </section>
 
         {/* The model */}
-        <section className="mx-auto max-w-6xl px-6 py-24">
-          <div className="max-w-2xl">
-            <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
-              The model
-            </p>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
-              A cell is a VM with a container inside it.
-            </h2>
-            <p className="mt-5 leading-8 text-fd-muted-foreground">
-              The boundary and the toolset are different things, so you can replace one without
-              disturbing the other.
+        <section className="border-y border-fd-border bg-fd-card/50">
+          <div className="mx-auto max-w-6xl px-6 py-24">
+            <div className="max-w-2xl">
+              <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
+                The model
+              </p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+                A cell is a VM with a container inside it.
+              </h2>
+              <p className="mt-5 leading-8 text-fd-muted-foreground">
+                The boundary and the toolset are different things, so you can replace one without
+                disturbing the other.
+              </p>
+            </div>
+            <ol className="mt-12 grid gap-4 md:grid-cols-3">
+              {layers.map((layer) => (
+                <li
+                  key={layer.name}
+                  className={
+                    layer.boundary
+                      ? 'rounded-2xl border-2 border-fd-primary bg-fd-card p-6'
+                      : 'rounded-2xl border border-fd-border bg-fd-card/50 p-6'
+                  }
+                >
+                  <h3 className="font-semibold">{layer.name}</h3>
+                  {layer.boundary && (
+                    <p className="mt-1 text-xs font-medium tracking-widest text-fd-primary uppercase">
+                      The boundary
+                    </p>
+                  )}
+                  <p className="mt-3 text-sm leading-7 text-fd-muted-foreground">{layer.role}</p>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-8 leading-8 text-fd-muted-foreground">
+              Nothing is mounted from the host, ever. Clone, build, lint, test and review inside the
+              cell.{' '}
+              <Link className="font-medium text-fd-primary hover:underline" to="/docs/concepts">
+                Core concepts →
+              </Link>
             </p>
           </div>
-          <ol className="mt-12 grid gap-4 md:grid-cols-3">
-            {layers.map((layer) => (
-              <li
-                key={layer.name}
-                className={
-                  layer.boundary
-                    ? 'rounded-2xl border-2 border-fd-primary bg-fd-card p-6'
-                    : 'rounded-2xl border border-fd-border bg-fd-card/50 p-6'
-                }
-              >
-                <h3 className="font-semibold">{layer.name}</h3>
-                {layer.boundary && (
-                  <p className="mt-1 text-xs font-medium tracking-widest text-fd-primary uppercase">
-                    The boundary
-                  </p>
-                )}
-                <p className="mt-3 text-sm leading-7 text-fd-muted-foreground">{layer.role}</p>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-8 leading-8 text-fd-muted-foreground">
-            Nothing is mounted from the host, ever. Clone, build, lint, test and review inside the
-            cell.{' '}
-            <Link className="font-medium text-fd-primary hover:underline" to="/docs/concepts">
-              Core concepts →
-            </Link>
-          </p>
         </section>
 
         {/* See it running */}
-        <section className="border-y border-fd-border bg-fd-secondary/40">
+        <section>
           {/* Wider than the other sections: these are screenshots of fixed-width
               art, and this is the width at which both sit side by side. */}
           <div className="mx-auto max-w-7xl px-6 py-24">
@@ -372,32 +434,36 @@ export default function Home() {
         </section>
 
         {/* What you control */}
-        <section className="mx-auto max-w-6xl px-6 py-24">
-          <div className="max-w-2xl">
-            <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
-              What you control
-            </p>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
-              Authority arrives in named pieces.
-            </h2>
-          </div>
-          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {controls.map((control) => (
-              <Link
-                key={control.title}
-                to={control.href}
-                className="group rounded-2xl border border-fd-border bg-fd-card p-6 transition-colors hover:border-fd-primary"
-              >
-                <control.icon className="size-5 text-fd-primary" aria-hidden />
-                <h3 className="mt-4 font-semibold group-hover:text-fd-primary">{control.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-fd-muted-foreground">{control.text}</p>
-              </Link>
-            ))}
+        <section className="border-y border-fd-border bg-fd-card/50">
+          <div className="mx-auto max-w-6xl px-6 py-24">
+            <div className="max-w-2xl">
+              <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
+                What you control
+              </p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+                Authority arrives in named pieces.
+              </h2>
+            </div>
+            <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {controls.map((control) => (
+                <Link
+                  key={control.title}
+                  to={control.href}
+                  className="group rounded-2xl border border-fd-border bg-fd-card p-6 transition-colors hover:border-fd-primary"
+                >
+                  <control.icon className="size-5 text-fd-primary" aria-hidden />
+                  <h3 className="mt-4 font-semibold group-hover:text-fd-primary">
+                    {control.title}
+                  </h3>
+                  <p className="mt-3 text-sm leading-7 text-fd-muted-foreground">{control.text}</p>
+                </Link>
+              ))}
+            </div>
           </div>
         </section>
 
         {/* The definition */}
-        <section className="border-y border-fd-border bg-fd-card/50">
+        <section>
           <div className="mx-auto grid max-w-6xl gap-12 px-6 py-24 md:grid-cols-[1fr_1.1fr] md:items-center">
             <div>
               <p className="text-sm font-medium tracking-widest text-fd-primary uppercase">
@@ -423,39 +489,41 @@ export default function Home() {
         </section>
 
         {/* What it does not do */}
-        <section className="mx-auto max-w-6xl px-6 py-24">
-          <div className="grid gap-12 md:grid-cols-[1fr_1.2fr] md:items-start">
-            <div>
-              <p className="text-sm font-medium tracking-widest text-fd-muted-foreground uppercase">
-                Honest limits
-              </p>
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
-                This does not make an agent harmless.
-              </h2>
-            </div>
-            <div className="space-y-5 leading-8 text-fd-muted-foreground">
-              <p>
-                Isolation is built to stop a compromise of your machine, and it is not infallible: a
-                bug in the hypervisor, Lima, the kernel or solitary itself can break it. Every such
-                bug is a vulnerability to fix, but none can be ruled out — keep them all up to date,
-                and give a cell only what you could afford to lose.
-              </p>
-              <p>
-                Even where it holds, isolation does not stop an agent misusing the authority you
-                granted it: it can still push to any repository the token you whitelisted can reach,
-                and reach anything you allowed. A cell with no allow list reaches the whole
-                internet. The image you run is trusted code.
-              </p>
-              <p>
-                A secret passed to a cell lives inside that cell. Give one only the credentials it
-                needs, and treat a cell's output as data rather than as something to run.
-              </p>
-              <Link
-                className="inline-block font-medium text-fd-primary hover:underline"
-                to="/docs/limitations"
-              >
-                Limitations and trade-offs →
-              </Link>
+        <section className="border-y border-fd-border bg-fd-card/50">
+          <div className="mx-auto max-w-6xl px-6 py-24">
+            <div className="grid gap-12 md:grid-cols-[1fr_1.2fr] md:items-start">
+              <div>
+                <p className="text-sm font-medium tracking-widest text-fd-muted-foreground uppercase">
+                  Honest limits
+                </p>
+                <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+                  This does not make an agent harmless.
+                </h2>
+              </div>
+              <div className="space-y-5 leading-8 text-fd-muted-foreground">
+                <p>
+                  Isolation is built to stop a compromise of your machine, and it is not infallible:
+                  a bug in the hypervisor, Lima, the kernel or solitary itself can break it. Every
+                  such bug is a vulnerability to fix, but none can be ruled out — keep them all up
+                  to date, and give a cell only what you could afford to lose.
+                </p>
+                <p>
+                  Even where it holds, isolation does not stop an agent misusing the authority you
+                  granted it: it can still push to any repository the token you whitelisted can
+                  reach, and reach anything you allowed. A cell with no allow list reaches the whole
+                  internet. The image you run is trusted code.
+                </p>
+                <p>
+                  A secret passed to a cell lives inside that cell. Give one only the credentials it
+                  needs, and treat a cell's output as data rather than as something to run.
+                </p>
+                <Link
+                  className="inline-block font-medium text-fd-primary hover:underline"
+                  to="/docs/limitations"
+                >
+                  Limitations and trade-offs →
+                </Link>
+              </div>
             </div>
           </div>
         </section>

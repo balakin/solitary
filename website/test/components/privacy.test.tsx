@@ -20,7 +20,7 @@ test('the privacy policy carries only a last-updated date', async () => {
   renderPage(Privacy);
   const updated = await screen.findByText(/Last updated:/);
   const time = updated.querySelector('time');
-  expect(time).toHaveAttribute('dateTime', '2026-10-24');
-  expect(time).toHaveTextContent('October 24, 2026');
+  expect(time).toHaveAttribute('dateTime', '2026-10-25');
+  expect(time).toHaveTextContent('October 25, 2026');
   expect(container).not.toHaveTextContent(/effective/i);
 });

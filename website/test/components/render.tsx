@@ -28,7 +28,7 @@ export function renderPage(Page: React.ComponentType) {
 }
 
 /** The link to `href` whose accessible name is `name`. */
-export async function findLink(name: string, href: string) {
+export async function findLink(name: string | RegExp, href: string) {
   const links = await screen.findAllByRole('link', { name });
   const link = links.find((candidate) => candidate.getAttribute('href') === href);
   if (!link) throw new Error(`no link to ${href} reading "${name}"`);

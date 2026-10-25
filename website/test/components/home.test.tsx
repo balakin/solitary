@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 import Home from '@/routes/home';
-import { repoUrl } from '@/lib/shared';
+import { repoUrl, videoUrl } from '@/lib/shared';
 import { findLink, renderPage } from './render';
 
 test('the CTA to GitHub opens a new tab and is counted by the tracker', async () => {
@@ -10,6 +10,15 @@ test('the CTA to GitHub opens a new tab and is counted by the tracker', async ()
   const github = await findLink('View on GitHub', repoUrl);
   expect(github).toHaveAttribute('target', '_blank');
   expect(github).toHaveAttribute('data-umami-event', 'github_click');
+});
+
+// A link, never an embedded player: YouTube's player would set cookies.
+test('the video is a link to YouTube that opens a new tab and is counted', async () => {
+  renderPage(Home);
+  const video = await findLink(/^Watch on YouTube/, videoUrl);
+  expect(video).toHaveAttribute('target', '_blank');
+  expect(video).toHaveAttribute('data-umami-event', 'video_click');
+  expect(document.querySelector('iframe')).toBeNull();
 });
 
 // Internal links are counted from onClick, not by attribute: the attribute makes
