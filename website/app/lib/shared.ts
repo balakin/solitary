@@ -82,6 +82,7 @@ export const author = {
 
 export const repoUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
 export const licenseUrl = `${repoUrl}/blob/${gitConfig.branch}/LICENSE`;
+export const videoUrl = 'https://www.youtube.com/watch?v=NYVIy5AFmOY';
 
 export function getPageImagePath(slugs: string[], locale?: string) {
   return (

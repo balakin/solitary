@@ -8,7 +8,7 @@ export const trackerSrc = 'https://cloud.umami.is/script.js';
 export const productionHost = 'solitary.balakin.io';
 
 /** The custom events the site sends. Pageviews need no name. */
-export type AnalyticsEvent = 'install_click' | 'github_click' | 'feedback_click';
+export type AnalyticsEvent = 'install_click' | 'github_click' | 'video_click' | 'feedback_click';
 
 declare global {
   interface Window {

@@ -8,14 +8,16 @@ import { vi } from 'vitest';
  * `Link` needs, and fumadocs' provider, which its layouts read the router
  * through. A stand-in for the tracker lets a test see what a click sent. The
  * router renders a tick later, so a test waits with a `findBy` query first.
+ * A page that reads loader data is given its route's own loader.
  */
-export function renderPage(Page: React.ComponentType) {
+export function renderPage(Page: React.ComponentType, loader?: () => unknown) {
   const track = vi.fn();
   window.umami = { track };
 
   const Stub = createRoutesStub([
     {
       path: '/',
+      loader,
       Component: () => (
         <RootProvider>
           <Page />
@@ -28,7 +30,7 @@ export function renderPage(Page: React.ComponentType) {
 }
 
 /** The link to `href` whose accessible name is `name`. */
-export async function findLink(name: string, href: string) {
+export async function findLink(name: string | RegExp, href: string) {
   const links = await screen.findAllByRole('link', { name });
   const link = links.find((candidate) => candidate.getAttribute('href') === href);
   if (!link) throw new Error(`no link to ${href} reading "${name}"`);

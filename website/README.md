@@ -109,7 +109,7 @@ pnpm vitest --project components # components only, no build needed, in watch mo
 
 ## Analytics
 
-The production site counts pageviews and three clicks with [Umami Cloud](https://umami.is)
+The production site counts pageviews and four clicks with [Umami Cloud](https://umami.is)
 (EU region). There is no telemetry anywhere else — not in the CLI, not in a cell — and the
 [privacy policy](https://solitary.balakin.io/privacy) (`app/routes/privacy.tsx`) says so; change it
 along with anything here that changes what is collected.
@@ -134,6 +134,7 @@ VITE_UMAMI_WEBSITE_ID=<id> pnpm build:pages
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `install_click`  | copies the install command, or follows "Create your first cell" or "other ways to install" on the home page                                                    |
 | `github_click`   | follows any link to the repository: "View on GitHub" on the home page, "GitHub" in the footer, and the GitHub icon in the header, docs sidebar and mobile menu |
+| `video_click`    | follows the video thumbnail on the home page to YouTube                                                                                                        |
 | `feedback_click` | reserved; the site has no feedback link yet                                                                                                                    |
 
 `install_click` measures interest, not installs. The GitHub icons are fumadocs' own and take no

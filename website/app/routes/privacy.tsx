@@ -18,8 +18,8 @@ const description =
 
 // A substantive change to the text below moves this date, and nothing else is
 // dated: there is no separate effective date to keep in step with it.
-const lastUpdated = 'October 24, 2026';
-const lastUpdatedIso = '2026-10-24';
+const lastUpdated = 'October 25, 2026';
+const lastUpdatedIso = '2026-10-25';
 
 const contactEmail = 'privacy@balakin.io';
 
@@ -101,8 +101,9 @@ export default function Privacy() {
             <li>your approximate geographic location, such as country and region;</li>
             <li>
               a small number of interactions with the site: following a link to the {appName}{' '}
-              repository on GitHub, and opening the installation or getting-started instructions,
-              including copying the install command;
+              repository on GitHub, following the link to the {appName} video on YouTube, and
+              opening the installation or getting-started instructions, including copying the
+              install command;
             </li>
             <li>visitor and session identifiers that are pseudonymous and rotate periodically.</li>
           </ul>
