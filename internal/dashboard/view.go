@@ -17,32 +17,18 @@ func (m model) View() string {
 		return ""
 	}
 	if !m.loaded {
-		return titleStyle.Render("solitary") + "\n\n" + labelStyle.Render("Reading cells…") + "\n"
+		return m.simpleView(labelStyle.Render("Reading cells…"), "q quit")
 	}
 	if len(m.cells) == 0 {
 		return m.empty()
 	}
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, m.list(), m.detailPane())
-
-	parts := []string{titleStyle.Render("solitary"), body}
-	if line := m.message(); line != "" {
-		parts = append(parts, line)
-	}
-	parts = append(parts, helpStyle.Render(m.help()))
-
-	return lipgloss.JoinVertical(lipgloss.Left, parts...) + "\n"
+	return m.screen()
 }
 
 func (m model) empty() string {
-	return lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render("solitary"),
-		"",
-		valueStyle.Render("No cells yet."),
-		labelStyle.Render("Create one with: solitary init <name>"),
-		"",
-		helpStyle.Render("r refresh · q quit"),
-	) + "\n"
+	return m.simpleView(valueStyle.Render("No cells yet.")+"\n"+
+		labelStyle.Render("Create one with: solitary init <name>"), "r refresh · q quit")
 }
 
 // list is every cell and its state, which is the whole point of the screen.
@@ -53,14 +39,19 @@ func (m model) list() string {
 		statusWidth = max(statusWidth, len(c.Status))
 	}
 
+	if m.width > 0 {
+		width = min(width, max(1, m.paneWidth(true)-4-statusWidth-7))
+	}
 	rows := make([]string, 0, len(m.cells))
-	for i, c := range m.cells {
+	start, end := m.cellWindow()
+	for i := start; i < end; i++ {
+		c := m.cells[i]
 		style, cursor := valueStyle, "  "
 		if i == m.cursor {
 			style, cursor = selectedStyle, "› "
 		}
 		mark := statusStyle(c.Status).Render(statusMark(c.Status))
-		name := style.Render(fmt.Sprintf("%-*s", width, c.Name))
+		name := style.Render(fmt.Sprintf("%-*s", width, lipgloss.NewStyle().MaxWidth(width).Render(c.Name)))
 		status := statusStyle(c.Status).Render(string(c.Status))
 		row := fmt.Sprintf("%s%s %s  %s", cursor, mark, name, status)
 		// A plain "!" rather than a warning sign: terminals disagree on
@@ -72,31 +63,34 @@ func (m model) list() string {
 		rows = append(rows, row)
 	}
 
-	return pane("cells", strings.Join(rows, "\n"))
+	return m.frame(fmt.Sprintf("cells · %d/%d", m.cursor+1, len(m.cells)), strings.Join(rows, "\n"), true, 0)
 }
 
 // detailPane is what the selected cell is made of: where its tools come from,
 // the machine it runs in, and which of its secrets are set.
 func (m model) detailPane() string {
+	if m.mode == viewingHelp {
+		return m.detailFrame("keys", actionHelp)
+	}
 	if m.mode == managingSecrets || m.mode == typing {
-		return pane("secrets · "+m.detail.Name, m.secretsBody())
+		return m.detailFrame("secrets · "+m.detail.Name, m.secretsBody())
 	}
 	if m.mode == viewingNetwork {
-		return pane("network · "+m.detail.Name, m.networkBody())
+		return m.detailFrame("network · "+m.detail.Name, m.networkBody())
 	}
 	if m.mode == viewingReport {
-		return pane("inspect · "+m.selected().Name, m.reportBody())
+		return m.detailFrame("inspect · "+m.selected().Name, m.reportBody())
 	}
 	if m.mode == watchingTraffic || m.mode == filteringTraffic {
-		return pane("traffic · "+m.detail.Name, m.trafficBody())
+		return m.detailFrame("traffic · "+m.detail.Name, m.trafficBody())
 	}
 
 	if m.detailErr != nil {
-		return pane(m.selected().Name, errorStyle.Render(m.detailErr.Error()))
+		return m.detailFrame(m.selected().Name, errorStyle.Render(m.detailErr.Error()))
 	}
 
 	if m.detail.Orphaned {
-		return pane(m.detail.Name, strings.Join([]string{
+		return m.detailFrame(m.detail.Name, strings.Join([]string{
 			field("status", statusStyle(cell.StatusDegraded).Render("no definition")),
 			"",
 			valueStyle.Render("Its machine is still here, holding the disk it"),
@@ -138,7 +132,7 @@ func (m model) detailPane() string {
 	lines = append(lines, m.handoffLines()...)
 	lines = append(lines, field("secrets", m.secretsSummary()))
 
-	return pane(m.detail.Name, strings.Join(lines, "\n"))
+	return m.detailFrame(m.detail.Name, strings.Join(lines, "\n"))
 }
 
 // attentionLines are what the list marks the cell for, each with what to do
@@ -460,7 +454,7 @@ const trafficShown = 14
 // trafficBody is what the cell's network is doing, as it happens.
 func (m model) trafficBody() string {
 	if len(m.traffic) > 0 {
-		return strings.Join(append(m.trafficRows(), "", m.trafficStatus()), "\n")
+		return strings.Join(append(m.trafficRows(), m.trafficStatus()), "\n")
 	}
 
 	{
@@ -487,7 +481,7 @@ func (m model) trafficRows() []string {
 	if end < 1 {
 		end = 1
 	}
-	start := end - trafficShown
+	start := end - m.trafficCapacity()
 	if start < 0 {
 		start = 0
 	}
@@ -667,8 +661,8 @@ func (m model) help() string {
 		return "y " + m.asking.verb + " · any other key cancel"
 	case typing:
 		return "enter save · esc cancel"
-	case viewingNetwork, viewingReport:
-		return "any key back"
+	case viewingNetwork, viewingReport, viewingHelp:
+		return "↑↓ scroll · pgup/pgdown page · esc back"
 	case filteringTraffic:
 		return "type to narrow · enter keep · esc clear"
 	case watchingTraffic:

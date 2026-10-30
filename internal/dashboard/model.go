@@ -49,6 +49,7 @@ const (
 	viewingNetwork
 	// viewingReport is what inspect reports about the selected cell.
 	viewingReport
+	viewingHelp
 	// watchingTraffic is a live view of what it is actually reaching.
 	watchingTraffic
 	// filteringTraffic is typing what to narrow that view to.
@@ -125,6 +126,10 @@ type model struct {
 	input   textinput.Model
 	notice  string
 	failure error
+
+	measuring      bool
+	detailsFocused bool
+	detailOffset   int
 
 	width, height int
 	// loaded is false until the first listing arrives, so that an empty
@@ -213,6 +218,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m = m.scroll(0, len(m.visibleTraffic()))
+		m.input.Width = max(1, m.paneWidth(false)-12)
+		m.filter.Width = max(1, m.paneWidth(false)-35)
+		if m.detailOffset > 0 {
+			m = m.scrollDetails("resize")
+		}
 		return m, nil
 
 	case tickMsg:
@@ -483,7 +494,7 @@ func (m model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case confirming:
 		return m.confirmKey(msg)
-	case viewingNetwork, viewingReport:
+	case viewingNetwork, viewingReport, viewingHelp:
 		return m.networkKey(msg)
 	case watchingTraffic:
 		return m.trafficKey(msg)
@@ -515,9 +526,35 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 
+	case "?":
+		m.mode, m.detailOffset = viewingHelp, 0
+		return m, nil
+	case "tab":
+		m.detailsFocused = !m.detailsFocused
+		return m, nil
+	case "pgup", "pgdown", "home", "end":
+		if m.detailsFocused {
+			return m.scrollDetails(msg.String()), nil
+		}
+		switch msg.String() {
+		case "pgup":
+			return m.move(-m.listCapacity())
+		case "pgdown":
+			return m.move(m.listCapacity())
+		case "home":
+			return m.move(-m.cursor)
+		default:
+			return m.move(len(m.cells) - 1 - m.cursor)
+		}
 	case "up", "k":
+		if m.detailsFocused {
+			return m.scrollDetails("up"), nil
+		}
 		return m.move(-1)
 	case "down", "j":
+		if m.detailsFocused {
+			return m.scrollDetails("down"), nil
+		}
 		return m.move(1)
 
 	case "r":
@@ -623,6 +660,7 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.clear(), describe(name)
 
 	case "n":
+		m.detailOffset = 0
 		if name == "" {
 			return m, nil
 		}
@@ -630,6 +668,7 @@ func (m model) browseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.clear(), describe(name)
 
 	case "i":
+		m.detailOffset = 0
 		if name == "" {
 			return m, nil
 		}
@@ -658,6 +697,9 @@ func (m model) confirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "y", "Y":
+		if m.height > 0 && 1+len(m.footerLines()) > m.height {
+			return m, nil
+		}
 		m.mode = browsing
 		return m, m.run(name, m.asking.command, m.asking.notice, m.asking.args...)
 	default:
@@ -671,6 +713,8 @@ func (m model) confirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // what a cell may reach is decided in its definition, not in a dashboard.
 func (m model) networkKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "up", "k", "down", "j", "pgup", "pgdown", "home", "end":
+		return m.scrollDetails(msg.String()), nil
 	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
@@ -701,9 +745,9 @@ func (m model) trafficKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		return m.scroll(-1, rows), nil
 	case "pgup", "ctrl+b":
-		return m.scroll(trafficShown, rows), nil
+		return m.scroll(m.trafficCapacity(), rows), nil
 	case "pgdown", "ctrl+f", " ":
-		return m.scroll(-trafficShown, rows), nil
+		return m.scroll(-m.trafficCapacity(), rows), nil
 	case "g", "home":
 		return m.scroll(rows, rows), nil
 	case "G", "end":
@@ -759,7 +803,7 @@ func (m model) filterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // scroll moves the view back through what has been kept, stopping at either
 // end rather than wrapping.
 func (m model) scroll(by, rows int) model {
-	limit := rows - trafficShown
+	limit := rows - m.trafficCapacity()
 	if limit < 0 {
 		limit = 0
 	}
@@ -872,11 +916,12 @@ func (m model) move(by int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	next := m.cursor + by
-	if next < 0 || next >= len(m.cells) {
+	next := max(0, min(len(m.cells)-1, m.cursor+by))
+	if next == m.cursor {
 		return m, nil
 	}
 	m.cursor = next
+	m.detailOffset = 0
 
 	return m.clear(), describe(m.selected().Name)
 }
