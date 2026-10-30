@@ -434,7 +434,7 @@ func TestInspectViewShowsTheReport(t *testing.T) {
 	}})
 	m = next.(model)
 	view := m.View()
-	for _, want := range []string{"lima", "2.2.1", "Ubuntu 26.04.1 LTS · kernel 7.0.0-34-generic", "3 updates pending, 3 of them security", "localhost/solitary-claude:latest", "any key back"} {
+	for _, want := range []string{"lima", "2.2.1", "Ubuntu 26.04.1 LTS · kernel 7.0.0-34-generic", "3 updates pending, 3 of them security", "localhost/solitary-claude:latest", "esc back"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the inspect view omits %q:\n%s", want, view)
 		}
