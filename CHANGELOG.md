@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/balakin/solitary/compare/v0.19.0...v0.20.0) (2026-10-30)
+
+
+### Features
+
+* add responsive dashboard navigation and scrolling ([4efdf3f](https://github.com/balakin/solitary/commit/4efdf3f1de3703f630935812c39c74305ceb13a7))
+
 ## [0.19.0](https://github.com/balakin/solitary/compare/v0.18.0...v0.19.0) (2026-10-24)
 
 
