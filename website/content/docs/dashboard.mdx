@@ -26,6 +26,12 @@ seoDescription: 'solitary dashboard shows every cell, its state, warnings and se
  ⏎ shell · u up · b rebuild · p patch · s stop · e secrets · n network · i inspect · t traffic · d rm
 ```
 
+The dashboard fits its panes to the terminal and keeps the controls below them visible. The cell list scrolls as you move the selection; `PgUp` / `PgDown` move a page and `Home` / `End` jump to either end. The title shows the selected cell's position.
+
+Press `Tab` to switch between the cell list and details. The active tab is shown in brackets at the top, and its pane has a highlighted border and bold heading. In details, the arrow keys, page keys and `Home` / `End` scroll longer content. Below 100 columns, only the active pane is shown; opening secrets, network, inspect or traffic shows that view directly. Network and inspect also scroll with these keys; `Esc` returns to the list. Traffic sizes its scrolling window to the available height.
+
+Press `?` from the main view for the full list of actions, including shortcuts omitted from the footer when space is tight. The help view scrolls too.
+
 It does nothing the commands cannot, and the slow ones it runs _as_ those commands: pressing `u` runs `solitary up --detach`, so a build prints what a build prints and a cell missing a secret asks for it the way it always does. The dashboard steps out of the way and comes back rather than owning a second, worse version of each.
 
 ## Keys
